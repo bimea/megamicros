@@ -1,2 +1,2 @@
 # megamicros
-Megamicros Memes array library
+Megamicros Mems array library
