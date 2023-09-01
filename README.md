@@ -14,3 +14,16 @@ Install with pip from your virtual environment:
 
 ## Installing from the GitHub repository 
 
+```bash
+  > git clone https://github.com/bimea/megamicros.git
+```
+
+Update your ``.bashrc/.zprofile/...`` by adding (or updating) the ``PYTHONPATH`` variable:
+
+```bash
+  > export PYTHONPATH=path_to_megamicros/megamicros/src
+```
+
+## Megamicros documentation
+
+* [In the Git repository](docs/index.md)
