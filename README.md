@@ -17,6 +17,9 @@ Install with pip from your virtual environment:
 ```bash
   > cd path_to_project
   > git clone https://github.com/bimea/megamicros.git
+  > cd megamicros
+  > virtualenv venv
+  > source venv/bin/activate
 ```
 
 Update your ``.bashrc/.zprofile/...`` by adding (or updating) the ``PYTHONPATH`` variable:
