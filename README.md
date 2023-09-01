@@ -9,7 +9,7 @@ Install with pip from your virtual environment:
 ```bash
   > virtualenv venv
   > source venv/bin/activate
-  (venv) > pip install --index https://pypi.biimea.io
+  (venv) > pip install --index https://pypi.biimea.io megamicros
 ```
 
 ## Installing from the GitHub repository 
