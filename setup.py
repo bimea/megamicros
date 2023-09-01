@@ -4,6 +4,7 @@ See:
 https://packaging.python.org/guides/distributing-packages-using-setuptools/
 https://github.com/pypa/sampleproject
 """
+import os.path
 
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
@@ -16,6 +17,17 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 # Arguments marked as "Required" below must be included for upload to PyPI.
 # Fields marked as "Optional" may be commented out.
+
+# read version from the VERSION text file
+with open( os.path.join( '.', 'VERSION')) as version_file:
+    version = version_file.read().strip()
+print( "Found version number: ", version )
+
+# Create a __init__.py file for the package versionning. 
+# This file could be extended with other parameters
+print( "Generate __init__.py file" )
+with open( os.path.join( './src/megamicros', '__init__.py'), 'w' ) as package_init_file:
+    package_init_file.writelines([f'__version__="{version}"'] )
 
 setup(
     # This is the name of your project. The first time you publish this
@@ -36,7 +48,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/guides/single-sourcing-package-version/
-    version="2.0.2",  # Required
+    version=version,  # Required
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
@@ -90,12 +102,17 @@ setup(
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate you support Python 3. These classifiers are *not*
         # checked by 'pip install'. See instead 'python_requires' below.
-        #"Programming Language :: Python :: 3",
-        #"Programming Language :: Python :: 3.7",
-        #"Programming Language :: Python :: 3.8",
-        #"Programming Language :: Python :: 3.9",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
-        #"Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy"
     ],
     # This field adds keywords for your project which will appear on the
     # project page. What does your project relate to?
@@ -107,6 +124,7 @@ setup(
     # When your source code is in a subdirectory under the project root, e.g.
     # `src/`, it is necessary to specify the `package_dir` argument.
     package_dir={"": "src"},  # Optional
+
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
     #
@@ -116,7 +134,12 @@ setup(
     #
     #   py_modules=["my_module"],
     #
-    packages=find_packages(where="src"),  # Required
+    # Required
+    packages=find_packages(
+        where="src",
+        exclude=["contrib", "docs", "tests*", "tasks"],
+    ),
+
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this
     # and refuse to install the project if the version does not match. See
@@ -160,7 +183,7 @@ setup(
     # executes the function `main` from this package when invoked:
     entry_points={  # Optional
         "console_scripts": [
-            "megamicros-version = megamicros.bin.version:main",
+            "megamicros-version = megamicros.apps.version:main",
         ],
     },
     # List additional URLs that are relevant to your project as a dict.

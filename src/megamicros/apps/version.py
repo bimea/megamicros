@@ -21,10 +21,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-import megamicros as mu
+from megamicros import __version__
 
 def main():
-    print( mu.__version__ )
+    print( __version__ )
 
 
 if __name__ == "__main__":
