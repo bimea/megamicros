@@ -169,48 +169,46 @@ In addition, making the doc available on the net needs:
 
 * installing the documentation container to be used with *Docker*
 
-## Local install
+## Local installation
 
-!!! Note
-    Local install of the Megamicros documentation is not needed if you have already cloned all the packages as described above.
-
-Provided you have access to the Github directory, clone it and make a python virtual environment on your local machine:
+Provided you have access to the Github directory, clone it and make a python virtual environment on your local machine (unless you have already done it):
 
 ```bash
-
-    $ > git clone https://gitlabsu.sorbonne-universite.fr/megamicros/Megamicros_readthedoc.git
-    $ > cd Megamicros_readthedoc
-    $ > virtualenv venv
-    $ > source venv/bin/activate
+    > git clone https://github.com/bimea/megamicros.git
+    > cd megamicros
+    > virtualenv venv
+    > source venv/bin/activate
 ```
 
-Load python mkdocs modules in your environment:
+Install mkdocs package in your virtual environment:
 
 ```bash
-    $ > pip install mkdocs mkdocs-material plantuml_markdown 
+    (venv) > pip install mkdocs "mkdocstrings[python]" mkdocs-material plantuml_markdown
 ```
 
-Execute the mkdocs web server:
+Launch the mkdocs web server:
 
 ```bash
-    $ > mkdocs serve
+     (venv) > mkdocs serve
 ```
 
 If you prefere using another port (default is 8000 and may be busy):
 
 ```bash
-    $ > mkdocs serve -a localhost:9003
+     (venv) > mkdocs serve -a localhost:9003
 ```
 
 You are now ready to update the doc and see results on your web navigator.
 
-
-## Docker Install
-
-You can build your own documentation server using docker. 
-The idea is to build a container that clones or pulls the doc repository before launching the python mkdocs server at every container boot/reboot.
+## Set documentation on line
 
 !!! Warning
+    This part will be further reviewed by substituting the MkDocs server with a simple static site generated with MkDocs.
+
+You can build your own documentation server using docker.
+The idea is to build a container that clones or pulls the doc repository before launching the python mkdocs server at every container boot/reboot.
+
+!!! Danger
     Note that this server install is not safe. You should use instead usual robust tools for python web servers
 
 Here is a dockerfile example:
