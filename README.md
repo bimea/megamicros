@@ -20,6 +20,7 @@ Install with pip from your virtual environment:
   > cd megamicros
   > virtualenv venv
   > source venv/bin/activate
+  > pip install -r requirements.txt
 ```
 
 Update your ``.bashrc/.zprofile/...`` by adding (or updating) the ``PYTHONPATH`` variable:
