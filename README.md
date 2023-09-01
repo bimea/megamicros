@@ -34,8 +34,8 @@ Update your ``.bashrc/.zprofile/...`` by adding (or updating) the ``PYTHONPATH``
 * [Direct access from the git repository](docs/index.md)
 * Using the *mkdocs* server: this method requires the GitHub installation:
 ```bash
+  > cd path_to_project/megamicros
   > source venv/bin/activate
   (venv) > pip install mkdocs "mkdocstrings[python]" mkdocs-material plantuml_markdown
-  (venv) > cd path_to_project/megamicros/docs 
   (venv) > mkdocs serve 
 ``` 
