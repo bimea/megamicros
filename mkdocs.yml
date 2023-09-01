@@ -1,0 +1,195 @@
+# see the nlohman/json mkdocs for config example:  https://github.com/nlohmann/json/blob/develop/docs/mkdocs/mkdocs.yml
+# see Material for mkdocs:  https://squidfunk.github.io/mkdocs-material/reference
+
+# Installing
+#   > source venve/bin/activate
+#   > pip install mkdocs mkdocs-material plantuml_markdown
+#   > mkdocs new my-project
+#   > cd my_project
+#   > mkdocs serve -a localhost:9003
+
+# Site config
+site_name: Megamicros documentation
+site_author: Bruno Gas
+site_url: http://readthedoc.biimea.io
+
+# Copyright
+copyright: Copyright &copy; 2022 - 2023 Bruno Gas - Sorbonne Université
+
+# Repository
+repo_name: megamicros
+repo_url: https://github.com/bimea/megamicros.git
+edit_uri: edit/develop/docs/mkdocs/docs
+
+#docs_dir: src
+
+# navigation
+nav:
+  - Home: 'index.md'
+
+  - Tutorials:
+    - tutorials/index.md
+    - Megamicros:
+      - tutorials/megamicros/index.md
+      - Getting started: tutorials/megamicros/get_started.md
+      - H5 antenna: tutorials/megamicros/h5.md
+      - Remote antenna: tutorials/megamicros/remote.md
+    - Megamicros server:
+      - tutorials/mu-server/index.md
+      - Installing: 
+        - tutorials/mu-server/install/index.md
+        - Jetson Nano: tutorials/mu-server/install/jetson.md
+        - Mini PC: tutorials/mu-server/install/minipc.md
+        - Raspberry Pi: tutorials/mu-server/install/raspi.md
+        - 4G Router: tutorials/mu-server/install/4Grouter.md
+      - Using: 'tutorials/mu-server/using.md'
+      - Dev: 
+        - tutorials/mu-server/dev/index.md
+        - MQTT client: 'tutorials/mu-server/dev/mqtt-client.md'
+      - C++ tools:
+        - tutorials/mu-server/c++tools/index.md
+    - Megamicros ML:
+      - tutorials/beamlearning/index.md
+      - AiDB: tutorials/beamlearning/aidb.md
+      - AiBoard: tutorials/beamlearning/aiboard.md
+      - AiLab: tutorials/beamlearning/ailab.md
+      - Beamforming:
+        - tutorials/beamlearning/beamforming/index.md
+    - IoT:
+      - tutorials/iot/index.md
+      - MQTT server: tutorials/iot/mqtt-server.md
+      - MQTT dashboards: tutorials/iot/boards.md
+      - MQTT c++ client: tutorials/iot/mqtt-cpp.md
+      - Station tracker: tutorials/iot/stracker.md
+
+  - API:
+    - api/index.md
+    - Python library:
+      - api/python/index.md
+      - Megamicros:
+        - api/python/megamicros/index.md'
+      - MegamicrosWS:
+        - api/python/megamicros-ws/index.md
+        - (Constructor): 'api/python/megamicros-ws/constructor.md'
+        - defines: 'api/python/megamicros-ws/defines.md'
+        - selftest: 'api/python/megamicros-ws/selftest.md'
+        - run: 'api/python/megamicros-ws/run.md'
+      - Examples:
+        - api/python/examples/index.md
+        - mu32ws_audio: 'api/python/examples/mu32ws_audio.md'
+      - Dataset:
+        - api/python/dataset/index.md
+    - C++ API: 
+      - api/c++/index.md
+      - Megamicros:
+        - api/c++/megamicros/index.md
+        - Parameters: 'api/c++/megamicros/parameters.md'
+      - MegamicrosUSB:
+        - api/c++/megamicros-usb/index.md
+        - bmf_callback: api/c++/megamicros-usb/bmf.md
+      - Usb:
+        - api/c++/usb/index.md
+        - AsyncBulkTransfer: api/c++/usb/async_bulk_transfer.md
+
+  - Contributing:
+    - dev/index.md
+    - Getting started: dev/getting_started.md
+    - Writing doc: dev/writing_doc.md
+    - Managing tools: 
+      - dev/managing_tools/index.md
+      - Python packaging: dev/managing_tools/python_package.md
+      - Python repository: dev/managing_tools/python_repos.md
+      - Nginx as proxy: dev/managing_tools/nginx_proxy.md
+    - Dash components:
+      - dev/dash/index.md
+      - Installing dev tools: dev/dash/install.md
+      - Dash websocket: dev/dash/dash-websocket.md
+
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - codehilite:
+      guess_lang: false
+  - footnotes
+  - md_in_html
+  - plantuml_markdown:
+      format: svg
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.critic
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.magiclink
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tilde
+  - pymdownx.snippets:
+      base_path: src
+      check_paths: true
+  - toc:
+      permalink: true
+
+# Javascripts extensions
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+
+# Doc theme
+theme: 
+  name: material
+  language: en
+  features:
+    - content.code.copy
+    - content.code.select
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.top
+    - content.tabs.link
+  font:
+    text: Roboto
+    code: JetBrains Mono
+  palette:
+    - media: '(prefers-color-scheme: light)'
+      scheme: slate
+      #primary: indigo
+      #accent: indigo
+      primary: blue
+      accent: light-blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: default
+      #primary: indigo
+      #accent: indigo
+      primary: blue
+      accent: light-blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+
+
