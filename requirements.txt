@@ -1,4 +1,4 @@
 mkdocs 
-"mkdocstrings[python]" 
+mkdocstrings[python]
 mkdocs-material 
 plantuml_markdown
