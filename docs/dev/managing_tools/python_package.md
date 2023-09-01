@@ -135,3 +135,4 @@ See the [Python private repository](python_repos.md) section for building a priv
 * [Build your first pip Package](https://dzone.com/articles/executable-package-pip-install)
 * [Identification des versions](https://www.python.org/dev/peps/pep-0440/)
 * [Classifiers](https://pypi.org/classifiers/)
+* [Building Hybrid Python/C++ Packages](https://python.plainenglish.io/building-hybrid-python-c-packages-8985fa1c5b1d)
