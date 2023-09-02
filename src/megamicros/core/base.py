@@ -29,18 +29,20 @@ Documentation
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
+import numpy as np
 from megamicros.log import log
 
 class MemsArray:
-    """
-    MEMs array base class.
+    """ MEMs array base class.
+
+    The MemsArray class models the operation of an antenna composed of any number of microphones 
 
     ...
 
     Attributes
     ----------
-    exposure : float
-        Exposure in seconds.
+    __mems : np.ndarray
+        MEMs array
 
     Methods
     -------
@@ -50,5 +52,20 @@ class MemsArray:
         Change the photo's gamma exposure.
 
     """
-    pass
 
+    __mems_position: np.ndarray
+
+    @property
+    def mems_number( self ) -> int:
+        return len( self.__mems )
+    
+    @property
+    def mems_position( self ) -> np.ndarray:
+        """ Get the antenna mems positions
+        
+        Returns
+        -------
+            mems_position : np.ndarray
+                array of 3D MEMs positions  
+        """
+        return self.__mems_position

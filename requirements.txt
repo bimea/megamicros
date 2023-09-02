@@ -3,3 +3,11 @@ mkdocs
 mkdocs-material
 mkdocstrings[python]
 plantuml_markdown
+numpy
+scipy
+matplotlib
+libusb1
+h5py
+pyaudio
+websockets
+opencv-python
