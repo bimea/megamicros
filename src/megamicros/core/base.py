@@ -21,24 +21,34 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-# megamicros/core/base.py
-# author: bruno.gas@sorbonne-universite.fr
-# date: 
 
-"""Provide several sample math calculations.
+"""Provide the base class of MEMs arrays.
 
-This module allows the user to make mathematical calculations.
-
-The module contains the following functions:
-
-- `add(a, b)` - Returns the sum of two numbers.
-- `subtract(a, b)` - Returns the difference of two numbers.
-- `multiply(a, b)` - Returns the product of two numbers.
-- `divide(a, b)` - Returns the quotient of two numbers.
-
-
+Documentation
+-------------
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
 from megamicros.log import log
+
+class MemsArray:
+    """
+    MEMs array base class.
+
+    ...
+
+    Attributes
+    ----------
+    exposure : float
+        Exposure in seconds.
+
+    Methods
+    -------
+    colorspace(c='rgb')
+        Represent the photo in the given colorspace.
+    gamma(n=1.0)
+        Change the photo's gamma exposure.
+
+    """
+    pass
 
