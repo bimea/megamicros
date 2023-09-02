@@ -41,15 +41,9 @@ class MemsArray:
 
     Attributes
     ----------
-    __mems : np.ndarray
-        MEMs array
+    __mems_position : np.ndarray
+        3D MEMs array  
 
-    Methods
-    -------
-    colorspace(c='rgb')
-        Represent the photo in the given colorspace.
-    gamma(n=1.0)
-        Change the photo's gamma exposure.
 
     """
 
@@ -57,7 +51,7 @@ class MemsArray:
 
     @property
     def mems_number( self ) -> int:
-        return len( self.__mems )
+        return len( self.__mems_position )
     
     @property
     def mems_position( self ) -> np.ndarray:
