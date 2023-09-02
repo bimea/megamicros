@@ -135,10 +135,12 @@ setup(
     #   py_modules=["my_module"],
     #
     # Required
+
     packages=find_packages(
         where="src",
         exclude=["contrib", "docs", "tests*", "tasks"],
     ),
+    #packages = ["megamicros"],
 
     # Specify which Python versions you support. In contrast to the
     # 'Programming Language' classifiers above, 'pip install' will check this

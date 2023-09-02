@@ -158,6 +158,12 @@ The information printed to your terminal tells you that MkDocs is serving your d
 
 Don't forget to push this work on your GitHub/GitLab repository.
 
+The next command build a static documentation site:
+
+```bash
+    > mkdocs build
+```
+
 ## Contributing
 
 Writing documentation needs some tools:

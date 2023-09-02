@@ -105,8 +105,8 @@ When using a private repository as ``pypi.biimea.io``, set the ``.pypirc`` confi
 ```rc
 [distutils]
 index-servers =
-pypi
-biimea
+    pypi
+    biimea
 
 [pypi]
 username:<your_pypi_username>

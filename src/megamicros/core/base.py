@@ -1,4 +1,4 @@
-# core_base.py base class for MegaMicros receivers
+# core.base.py base class for MegaMicros receivers
 #
 # Copyright (c) 2023 Sorbonne Université
 # Author: bruno.gas@sorbonne-universite.fr
@@ -21,7 +21,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-"""
+# megamicros/core/base.py
+# author: bruno.gas@sorbonne-universite.fr
+# date: 
+
+"""Provide several sample math calculations.
+
+This module allows the user to make mathematical calculations.
+
+The module contains the following functions:
+
+- `add(a, b)` - Returns the sum of two numbers.
+- `subtract(a, b)` - Returns the difference of two numbers.
+- `multiply(a, b)` - Returns the product of two numbers.
+- `divide(a, b)` - Returns the quotient of two numbers.
+
+
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 

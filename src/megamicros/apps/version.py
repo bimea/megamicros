@@ -21,6 +21,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+
+"""
+apps/version.py
+
+Print the megamicros installed version
+
+@author: bruno.gas@sorbonne-universite.fr
+
+Documentation
+-------------
+MegaMicros documentation is available on https://readthedoc.biimea.io
+"""
+
 from megamicros import __version__
 
 def main():
