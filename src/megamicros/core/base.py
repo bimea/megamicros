@@ -35,14 +35,23 @@ from megamicros.log import log
 class MemsArray:
     """ MEMs array base class.
 
-    The MemsArray class models antennas composed of any number of microphones
+    The MemsArray class models the operation of an antenna composed of any number of microphones 
+
+    ...
+
+    Attributes
+    ----------
+    __mems_position : np.ndarray
+        3D MEMs array  
+
+
     """
 
     __mems_position: np.ndarray
 
     @property
     def mems_number( self ) -> int:
-        return len( self.__mems )
+        return len( self.__mems_position )
     
     @property
     def mems_position( self ) -> np.ndarray:
