@@ -35,22 +35,7 @@ from megamicros.log import log
 class MemsArray:
     """ MEMs array base class.
 
-    The MemsArray class models the operation of an antenna composed of any number of microphones 
-
-    ...
-
-    Attributes
-    ----------
-    __mems : np.ndarray
-        MEMs array
-
-    Methods
-    -------
-    colorspace(c='rgb')
-        Represent the photo in the given colorspace.
-    gamma(n=1.0)
-        Change the photo's gamma exposure.
-
+    The MemsArray class models antennas composed of any number of microphones
     """
 
     __mems_position: np.ndarray
