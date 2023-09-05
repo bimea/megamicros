@@ -32,6 +32,10 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 from megamicros.log import log
 
+
+DEFAULT_FRAME_LENGTH = 256
+
+
 class MemsArray:
     """ MEMs array base class.
 
@@ -62,13 +66,21 @@ class MemsArray:
 
     __mems_position: np.ndarray
         MEMs 3D position relative to the antenna center 
+
+    __frame_length: int
+        The output buffer length in signal samples number
     """
 
-    __mems: tuple
+    # Antenna dimensions
+    __mems: tuple = []
     __available_mems: tuple
-    __analogs: tuple
-    __available_analogs: tuple
+    __analogs: tuple = []
+    __available_analogs: tuple = []
     __mems_position: np.ndarray | None
+
+    # Output buffering
+    __frame_length: int = DEFAULT_FRAME_LENGTH
+    __it: int = 0
 
     @property
     def mems_number( self ) -> int:
@@ -101,24 +113,76 @@ class MemsArray:
         """
         return self.__mems_position
     
-    def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None=None ):
+    @property
+    def frame_length( self ) -> int:
+        """ Get the output frames length """
+        return self.__frame_length
+
+    
+    def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None=None, unit: str|None=None ):
         """Create an antenna object
 
-        One of the two MEMs parameters should be given. 
+        One of the two MEMs parameters (`available_mems_number` or `mems_position`) should be given. 
 
         Parameters:
         -----------
         available_mems_number : int | None
             The total number of MEMs composing the antenna
-        mems_position = np.ndarray | None
+        mems_position : np.ndarray | None
             The positions of the MEMs relative to the center of the antenna
+        unit : str | None
+            The unit used for mems_position ("meters", "centimeters", "millimeters"), default is "meters"
         """
 
         if available_mems_number is None and mems_position is None:
             raise Exception( f"At least one of the two parameters `available_mems_number` or `mems_position` should be given" )
-        elif mems_position is None:
-            self.__mems_position = None
-            self.__available_mems = [i for i in available_mems_number]
-        else:
+        elif mems_position is not None:
             self.__mems_position = mems_position
-            self.__available_mems = [i for i in len( mems_position )]
+            self.__available_mems = [i for i in range( len( mems_position ) )]
+        else:
+            self.__mems_position = None
+            self.__available_mems = [i for i in range( available_mems_number )]
+
+    def set_frame_length( self, frame_length: int ):
+        """ Set the output frame length in samples number 
+        
+        Parameters:
+        -----------
+        frame_length : int
+            the frame length in samples number
+        """
+
+        self.__frame_length = frame_length
+
+
+    def set_active_mems( self, mems: tuple ):
+        """ Activate mems
+
+        Parameters:
+        -----------
+        mems : tuple
+            list or tuple of mems number to activate
+        """
+
+        # Check if activated MEMs are available. Raise an exception if not
+        if False in np.isin( mems, self.__available_mems ):
+            mask = np.logical_not( np.isin( mems, self.__available_mems ) )
+            raise Exception( f"Some activated microphones ({mems[mask]}) are not available on antenna.")
+
+        self.__mems = mems
+
+
+    def __iter__( self ):
+        """ Init iterations over the antenna data """
+
+        self.__it = 0
+        return self
+
+    def __next__( self ) -> np.ndarray :
+        """ next iteration over the antenna data 
+
+        Note that as MemsArray is a base class without any data inside, one can only return zeros filled data
+        """
+
+        self.__it += 1
+        return np.zeros( ( self.mems_number, self.__frame_length ) )
