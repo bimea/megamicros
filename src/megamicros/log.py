@@ -24,11 +24,24 @@
 """
 MegaMicros documentation is available on https://readthedoc.biimea.io
 
+Declare a stream handler for screen printing and a file handler for log file reporting
+Declare a global logging handler which default level is set on `logging.NOTSET` (which means no log messages printing)
+The default log file name is `./megamicros.log`.
+
+You can set the level to:
+* debug
+* info
+* warning
+* error
+* critical
+
 Usage:
- >>> import megamicro.data
-Or:
- >>> from  megamicro.data import log
+------
+
+from megamicros import log
+log.setLevel( 'info' )
 """
+
 
 import logging
 import traceback
@@ -36,7 +49,7 @@ import traceback
 DEBUG_MODE = True
 DEFAULT_LOGFILE = './megamicros.log'
 
-class Mu32Formatter(logging.Formatter):
+class MuFormatter(logging.Formatter):
 	"""Logging Formatter to add colors and count warning / errors"""
 
 	green = "\x1b[32;21m"
@@ -66,11 +79,11 @@ class Mu32Formatter(logging.Formatter):
 
 mulog_ch = logging.StreamHandler()
 mulog_ch.setLevel( logging.DEBUG )
-mulog_ch.setFormatter( Mu32Formatter() )
+mulog_ch.setFormatter( MuFormatter() )
 
 mulog_ch2 = logging.FileHandler( DEFAULT_LOGFILE, mode='a', encoding='utf-8', delay=False, errors=None)
 mulog_ch2.setLevel( logging.DEBUG )
-mulog_ch2.setFormatter( Mu32Formatter() )
+mulog_ch2.setFormatter( MuFormatter() )
 
 log = logging.getLogger( __name__ )
 log.addHandler( mulog_ch2 )

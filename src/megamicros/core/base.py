@@ -34,6 +34,7 @@ from megamicros.log import log
 
 
 DEFAULT_FRAME_LENGTH = 256
+DEFAULT_SAMPLING_FREQUENCY = 50000
 
 
 class MemsArray:
@@ -67,6 +68,9 @@ class MemsArray:
     __mems_position: np.ndarray
         MEMs 3D position relative to the antenna center 
 
+    __sampling_frequency: float
+        Sampling frequency
+
     __frame_length: int
         The output buffer length in signal samples number
     """
@@ -77,6 +81,9 @@ class MemsArray:
     __analogs: tuple = []
     __available_analogs: tuple = []
     __mems_position: np.ndarray | None
+
+    # Antenna properties
+    __sampling_frequency: float = DEFAULT_SAMPLING_FREQUENCY
 
     # Output buffering
     __frame_length: int = DEFAULT_FRAME_LENGTH
@@ -119,6 +126,12 @@ class MemsArray:
         return self.__frame_length
 
     
+    @property
+    def sampling_frequency( self ) -> float:
+        """ Get the antenna current sampling frequency """
+        return self.__sampling_frequency
+    
+
     def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None=None, unit: str|None=None ):
         """Create an antenna object
 
@@ -143,7 +156,7 @@ class MemsArray:
             self.__mems_position = None
             self.__available_mems = [i for i in range( available_mems_number )]
 
-    def set_frame_length( self, frame_length: int ):
+    def setFrameLength( self, frame_length: int ):
         """ Set the output frame length in samples number 
         
         Parameters:
@@ -155,7 +168,19 @@ class MemsArray:
         self.__frame_length = frame_length
 
 
-    def set_active_mems( self, mems: tuple ):
+    def setSamplingFrequency( self, sampling_frequency: float ):
+        """ Set the antenna sampling frequency
+        
+        Parameters:
+        -----------
+        sampling_frequency : float
+            The sampling frequency (default is given by DEFAULT_SAMPLING_FREQUENCY)
+        """
+
+        self.__frame_length = sampling_frequency
+
+
+    def setActiveMems( self, mems: tuple ):
         """ Activate mems
 
         Parameters:
