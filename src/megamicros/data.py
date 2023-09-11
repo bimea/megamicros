@@ -25,9 +25,12 @@
 MegaMicros documentation is available on https://readthedoc.biimea.io
 git clone https://gitlabsu.sorbonne-universite.fr/megamicros/Megamicros.git
 """
-
+import os
+from matplotlib import pyplot as plt
 import numpy as np
+from scipy.io import wavfile
 from megamicros.exception import MuException
+from megamicros.log import log
 
 DEFAULT_LIMIT_VALUE = 10
 FILETYPE_H5 = 1
@@ -203,3 +206,53 @@ class MuAudio( MuData ):
 
         self.__frame_size = frame_size
         self.__frame_number = int( np.shape(self.__raw)[1] / self.__frame_size )
+
+
+def generate_moovie( imgs, rate: float, sound, sampling_frequency, norm=None, extent=None, cleanup=True ):
+
+    # Create tmp directory
+    log.info( f' .Create ./tmp directory...' )
+    os.system( 'mkdir -p ./tmp && rm -Rf ./tmp/*' )
+
+    # Create video from images 
+    if norm == None:
+        log.info( f' .Generate images as png files without normalization...' )
+        for i, img in enumerate( imgs ):
+            plt.imshow( img, origin='lower', extent=extent)
+            plt.savefig( f"./tmp/file{i:02d}.png" )
+    elif norm == 'energy':
+        log.info( f' .Generate images as png files with sequence energy normalization...' )
+        log.info( f' .Found min/max images values in sequence: [{np.amin(imgs)}, {np.amax(imgs) }]' )
+        for i, img in enumerate( imgs ):
+            plt.imshow( img, vmin=np.amin(imgs), vmax=np.amax(imgs), origin='lower', extent=extent )
+            plt.savefig( f"./tmp/file{i:02d}.png" )
+    else:
+        raise MuException( f"Unknown normalization method: '{norm}'.")
+
+    # write video
+    log.info( f' .Generate video from png files...' )
+    cmd = f"cd ./tmp && ffmpeg -v error -r {rate} -i file%02d.png -vcodec mpeg4 -y video.mp4"
+    error = os.system( cmd )
+    if error:
+        raise MuException( "failed to write mp4 video file from png images..." )
+
+    # Save sound
+    log.info( f' .Generate sound wav file...' )
+    wavfile.write ( f"./tmp/audio.wav", sampling_frequency, sound )
+    print( "audio saved")
+
+    # merge video and sound
+    log.info( f' .Merge audio with video and make mp4 movie file...' )
+    cmd = f"cd ./tmp && ffmpeg -v error -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -shortest movie.mp4"
+    error = os.system( cmd )
+    if error:
+        raise MuException( "failed to write mp4 movie file..." )
+    
+    log.info( f' .Movie saved' )
+
+    # Remove png files
+    if cleanup:
+        log.info( f' .Remove temporary png files...' )
+        cmd = f"cd ./tmp && rm *.png"
+        if os.system( cmd ):
+            raise MuException( "failed to cleanup temporary directory" )
