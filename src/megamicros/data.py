@@ -208,7 +208,32 @@ class MuAudio( MuData ):
         self.__frame_number = int( np.shape(self.__raw)[1] / self.__frame_size )
 
 
-def generate_moovie( imgs, rate: float, sound, sampling_frequency, norm=None, extent=None, cleanup=True ):
+def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_frequency: float, norm=str|None, extent=None, cleanup=True ):
+    """
+    Generate a film by adding audio to image sequence.
+    Images files are build in a ./tmp local directory and removed if `cleanup` is set du True
+
+    Parameters
+    ----------
+    imgs: np.ndarray
+        list of images saved as 2D numpy array
+    rate: float 
+        images number per second (video frequency)
+    sound: np.ndarray
+        sound as a numpy array of float
+    sampling_frequency: float
+        sound sampling frequency
+    norm: str, optional
+        images normalization method. Can be either None or "energy"
+    extend: floats (left, right, bottom, top), optional
+        The bounding box in data coordinates that the image will fill.
+        The image is stretched individually along x and y to fill the box.
+    cleanup: bool, optional
+        clean temporary directory
+    """
+    
+    # Can work with int type for sampling_frequency
+    sampling_frequency = int( sampling_frequency )
 
     # Create tmp directory
     log.info( f' .Create ./tmp directory...' )
@@ -239,7 +264,6 @@ def generate_moovie( imgs, rate: float, sound, sampling_frequency, norm=None, ex
     # Save sound
     log.info( f' .Generate sound wav file...' )
     wavfile.write ( f"./tmp/audio.wav", sampling_frequency, sound )
-    print( "audio saved")
 
     # merge video and sound
     log.info( f' .Merge audio with video and make mp4 movie file...' )
