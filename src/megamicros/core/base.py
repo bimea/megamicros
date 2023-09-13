@@ -31,6 +31,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 
 import numpy as np
 from megamicros.log import log
+from megamicros.exception import MuException
 
 
 DEFAULT_FRAME_LENGTH = 256
@@ -76,11 +77,11 @@ class MemsArray:
     """
 
     # Antenna dimensions
-    __mems: tuple = []
-    __available_mems: tuple
-    __analogs: tuple = []
-    __available_analogs: tuple = []
-    __mems_position: np.ndarray | None
+    __mems: tuple|None = None
+    __available_mems: tuple|None = None
+    __analogs: tuple|None = None
+    __available_analogs: tuple|None = None
+    __mems_position: np.ndarray|None = None
 
     # Antenna properties
     __sampling_frequency: float = DEFAULT_SAMPLING_FREQUENCY
@@ -132,29 +133,103 @@ class MemsArray:
         return self.__sampling_frequency
     
 
-    def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None=None, unit: str|None=None ):
-        """Create an antenna object
+    #def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None=None, unit: str|None=None ):
+    def __init__( self, *args, **kwargs ):
 
-        One of the two MEMs parameters (`available_mems_number` or `mems_position`) should be given. 
+        """Create an antenna object
 
         Parameters:
         -----------
         available_mems_number : int | None
-            The total number of MEMs composing the antenna
+            The total number of MEMs composing the antenna with MEMs numbered from 0 to `available_mems_number-1`
         mems_position : np.ndarray | None
-            The positions of the MEMs relative to the center of the antenna
+            The 3D positions of the MEMs relative to the center of the antenna
         unit : str | None
             The unit used for mems_position ("meters", "centimeters", "millimeters"), default is "meters"
         """
+        
+        if len( args ) != 0:
+            raise MuException( "Direct arguments are not accepted for MemsArray objects" )
 
-        if available_mems_number is None and mems_position is None:
-            raise Exception( f"At least one of the two parameters `available_mems_number` or `mems_position` should be given" )
-        elif mems_position is not None:
-            self.__mems_position = mems_position
-            self.__available_mems = [i for i in range( len( mems_position ) )]
-        else:
-            self.__mems_position = None
-            self.__available_mems = [i for i in range( available_mems_number )]
+        # No args -> nothing to do
+        if len( kwargs ) == 0:
+            return
+                
+        if 'available_mems_number' in kwargs:
+            self.setAvailableMems( kwargs['available_mems_number'] )
+
+        if 'mems_position' in kwargs:
+            self.setMemsPosition( kwargs['mems_position'], unit=kwargs['unit'] if 'unit' in kwargs else None )
+        
+        if 'mems' in kwargs:
+            self.setActiveMems( kwargs['mems'] )
+
+        log.info( f" .Created a new antenna" )
+
+
+
+    def setMemsPosition( self, mems_position: np.ndarray, unit: str="meters" ):
+        """ Set MEMs physical position
+        
+        Parameters
+        ----------
+        mems_position: np.ndarray
+            3D array of MEMs position (shape = `(mems_number, 3)`)
+
+        """
+        if mems_position.shape[1] != 3:
+            raise MuException( f"Array dimensions are not correct: shape is {mems_position.shape} but should be (mems_number, 3)" )
+
+        # Build the available MEMs list if needed:
+        if self.__available_mems is None:
+            log.info( f" .Setting available MEMs numbered from 0 to {mems_position.shape[0]-1}" )
+            self.__available_mems = [i for i in range(mems_position.shape[0])]
+
+        # check matching with available MEMs
+        if mems_position.shape[0] > len( self.__available_mems ):
+            log.warning( f"Positions array of size {mems_position.shape} does not match with the available MEMs list: rebuilding it" )
+            self.__available_mems = [i for i in range(mems_position.shape[0])]
+
+        # check matching with activated MEMs
+        if self.__mems is not None:
+            if mems_position.shape[0] <= max( self.__mems ):
+                log.warning( f"Positions array of size {mems_position.shape} does not match with the activated MEMs list: deactivating MEMs" )
+                self.__mems = None
+
+        self.__mems_position = mems_position
+        if unit == "centimeters":
+            self.__mems_position /= 100
+        elif unit == "millimeters":
+            self.__mems_position /= 1000
+
+        log.info( f" .Set a {mems_position.shape[0]} activable MEMs antenna with physical positions" )
+
+
+    def setAvailableMems( self, available_mems_number: int ):
+        """Init antenna available MEMs.
+        
+        This funtion deactivates MEMs if some are already activated 
+
+        Parameters
+        ----------
+        available_mems_number: int
+            Antenna available MEMs number which will be numbered from 0 to `available_mems_number-1`
+        """
+        self.__available_mems = [i for i in range(available_mems_number)]
+
+        # Deactivate MEMs
+        if self.__mems is not None and max(self.__mems) >= available_mems_number:
+            log.warning( f"Some MEMs are activated that do not match the new antenna definition: all MEMs are now unactivated" )
+            self.__mems = None
+
+        # Check positions matching if any
+        if self.__mems_position is not None:
+            if self.__mems_position.shape[0] != available_mems_number:
+                log.warning( f"Actual MEMs positions do not match the new antenna definition: deleting all positions" )
+                self.__mems_position = None
+
+        log.info( f" .Set a {available_mems_number} MEMs antenna with MEMs numbered from 0 to {available_mems_number-1}" )
+
 
     def setFrameLength( self, frame_length: int ):
         """ Set the output frame length in samples number 
@@ -189,12 +264,20 @@ class MemsArray:
             list or tuple of mems number to activate
         """
 
+        if self.__available_mems is None:
+            raise MuException( f"Cannot actiavte MEMs on antenna with no available MEMs" )
+
         # Check if activated MEMs are available. Raise an exception if not
         if False in np.isin( mems, self.__available_mems ):
             mask = np.logical_not( np.isin( mems, self.__available_mems ) )
-            raise Exception( f"Some activated microphones ({mems[mask]}) are not available on antenna.")
+            raise Exception( f"Some activated microphones ({np.array(mems)[mask]}) are not available on antenna.")
+
+        # Warning if physical MEMs already activated
+        if self.__mems is not None and self.__mems_position is not None:
+            log.warning( "MEMs are already activated with physical positions set. Please consider that new activated map could not match with physical MEMs positions" )
 
         self.__mems = mems
+        log.info( f" .{len(mems)} MEMs were activated among 0 to {len(self.__available_mems)-1} available MEMs" )
 
 
     def __iter__( self ):
