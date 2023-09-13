@@ -32,6 +32,8 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 from megamicros.log import log
 from megamicros.exception import MuException
+from megamicros.db.query import AidbSession
+from megamicros.data import MuAudio
 
 
 DEFAULT_FRAME_LENGTH = 256
@@ -125,7 +127,6 @@ class MemsArray:
     def frame_length( self ) -> int:
         """ Get the output frames length """
         return self.__frame_length
-
     
     @property
     def sampling_frequency( self ) -> float:
@@ -167,8 +168,47 @@ class MemsArray:
         log.info( f" .Created a new antenna" )
 
 
+    def setInputDB( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=True ) -> None :
+        """ Connect the antenna input stream to a labelized database 
+        
+        Parameters
+        ----------
+        dbhost: str
+            the database host address in the form ``http(s)://www.database.io``
+        login: str
+            database account login
+        email: str
+            database user email
+        passwd: str
+            account password
+        label_id: int
+            signal label
+        file_id: int, optional
+            file identifier. Default is all files containing the labelized signals
+        sequence_id: int, optional
+            sequence identifier. Default is all the sequences in file
+        preload: bool, optional
+            Whether to load the whool sequence once or not. Default is `True` 
+        """
 
-    def setMemsPosition( self, mems_position: np.ndarray, unit: str="meters" ):
+        try:
+            with AidbSession(
+                dbhost=dbhost,
+                login=login,
+                email=email,
+                password=passwd ) as session:
+                    signal: MuAudio = session.load_labelized( 
+                        sourcefile_id=file_id, 
+                        label_id=label_id, 
+                        limit=100, 
+                        channels=list( np.arange( 32 ) + 1 ) 
+                    )[sequence_id]
+        except Exception as e:
+            raise MuException( e )
+
+
+
+    def setMemsPosition( self, mems_position: np.ndarray, unit: str="meters" ) -> None :
         """ Set MEMs physical position
         
         Parameters
@@ -205,7 +245,7 @@ class MemsArray:
         log.info( f" .Set a {mems_position.shape[0]} activable MEMs antenna with physical positions" )
 
 
-    def setAvailableMems( self, available_mems_number: int ):
+    def setAvailableMems( self, available_mems_number: int ) -> None :
         """Init antenna available MEMs.
         
         This funtion deactivates MEMs if some are already activated 
@@ -231,7 +271,7 @@ class MemsArray:
         log.info( f" .Set a {available_mems_number} MEMs antenna with MEMs numbered from 0 to {available_mems_number-1}" )
 
 
-    def setFrameLength( self, frame_length: int ):
+    def setFrameLength( self, frame_length: int ) -> None :
         """ Set the output frame length in samples number 
         
         Parameters:
@@ -243,7 +283,7 @@ class MemsArray:
         self.__frame_length = frame_length
 
 
-    def setSamplingFrequency( self, sampling_frequency: float ):
+    def setSamplingFrequency( self, sampling_frequency: float ) -> None :
         """ Set the antenna sampling frequency
         
         Parameters:
@@ -255,7 +295,7 @@ class MemsArray:
         self.__frame_length = sampling_frequency
 
 
-    def setActiveMems( self, mems: tuple ):
+    def setActiveMems( self, mems: tuple ) -> None :
         """ Activate mems
 
         Parameters:
@@ -280,7 +320,7 @@ class MemsArray:
         log.info( f" .{len(mems)} MEMs were activated among 0 to {len(self.__available_mems)-1} available MEMs" )
 
 
-    def __iter__( self ):
+    def __iter__( self ) :
         """ Init iterations over the antenna data """
 
         self.__it = 0
@@ -293,4 +333,4 @@ class MemsArray:
         """
 
         self.__it += 1
-        return np.zeros( ( self.mems_number, self.__frame_length ) )
+        return np.random.rand( self.mems_number, self.__frame_length ) * 2 - 1
