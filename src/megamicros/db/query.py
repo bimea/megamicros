@@ -26,7 +26,6 @@ import numpy as np
 
 from megamicros.log import log
 from megamicros.data import MuAudio, FILETYPE_MUH5, FILETYPE_WAV
-
 from megamicros.db.exception import MuDbException
 from megamicros.db.session import RestDBSession, DEFAULT_TIMEOUT
 
@@ -46,15 +45,20 @@ class AidbSession( RestDBSession ):
 # =============================================================================
 
     def get_meta( self, object:str, id:int|None=None, url:str|None=None, field:dict|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
-        """
-        Get object metadata content from identifier url or other fields given as argument
+        """ Get object metadata content from identifier url or other fields given as argument
 
-        ## Parameters
-        * obejct: object name (the database table name)
-        * id: object identifier in database
-        * url: object full url in database
-        * field: dictionary {'label': 'field_name', 'value': value } giving the field for searching
-        * timeout: the time after which the call throw a timeout exception
+        Parameters
+        ----------
+        object: str
+            object name (the database table name)
+        id: int, optional
+            object identifier in database
+        url: str, optional
+            object full url in database
+        field: dict, optional
+            dictionary of the form ``{'label': 'field_name', 'value': value }`` giving the field for searching
+        timeout: int, optional
+            the time after which the call throw a timeout exception
         """
         if object not in DATABASE_TABLES:
             log.error( f"Fetching metadata failed for object {object}: unknown object" )
@@ -654,8 +658,7 @@ class AidbSession( RestDBSession ):
 # =============================================================================
 
     def get_sourcefile( self, id:int|None=None, url:str|None=None, filename:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
-        """
-        Get context metadata content from identifier url or name
+        """ Get context metadata content from identifier url or name
         """
         field = None if filename is None else {'label': 'filename', 'value': filename}
         return self.get_meta( object='sourcefile', id=id, url=url, field=field, timeout=timeout )
@@ -894,15 +897,25 @@ class AidbSession( RestDBSession ):
         """
         Load labelized audio data from database
 
-        ## Parameters
-        * label_id: the label identifier
-        * sourcefile_id: file identifier for file filtering (default: all database files are considered)
-        * tags_id: tag's identifiers for response filtering (default: all tags accepted)
-        * limit: max number of audio signals to download
-        * channels: list of channels to extract from the file, default is [1,2]
+        Parameters
+        ----------
+        label_id: int
+            the label identifier
+        sourcefile_id: int, optional
+            file identifier for file filtering (default: all database files are considered)
+        tags_id: int, optional
+            tag's identifiers for response filtering (default: all tags accepted)
+        limit: int, optional
+            max number of audio signals to download. Default is 100
+        timeout: int, optional
+            the delay before abandon if the server does not responds
+        channels: list, optional
+            list of channels to extract from the file, default is [1,2]
 
-        ## Returns
-        List of MuAudio objects 
+        Returns
+        -------
+        results: list
+            List of MuAudio objects 
         """
 
         # Get labelized signal's metadata
@@ -925,6 +938,8 @@ class AidbSession( RestDBSession ):
                 raise MuDbException( "Unknown type of identifier for 'tags_id' parameter" )
         
         response = self.get( f"/filelabeling/?{'&'.join( queries )}", timeout=timeout ).json()
+        print( f"request=/filelabeling/?{'&'.join( queries )}" )
+        
         
         if response['count'] == 0:
             log.info( f" .No signal labelized found for label {label_id}'")

@@ -229,14 +229,19 @@ class RestDBSession:
 # =============================================================================
 
     def get( self, request:str, timeout:int=DEFAULT_TIMEOUT, full_url:bool=False ) -> requests.Response:
-        """
-        The [GET] REST command
+        """ The [GET] REST command
 
-        ## Parameters:
-        * request: the database request
-        * timeout: time before abandon if server does not responds
-        * full_url: True or False whether the host is provided or not in the url request (default is False)
+        Parameters
+        ----------
+        request: str
+            The database request
+        timeout: int, optional
+            Time before abandon if server does not responds
+        full_url: bool, optional
+            True or False whether the host is provided or not in the url request (default is False)
 
+        Returns
+        -------
         Reponse can be either json text or binary:
         >>> get( request=some_request ).json()  # if json response
         >>> get( request=some_request ).content # if binary response
@@ -266,12 +271,16 @@ class RestDBSession:
 
 
     def post( self, request: str, content, timeout=DEFAULT_TIMEOUT, full_url:bool=False ) -> requests.Response:
-        """
-        Submit a POST request to the database server
+        """ Submit a POST request to the database server
 
-        * request: the endpoint url or the complete url (host with endpoint)
-        * timeout: time limit after which the method throw an exception
-        * full_url: True or False whether the host is provided or not in the url request (default is False)
+        Parameters
+        ----------
+        request: str
+            the endpoint url or the complete url (host with endpoint)
+        timeout: int, optional
+            time limit after which the method throw an exception
+        full_url: bool, optional
+            True or False whether the host is provided or not in the url request (default is False)
         """
 
         if self.__connected_flag == False:
@@ -296,12 +305,17 @@ class RestDBSession:
         return response
 
     def put( self, request: str, content: dict, timeout=DEFAULT_TIMEOUT, full_url:bool=False ) -> requests.Response:
-        """
+        """ 
         Submit a PUT request to the database server
 
-        * request: the endpoint url or the complete url (host with endpoint)
-        * timeout: time limit after which the method throw an exception
-        * full_url: True or False whether the host is provided or not in the url request (default is False)
+        Parameters
+        ----------
+        request: str
+            the endpoint url or the complete url (host with endpoint)
+        timeout: int, optional
+            time limit after which the method throw an exception
+        full_url: bool, optional
+            True or False whether the host is provided or not in the url request (default is False)
         """
 
         if self.__connected_flag == False:
@@ -327,13 +341,18 @@ class RestDBSession:
 
 
     def patch( self, request: str, content: dict, timeout=DEFAULT_TIMEOUT, full_url:bool=False  ) -> requests.Response:
-        """
-        Submit a PATCH request to the database server
+        """ Submit a PATCH request to the database server
 
-        * request: the endpoint url or the complete url (host with endpoint)
-        * content: dictionary of fields to be updated
-        * timeout: time limit after which the method throw an exception
-        * full_url: True or False whether the host is provided or not in the url request (default is False)
+        Parameters
+        ----------
+        request: str
+            the endpoint url or the complete url (host with endpoint)
+        content: dict
+            dictionary of fields to be updated
+        timeout: int, optional
+            time limit after which the method throw an exception
+        full_url: bool, optional 
+            True or False whether the host is provided or not in the url request (default is False)
         """
         
         if self.__connected_flag == False:
@@ -359,16 +378,20 @@ class RestDBSession:
 
 
     def delete( self, request: str, timeout:int=DEFAULT_TIMEOUT, full_url:bool=False ) -> requests.Response:
-        """
-        Send a delete request to database server
+        """ Send a delete request to database server
 
-        Args:
-        * request: a string containing the database end point 
-        * timeout: the delay after what the session throw a timeout exception
-        * full_url: True or False whether the host is provided or not in the url request (default is False)
+        Parameters
+        ----------
+        request: str
+            a string containing the database end point 
+        timeout: int, optional 
+            the delay after what the session throw a timeout exception
+        full_url: bool, optional
+            True or False whether the host is provided or not in the url request (default is False)
 
-        Returns:
-        * Response object
+        Returns
+        -------
+            Response object: requests.Response
         """
         if self.__connected_flag == False:
             log.error( "Bad request on data base: connection is closed" )

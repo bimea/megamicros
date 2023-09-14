@@ -45,9 +45,13 @@ class MemsArray:
 
     The MemsArray class models the operation of an antenna composed of any number of microphones
     Les microphones de l'antenne sont obligatoireement numérotés de 0 à `available_mems_number`. 
-    Certains peuvent ne pas être *actifs*. `mems_number` donne le nombre de microphnes actifs. 
+    Certains peuvent ne pas être *actifs*. `mems_number` donne le nombre de microphones actifs. 
     Les microphones sont définis par une position relative au centre de l'antenne. 
     Ces positions peuvent ne pas être connues. Il n'est alors pas possible de faire du filtrage spatial.
+    Les positions des microphones peuvent ne pas être tutes déterminées. 
+    C'est le cas lorsque des microphones sont devenus hors d'usage au moement de la mesure.
+    Ces microphpjnes sont toujours identifiés comme *available*, mais ils doivent être désactivés dans l'antenne lorsque leurs signaux sont absents du flux entrant.
+ 
 
     Antenna microphones must be numbered from 0 to `available_mems_number`. 
     Some may not be *active*. `mems_number` gives the number of active microphones. 
@@ -68,7 +72,7 @@ class MemsArray:
     __available_analogs: tuple
         actual analogs channels
 
-    __mems_position: np.ndarray
+    __mems_position: np.ndarray|None
         MEMs 3D position relative to the antenna center 
 
     __sampling_frequency: float
@@ -83,7 +87,9 @@ class MemsArray:
     __available_mems: tuple|None = None
     __analogs: tuple|None = None
     __available_analogs: tuple|None = None
-    __mems_position: np.ndarray|None = None
+    __mems_position: np.ndarray|None|None = None
+    __counter: bool|None = None
+    __counter_skip: bool|None = None
 
     # Antenna properties
     __sampling_frequency: float = DEFAULT_SAMPLING_FREQUENCY
@@ -113,15 +119,30 @@ class MemsArray:
         return len( self.__available_analogs )
     
     @property
-    def mems_position( self ) -> np.ndarray | None:
+    def mems_position( self ) -> np.ndarray|None | None:
         """ Get the antenna mems positions
         
         Returns
         -------
-            mems_position : np.ndarray | None
+            mems_position : np.ndarray|None | None
                 array of 3D MEMs positions  
         """
         return self.__mems_position
+
+    @property
+    def mems( self ) -> tuple | None:
+        """ Get the activated memes list """
+        return self.__mems
+
+    @property
+    def counter( self ) -> bool | None:
+        """ Get the counter status """
+        return self.__counter
+    
+    @property
+    def counter_skip( self ) -> bool | None:
+        """ Get the counter skipping status """
+        return self.__counter_skip
     
     @property
     def frame_length( self ) -> int:
@@ -134,7 +155,7 @@ class MemsArray:
         return self.__sampling_frequency
     
 
-    #def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None=None, unit: str|None=None ):
+    #def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None|None=None, unit: str|None=None ):
     def __init__( self, *args, **kwargs ):
 
         """Create an antenna object
@@ -143,7 +164,7 @@ class MemsArray:
         -----------
         available_mems_number : int | None
             The total number of MEMs composing the antenna with MEMs numbered from 0 to `available_mems_number-1`
-        mems_position : np.ndarray | None
+        mems_position : np.ndarray|None | None
             The 3D positions of the MEMs relative to the center of the antenna
         unit : str | None
             The unit used for mems_position ("meters", "centimeters", "millimeters"), default is "meters"
@@ -167,53 +188,55 @@ class MemsArray:
 
         log.info( f" .Created a new antenna" )
 
+    def setCounter( self ) -> None :
+        """ Make counter available. Counter state will be added to output signals 
 
-    def setInputDB( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=True ) -> None :
-        """ Connect the antenna input stream to a labelized database 
-        
-        Parameters
-        ----------
-        dbhost: str
-            the database host address in the form ``http(s)://www.database.io``
-        login: str
-            database account login
-        email: str
-            database user email
-        passwd: str
-            account password
-        label_id: int
-            signal label
-        file_id: int, optional
-            file identifier. Default is all files containing the labelized signals
-        sequence_id: int, optional
-            sequence identifier. Default is all the sequences in file
-        preload: bool, optional
-            Whether to load the whool sequence once or not. Default is `True` 
+        See
+        ---
+            MemsArray.unsetCounter()
+        """
+        self.__counter = True
+
+    def unsetCounter( self ) -> None :
+        """ Make counter unavailable.
+
+        See
+        ---
+            MemsArray.setCounter()
+        """
+        self.__counter = False
+
+    def setCounterSkip( self ) -> None :
+        """ If counter is available, do not add counter state in output signals
+
+        See
+        ---
+            MemsArray.setCounter()
+            MemsArray.unsetCounterSkip()
+        """
+        self.__counter_skip = True
+
+    def unsetCounterSkip( self ) -> None :
+        """ If counter is available, add counter state in output signals
+
+        See
+        ---
+            MemsArray.setCounter()
+            MemsArray.setCounterSkip()
+        """
+        self.__counter_skip = False
+
+
+    def setCounter( self ) -> None :
+        """ Make counter available. Counter state will be added to output signals 
         """
 
-        try:
-            with AidbSession(
-                dbhost=dbhost,
-                login=login,
-                email=email,
-                password=passwd ) as session:
-                    signal: MuAudio = session.load_labelized( 
-                        sourcefile_id=file_id, 
-                        label_id=label_id, 
-                        limit=100, 
-                        channels=list( np.arange( 32 ) + 1 ) 
-                    )[sequence_id]
-        except Exception as e:
-            raise MuException( e )
-
-
-
-    def setMemsPosition( self, mems_position: np.ndarray, unit: str="meters" ) -> None :
+    def setMemsPosition( self, mems_position: np.ndarray|None, unit: str="meters" ) -> None :
         """ Set MEMs physical position
         
         Parameters
         ----------
-        mems_position: np.ndarray
+        mems_position: np.ndarray|None
             3D array of MEMs position (shape = `(mems_number, 3)`)
 
         """
@@ -326,11 +349,102 @@ class MemsArray:
         self.__it = 0
         return self
 
-    def __next__( self ) -> np.ndarray :
+    def __next__( self ) -> np.ndarray|None :
         """ next iteration over the antenna data 
 
-        Note that as MemsArray is a base class without any data inside, one can only return zeros filled data
+        Note that as MemsArray is a base class without any data inside, one can only return random data
         """
 
         self.__it += 1
-        return np.random.rand( self.mems_number, self.__frame_length ) * 2 - 1
+
+        if self.__counter == False or ( self.__counter == True and self.__counter_skip==True ):
+            # send data without counter status
+            return np.random.rand( self.mems_number, self.__frame_length ) * 2 - 1
+        else:
+            # add counter values
+            pass
+
+
+
+class MemsArrayDB( MemsArray ):
+    """ MEMs array class with input stream connected to a remote database.
+
+    """
+
+    __source: np.ndarray|None = None
+
+    def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
+        """ Connect the antenna input stream to a labelized database 
+
+        The connection to the database is verified. If the database is not available, an exception is raised. 
+        If the `preload` parameter is set to `True`, the antenna signals are uploaded and buffered once from this stage. 
+        
+        Parameters
+        ----------
+        dbhost: str
+            the database host address in the form ``http(s)://www.database.io``
+        login: str
+            database account login
+        email: str
+            database user email
+        passwd: str
+            account password
+        label_id: int
+            signal label
+        file_id: int, optional
+            file identifier. Default is all files containing the labelized signals
+        sequence_id: int, optional
+            sequence identifier. Default is all the sequences in file
+        preload: bool, optional
+            Whether to load the whool sequence once or not. Default is `False` 
+        """
+
+
+        if file_id is None:
+            raise MuException( f"Sorry, working on several files is not yet implemented" )
+        
+        # test connection to database
+        if preload == False:
+            try:
+                with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
+                    log.info( f"Connected successfully to {dbhost}" )
+                    # get meta data
+                    meta = session.get_sourcefile( file_id )
+                    self.__sampling_frequency = meta['info']['sampling_frequency']
+                    self.__available_mems =  meta['info']['mems']
+                    self.__counter = meta['info']['counter']
+                    self.__counter_skip = meta['info']['counter_skip']
+                    self.__available_analogs = meta['info']['analogs']
+                    channels_number = meta['info']['channels_number']
+
+
+            except MuException as e:
+                raise( f"Connection to database {dbhost} failed: {e}" )
+            
+        # test connection and get signals from database
+        else:
+            try:
+                with AidbSession(
+                    dbhost=dbhost,
+                    login=login,
+                    email=email,
+                    password=passwd ) as session:
+                        signal: MuAudio = session.load_labelized( 
+                            sourcefile_id=file_id, 
+                            label_id=label_id, 
+                            limit=100, 
+                            channels=self.mems
+                        )[sequence_id]
+
+                # Save signals as ND array
+                log.info( f"Successfully connected to {dbhost}" )
+                self.__source = signal()
+                mems_number, samples_number = self.__source
+                log.info( f"Got {samples_number} samples on {mems_number} MEMs" )
+
+                # Set parameters from the uploaded data
+                self.setAvailableMems( mems_number )
+                 
+
+            except Exception as e:
+                raise( f"Connection to database {dbhost} failed: {e}" )
