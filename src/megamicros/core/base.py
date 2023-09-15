@@ -130,6 +130,11 @@ class MemsArray:
         return self.__mems_position
 
     @property
+    def available_mems( self ) -> tuple | None:
+        """ Get the available mems list """
+        return self.__available_mems
+    
+    @property
     def mems( self ) -> tuple | None:
         """ Get the activated memes list """
         return self.__mems
@@ -278,7 +283,7 @@ class MemsArray:
         available_mems_number: int
             Antenna available MEMs number which will be numbered from 0 to `available_mems_number-1`
         """
-        self.__available_mems = [i for i in range(available_mems_number)]
+        self.__available_mems = [i for i in range( available_mems_number )]
 
         # Deactivate MEMs
         if self.__mems is not None and max(self.__mems) >= available_mems_number:
@@ -291,7 +296,28 @@ class MemsArray:
                 log.warning( f"Actual MEMs positions do not match the new antenna definition: deleting all positions" )
                 self.__mems_position = None
 
-        log.info( f" .Set a {available_mems_number} MEMs antenna with MEMs numbered from 0 to {available_mems_number-1}" )
+        log.info( f" .Set {available_mems_number} MEMs numbered from 0 to {available_mems_number-1}" )
+
+
+    def setAvailableAnalogs( self, available_analogs_number: int ) -> None :
+        """Init antenna available analogic channels.
+        
+        This funtion deactivates channels if some are already activated 
+
+        Parameters
+        ----------
+        available_analogs_number: int
+            Antenna available analogs number which will be numbered from 0 to `available_analogs_number-1`
+        """
+
+        self.__available_analogs = [i for i in range( available_analogs_number )]
+
+        # Deactivate analogs
+        if self.__analogs is not None and max(self.__analogs) >= available_analogs_number:
+            log.warning( f"Some analogs are activated that do not match the new antenna definition: all analogic channels are now unactivated" )
+            self.__analogs = None
+
+        log.info( f" .Set {available_analogs_number} analog channels numbered from 0 to {available_analogs_number-1}" )
 
 
     def setFrameLength( self, frame_length: int ) -> None :
@@ -407,14 +433,13 @@ class MemsArrayDB( MemsArray ):
         if preload == False:
             try:
                 with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
-                    log.info( f"Connected successfully to {dbhost}" )
                     # get meta data
                     meta = session.get_sourcefile( file_id )
-                    self.__sampling_frequency = meta['info']['sampling_frequency']
-                    self.__available_mems =  meta['info']['mems']
-                    self.__counter = meta['info']['counter']
-                    self.__counter_skip = meta['info']['counter_skip']
-                    self.__available_analogs = meta['info']['analogs']
+                    self.setSamplingFrequency( meta['info']['sampling_frequency'] )
+                    self.setAvailableMems( len( meta['info']['mems'] ) )
+                    self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
+                    self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
+                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
                     channels_number = meta['info']['channels_number']
 
 

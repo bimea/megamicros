@@ -67,7 +67,7 @@ class AidbSession( RestDBSession ):
         if id is not None:
             log.info( f" .Downloading metadata for object '{object}' [{id}]..." )
             response = self.get( f"/{object}/{id}", timeout=timeout ).json()
-            log.info( f" Object {object} found with identifier [{id}] " )
+            log.info( f" .Object {object} found with identifier [{id}] " )
             return response
         
         if url is not None:
