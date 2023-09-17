@@ -231,11 +231,6 @@ class MemsArray:
         """
         self.__counter_skip = False
 
-
-    def setCounter( self ) -> None :
-        """ Make counter available. Counter state will be added to output signals 
-        """
-
     def setMemsPosition( self, mems_position: np.ndarray|None, unit: str="meters" ) -> None :
         """ Set MEMs physical position
         
@@ -341,7 +336,7 @@ class MemsArray:
             The sampling frequency (default is given by DEFAULT_SAMPLING_FREQUENCY)
         """
 
-        self.__frame_length = sampling_frequency
+        self.__sampling_frequency = sampling_frequency
 
 
     def setActiveMems( self, mems: tuple ) -> None :
@@ -383,12 +378,13 @@ class MemsArray:
 
         self.__it += 1
 
-        if self.__counter == False or ( self.__counter == True and self.__counter_skip==True ):
-            # send data without counter status
-            return np.random.rand( self.mems_number, self.__frame_length ) * 2 - 1
+        if self.__counter is None or ( self.__counter == False or ( self.__counter == True and self.__counter_skip==True ) ):
+            # send data without counter state
+            return np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1
         else:
             # add counter values
-            pass
+            counter = np.array( [[i for i in range(self.__frame_length)]] ).T + self.__it * self.__frame_length
+            return np.concatenate( ( counter, ( np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
 
 
 
@@ -440,8 +436,6 @@ class MemsArrayDB( MemsArray ):
                     self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
                     self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
                     self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
-                    channels_number = meta['info']['channels_number']
-
 
             except MuException as e:
                 raise( f"Connection to database {dbhost} failed: {e}" )
@@ -449,26 +443,32 @@ class MemsArrayDB( MemsArray ):
         # test connection and get signals from database
         else:
             try:
-                with AidbSession(
-                    dbhost=dbhost,
-                    login=login,
-                    email=email,
-                    password=passwd ) as session:
+                with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
+                    # get meta data
+                    meta = session.get_sourcefile( file_id )
+                    self.setSamplingFrequency( meta['info']['sampling_frequency'] )
+                    self.setAvailableMems( len( meta['info']['mems'] ) )
+                    self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
+                    self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
+                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
+
+                    # get signal
+                    log.info( f" .Downloading..." )
+                    try:
                         signal: MuAudio = session.load_labelized( 
                             sourcefile_id=file_id, 
                             label_id=label_id, 
                             limit=100, 
                             channels=self.mems
                         )[sequence_id]
-
+                    except Exception as e:
+                        raise f" .Download failed: {e}"
+                    
                 # Save signals as ND array
-                log.info( f"Successfully connected to {dbhost}" )
                 self.__source = signal()
-                mems_number, samples_number = self.__source
+                mems_number, samples_number = self.__source.shape
                 log.info( f"Got {samples_number} samples on {mems_number} MEMs" )
 
-                # Set parameters from the uploaded data
-                self.setAvailableMems( mems_number )
                  
 
             except Exception as e:
