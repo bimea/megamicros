@@ -394,6 +394,7 @@ class MemsArrayDB( MemsArray ):
     """
 
     __source: np.ndarray|None = None
+    __available_frames_number: int|None = None
 
     def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
         """ Connect the antenna input stream to a labelized database 
@@ -416,7 +417,7 @@ class MemsArrayDB( MemsArray ):
         file_id: int, optional
             file identifier. Default is all files containing the labelized signals
         sequence_id: int, optional
-            sequence identifier. Default is all the sequences in file
+            sequence identifier. Default is all the sequences located in the file
         preload: bool, optional
             Whether to load the whool sequence once or not. Default is `False` 
         """
@@ -455,21 +456,51 @@ class MemsArrayDB( MemsArray ):
                     # get signal
                     log.info( f" .Downloading..." )
                     try:
+                        # get all sequences
                         signal: MuAudio = session.load_labelized( 
                             sourcefile_id=file_id, 
                             label_id=label_id, 
                             limit=100, 
                             channels=self.mems
-                        )[sequence_id]
+                        )
+ 
                     except Exception as e:
-                        raise f" .Download failed: {e}"
+                        raise f" .Downloading failed: {e}"
                     
                 # Save signals as ND array
-                self.__source = signal()
-                mems_number, samples_number = self.__source.shape
-                log.info( f"Got {samples_number} samples on {mems_number} MEMs" )
+                if sequence_id is None:
+                    self.__source = signal()
+                else:
+                    self.__source = signal[sequence_id]
 
-                 
+                # check status channel
+                # >>>>>>>
+
+                mems_number, samples_number = self.__source.shape
+                log.info( f" .Got {samples_number} samples on {mems_number} MEMs" )
 
             except Exception as e:
                 raise( f"Connection to database {dbhost} failed: {e}" )
+
+    def __iter__( self ) :
+        """ Init iterations over the antenna data """
+
+        if self.__source is None:
+            raise MuException( f"No input source stream. Cannot iterate" )
+        self.__it = 0
+        return self
+
+    def __next__( self ) -> np.ndarray|None :
+        """ next iteration over the antenna data 
+
+        """
+
+        self.__it += 1
+
+        if self.__counter is None or ( self.__counter == False or ( self.__counter == True and self.__counter_skip==True ) ):
+            # send data without counter state
+            return np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1
+        else:
+            # add counter values
+            counter = np.array( [[i for i in range(self.__frame_length)]] ).T + self.__it * self.__frame_length
+            return np.concatenate( ( counter, ( np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
