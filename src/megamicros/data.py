@@ -169,7 +169,7 @@ class MuAudio( MuData ):
         
         return self.__raw[:,offset:offset+self.__frame_size]
     
-    def __call__( self ):
+    def __call__( self ) -> np.ndarray :
         return self.__raw
 
 

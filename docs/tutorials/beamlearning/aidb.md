@@ -1,15 +1,10 @@
-# Aidb database for microphones array data
+# Database for microphones array data
 
-*Data* tutorial aims at defining the ways hyou have to prepare your data for heam forming machine learning.
-Two tools are available:
-* *BeamAidb* a database tool where all original data file should be stored 
-* *BeamAiboard* a web tool for data segmenting
-
+This tutorial aims at defining the way you can save your data by using the *django Rest framewor*.
 
 ## Installing  *Aidb*
 
-
-*Aidb* designates the database model used for learning signals from MegaMicro antennas.
+*Aidb* designates the database model used for saving signals from MegaMicro antennas.
 The database operates in remote server mode with a REST interface for managing requests.
 
 Sources are available on Github at `GitHub Beamea/Aidb <https://github.com:beameo/Aidb>`_.
@@ -106,11 +101,13 @@ With the updated configuration file ``aidb/aidb/settings.py``:
     ALLOWED_HOSTS = ['your_web_site_address.fr', '127.0.0.1']
 
     # MQTT parameters that should be updated to local usage
-    MQTT_BROKER_HOST = 'parisparc.biimea.tech'
-    MQTT_BROKER_PORT = 1883
-    MQTT_CLIENT_ID = 'megamicros/aidb/unknown'
-    MQTT_LOG_TOPIC = MQTT_CLIENT_ID + '/log'
-    MQTT_LOG_QOS = 1
+    MQTT_SETTINGS = {
+        'BROKER_HOST': 'parisparc.biimea.tech',
+        'BROKER_PORT': 1883,
+        'CLIENT_ID': 'megamicros/aidb/unknown',
+        'LOG_TOPIC': 'megamicros/aidb/unknown/log',
+        'LOG_QOS': 1,
+    }
 ```
 
 The MQTT log part is defined in the `../core/admin.py`:

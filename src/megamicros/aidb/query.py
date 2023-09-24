@@ -26,8 +26,8 @@ import numpy as np
 
 from megamicros.log import log
 from megamicros.data import MuAudio, FILETYPE_MUH5, FILETYPE_WAV
-from megamicros.db.exception import MuDbException
-from megamicros.db.session import RestDBSession, DEFAULT_TIMEOUT
+from megamicros.aidb.exception import MuDbException
+from megamicros.aidb.session import RestDBSession, DEFAULT_TIMEOUT
 
 
 DEFAULT_LIMIT = 100

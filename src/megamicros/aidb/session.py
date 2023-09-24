@@ -34,7 +34,7 @@ import requests
 import re
 
 from megamicros.log import log
-from megamicros.db.exception import MuDbException
+from megamicros.aidb.exception import MuDbException
 
 
 DEFAULT_TIMEOUT = 10

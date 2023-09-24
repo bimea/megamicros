@@ -10,5 +10,7 @@ libusb1
 h5py
 pyaudio
 websockets
+paho_mqtt
+ffmpeg
 opencv-python
 jupyterlab

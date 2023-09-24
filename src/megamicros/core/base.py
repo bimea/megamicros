@@ -457,7 +457,7 @@ class MemsArrayDB( MemsArray ):
                     log.info( f" .Downloading..." )
                     try:
                         # get all sequences
-                        signal: MuAudio = session.load_labelized( 
+                        signal: list = session.load_labelized( 
                             sourcefile_id=file_id, 
                             label_id=label_id, 
                             limit=100, 
@@ -469,14 +469,14 @@ class MemsArrayDB( MemsArray ):
                     
                 # Save signals as ND array
                 if sequence_id is None:
-                    self.__source = signal()
+                    self.__source = np.concatenate( signal, axis=1 )
                 else:
                     self.__source = signal[sequence_id]
 
                 # check status channel
                 # >>>>>>>
 
-                mems_number, samples_number = self.__source.shape
+                samples_number, mems_number = self.__source.shape
                 log.info( f" .Got {samples_number} samples on {mems_number} MEMs" )
 
             except Exception as e:
