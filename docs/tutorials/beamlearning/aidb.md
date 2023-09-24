@@ -1,82 +1,108 @@
 # Database for microphones array data
 
-This tutorial aims at defining the way you can save your data by using the *django Rest framewor*.
+This tutorial aims at defining the way you can save your data by using the *django Rest framework* for database building.
 
 ## Installing  *Aidb*
 
 *Aidb* designates the database model used for saving signals from MegaMicro antennas.
 The database operates in remote server mode with a REST interface for managing requests.
 
-Sources are available on Github at `GitHub Beamea/Aidb <https://github.com:beameo/Aidb>`_.
+Sources are available on Github at [GitHub bimea/megamicros](https://github.com/bimea/megamicros).
 Several installation methods are possible:
 
-* In single *Docker* container mode - *single application*: This is the simplest mode: the database (*sqlite*), the web server (*python*) and the python application (*Djangorest*) are running in the same container within the same Python program;
-* In double or triple container mode - *multi-servers*: database (*Postgres*, *mariadb*, *mysqldb*,…), web server (*Apache*, *Ngind*,…), and Python application (*Djangorest*) run on dedicated server programs and 1, 2 or three separate containers.
+* Direct installation mode
+* Docker container mode
 
-### In your local machine (MacOs and Linux systems)
+### The direct installation mode (MacOs and Linux systems)
 
-We suppose here you are creating a new project. 
-For that, please follow the two pre-installing next steps:
+Again two installation modes are possible.
+One from the *megamicros* GitHub repository (for developpers) and the other using *pip install* (for end users).
 
-* clone the repository on your local machine
-* create a python virtual environment with *Django* and *Djang-Rest-Framework* installed, and also some required Python modules:
+#### Using *pip install*
+
+* create a python virtual environment with *Megamicros*, *Django* and *Djang-Rest-Framework* installed, and also some required Python modules:
 
 ```bash
-    $ > git clone git@github.com:beamea/Aidb.git
-    $ > cd Aidb
+    $ > mkdir project && cd project
     $ > virtualenv venv
     $ > source venv/bin/activate
+    (venv) $ > export PIP_EXTRA_INDEX_URL=https://pypi.biimea.io
+    (venv) $ > pip install megamicros  
     (venv) $ > pip install django djangorestframework djangorestframework-simplejwt django-cors-headers django-filter dj-rest-auth
-    (venv) $ > pip install ffmpeg h5py
-    (venv) $ > cd aidb
-    (venv) $ > python manage.py makemigrations core
-    (venv) $ > python manage.py migrate
-    (venv) $ > python manage.py createsuperuser --email <your_email> --username admin
+    (venv) $ > pip install ffmpeg h5py paho_mqtt
 ```
 
-Let's note that the initial project was created with the following commands:
+* Build a new *Django* project
 
 ```bash
-    (venv) $ > django-admin startproject aidb
-    (venv) $ > cd aidb
-    (venv) $ > django-admin startapp core
+    (venv) $ > django-admin startproject my_project_name
+    (venv) $ > cd my_project_name
     (venv) $ > python manage.py migrate
+    Operations to perform:
+        Apply all migrations: admin, auth, contenttypes, sessions
+    Running migrations:
+        Applying contenttypes.0001_initial... OK
+        Applying auth.0001_initial... OK
+        Applying admin.0001_initial... OK
+        Applying admin.0002_logentry_remove_auto_add... OK
+        Applying admin.0003_logentry_add_action_flag_choices... OK
+        Applying contenttypes.0002_remove_content_type_name... OK
+        Applying auth.0002_alter_permission_name_max_length... OK
+        Applying auth.0003_alter_user_email_max_length... OK
+        Applying auth.0004_alter_user_username_opts... OK
+        Applying auth.0005_alter_user_last_login_null... OK
+        Applying auth.0006_require_contenttypes_0002... OK
+        Applying auth.0007_alter_validators_add_error_messages... OK
+        Applying auth.0008_alter_user_username_max_length... OK
+        Applying auth.0009_alter_user_last_name_max_length... OK
+        Applying auth.0010_alter_group_name_max_length... OK
+        Applying auth.0011_update_proxy_permissions... OK
+        Applying auth.0012_alter_user_first_name_max_length... OK
+        Applying sessions.0001_initial... OK
+    (venv) $ > python manage.py createsuperuser --email <your_email> --username admin
+    Password:
+    Password (again):
+    Superuser created successfully.
 ```
 
-With the updated configuration file ``aidb/aidb/settings.py``:
+* Test your *Django server* by typing the following run command and by looking at your web browser:
+
+```bash
+    (venv) $ > python manage.py runserver
+```
+
+You should see something like that as the home django start page:
+
+![Django home](images/django.jpg)
+
+You have now to install the *Django Rest Framework* and the *megamicros.aidb* applications.
+This is done by updating the default ``settings.py`` file in the ``my_project_name/my_prject_name`` directory.
+Add the follong lines :
 
 ```python
-    # ...
-    # Access to Megamicros python code
-    from sys import path
-    path.insert( 0, str(BASE_DIR) + "/../../../../../Megamicros/src" )
-    path.insert( 1, str(BASE_DIR) + "/../../../../../Megamicros_aidb/src" )
-    # ...
-    # Application definition
+    #...
+    # Add the following applications
     INSTALLED_APPS = [
-        'django.contrib.admin',
-        'django.contrib.auth',
-        'django.contrib.contenttypes',
-        'django.contrib.sessions',
-        'django.contrib.messages',
-        'django.contrib.staticfiles',
-        'django_filters',
-        'rest_framework',
+        ...,                        # already installed apps
+        'django_filters',           # DRF apps and misc
+        'rest_framework',           # ...
         'rest_framework.authtoken',
-        'corsheaders',
+        'corsheaders',  
         'dj_rest_auth',
-        'core'
+        'megamicros.aidb'           # the megamicros app
     ]
+```
 
-    # ...
-    # Internationalization
-    # https://docs.djangoproject.com/en/4.1/topics/i18n/
-    LANGUAGE_CODE = 'en-us'
-    TIME_ZONE = 'UTC'
-    #TIME_ZONE = 'Europe/Paris'
-    USE_I18N = True
-    USE_TZ = True
+Also the ``ROOT_URLCONF`` should be updated to link to the *Megamicros* application pages:
 
+```python
+    #...
+    ROOT_URLCONF = 'megamicros.aidb.urls'
+```
+
+Add the following lines for DRF application:
+
+```python
     # ...
     # REST Framework parameters
     REST_FRAMEWORK = {
@@ -96,34 +122,51 @@ With the updated configuration file ``aidb/aidb/settings.py``:
         'LOGIN_URL': 'login',
         'LOGOUT_URL': 'logout',
     }
+```
 
+Set the following *Megamicros* application parameters:
+
+```python
+    # ...
     CORS_ALLOW_ALL_ORIGINS: True
-    ALLOWED_HOSTS = ['your_web_site_address.fr', '127.0.0.1']
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
     # MQTT parameters that should be updated to local usage
-    MQTT_SETTINGS = {
-        'BROKER_HOST': 'parisparc.biimea.tech',
-        'BROKER_PORT': 1883,
-        'CLIENT_ID': 'megamicros/aidb/unknown',
-        'LOG_TOPIC': 'megamicros/aidb/unknown/log',
-        'LOG_QOS': 1,
+    MEGAMICROS = {
+        'MQTT_BROKER_HOST': 'parisparc.biimea.tech',
+        'MQTT_BROKER_PORT': 1883,
+        'MQTT_CLIENT_ID': 'megamicros/aidb/unknown',
+        'MQTT_LOG_TOPIC': 'megamicros/aidb/unknown/log',
+        'MQTT_LOG_QOS': 1,
     }
 ```
 
-The MQTT log part is defined in the `../core/admin.py`:
+Last thing is to make migrations in the database for building the new tables of the two applications *DRF* and *Megamicros*:
 
-```python
-    # create a MQTT client:
-    mqtt_client = mqtt.MqttClient( host=MQTT_BROKER_HOST, port=MQTT_BROKER_PORT, name=MQTT_CLIENT_ID )
-
-    # create the Mqtt Publishing Handler, set the level and add it to the logger
-    mqtt_handler = mqtt.MqttPubHandler( mqtt_client, topic=MQTT_LOG_TOPIC, qos=MQTT_LOG_QOS )
-    mqtt_handler.setLevel( logging.DEBUG )
-    log.addHandler( mqtt_handler )
+```bash
+    (venv) $ > python manage.py migrate
+    Operations to perform:
+        Apply all migrations: admin, auth, authtoken, contenttypes, sessions
+    Running migrations:
+        Applying authtoken.0001_initial... OK
+        Applying authtoken.0002_auto_20160226_1747... OK
+        Applying authtoken.0003_tokenproxy... OK
+    (venv) $ > python manage.py makemigrations aidb
+    Migrations for 'aidb':
+        /Users/brunogas/Documents/Dev/Bimea/venv/lib/python3.10/site-packages/megamicros/aidb/migrations/0001_initial.py
+            - Create model Campaign
+            - Create model Config
+            - Create model Context
+            - Create model Device
+            ...
+    (venv) $ > python manage.py migrate
+    Operations to perform:
+        Apply all migrations: admin, aidb, auth, authtoken, contenttypes, sessions
+    Running migrations:
+        Applying aidb.0001_initial... OK
 ```
 
-
-Launch the database server:
+Run the server:
 
 ```bash
     (venv) $ > python manage.py runserver
@@ -132,21 +175,18 @@ Launch the database server:
 Your database is now ready for use.
 
 !!! Warning
-
     Note that for some reasons, hdf5 (version 1.12) does not work with Mac M2 processor. 
     Instead Install the 1.8 version:
 
-    ```bash
+```bash
     $ > brew install hdf5@1.8
     $ > export HDF5_DIR=/opt/homebrew/opt/hdf5@1.8
     $ > pip install h5py
-    ```
+```
 
 !!! warning
-
     Note that for other reasons hdf5 may not work on Mac Os with Python 3.11 (whatever the version you want to install 1.8, 1.10  or 1.12).
     Please install Python 3.10 for the hdf5 library to work fine.
-
 
 ### In a container for docker environments
 
