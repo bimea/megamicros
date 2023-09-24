@@ -76,7 +76,7 @@ You should see something like that as the home django start page:
 ![Django home](images/django.jpg)
 
 You have now to install the *Django Rest Framework* and the *megamicros.aidb* applications.
-This is done by updating the default ``settings.py`` file in the ``my_project_name/my_prject_name`` directory.
+This is done by updating the default ``settings.py`` file in the ``my_project_name/my_project_name`` directory.
 Add the follong lines :
 
 ```python
@@ -200,14 +200,14 @@ The container image contains the platform needed to run the application, without
 [See the Dockerfile file](./files/Dockerfile)
 
 ```yaml
-   # Dockerfile for biimea/aidb:python3.10-drf3.14.0 image build
-   # Version: 1.1 - 20221220 
+    # Dockerfile for megamicros/aidb:python3.10-drf3.14.0 image build
+    # Version: 2.0.16 - 20230924 
 
     FROM ubuntu:22.04
 
     LABEL author=bruno.gas@biimea.com
     LABEL vendor=biimea
-    LABEL version=1.1
+    LABEL version=2.0.16
 
     # needed for dpkg-reconfigure to be in non interactive mode:
     ARG DEBIAN_FRONTEND=noninteractive
@@ -220,7 +220,8 @@ The container image contains the platform needed to run the application, without
         vim \
         tzdata \
         libhdf5-dev \
-        ffmpeg 
+        ffmpeg \
+        portaudio19-dev
 
     # For 'default timezone' reconfiguring:
     RUN ln -fs /usr/share/zoneinfo/Europe/Paris /etc/localtime
@@ -235,6 +236,8 @@ The container image contains the platform needed to run the application, without
     RUN ln -fs /usr/bin/python3 /usr/bin/python
 
     RUN python -m pip install --upgrade pip
+
+    RUN pip install --index https://pypi.biimea.io megamicros
 
     RUN pip install django \
         djangorestframework \
@@ -283,34 +286,74 @@ It updates it each time the container is restarted:
 
 ```bash
 
-    #!/bin/sh
-    # docker-entrypint.sh for for biimea/aidb:python3.10-drf3.14.0 image build
-    # version 1.1 - 20221220 
+#!/bin/sh
+# docker-entrypoint.sh for for megamicros/aidb:python3.10-drf3.14.0 image build
+# version 2.0.16 - 20230924 
 
-    if [ ! -d /app/Aidb ] ; then
-        echo "This is a first installation: cloning Aidb repository..."
-        cd /app
-        git clone git@github.com:biimea/Aidb.git
-        cd Aidb/aidb
-        python manage.py makemigrations
-        python manage.py migrate
-        python manage.py createsuperuser --noinput
-        cd aidb
-        echo "ALLOWED_HOSTS = ['${ALLOWED_HOSTS}']" >> settings.py
-        cp settings.py settings.template.py
-        echo "done"
-    else
-        echo "Project already installed, updating from Aidb repository..."
-        cd /app/Aidb
-        git pull
-        cd aidb
-        python manage.py makemigrations
-        python manage.py migrate
-        echo "done"
-    fi
+if [ ! -d /app/Aidb ] ; then
+    echo "This is a first installation: cloning Aidb repository..."
+    cd /app
+    django-admin startproject Aidb
+    cd /app/Aidb
+    python manage.py migrate
+    python manage.py createsuperuser --noinput
+    cd /app/Aidb/Aidb
+    echo "
 
-    echo "exec Biimea-Aidb..."
-    exec python /app/Aidb/aidb/manage.py runserver 0.0.0.0:8000
+INSTALLED_APPS.extend( [
+    'django_filters', 
+    'rest_framework', 
+    'rest_framework.authtoken', 
+    'corsheaders', 
+    'dj_rest_auth', 
+    'megamicros.aidb'
+] )
+
+ROOT_URLCONF = 'megamicros.aidb.urls'
+
+REST_FRAMEWORK={
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination', 
+    'PAGE_SIZE': 20, 
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication'
+    ),            
+}
+
+SWAGGER_SETTINGS = {
+    'LOGIN_URL': 'login',
+    'LOGOUT_URL': 'logout',
+}
+
+CORS_ALLOW_ALL_ORIGINS: True
+ALLOWED_HOSTS = ['${ALLOWED_HOSTS}']
+
+# Megamicros parameters that should be updated to local usage
+MEGAMICROS = {
+    'MQTT_BROKER_HOST': '${MQTT_BROKER_HOST}',
+    'MQTT_BROKER_PORT': ${MQTT_BROKER_PORT},
+    'MQTT_CLIENT_ID': '${MQTT_CLIENT_ID}',
+    'MQTT_LOG_TOPIC': '${MQTT_LOG_TOPIC}',
+    'MQTT_LOG_QOS': ${MQTT_LOG_QOS},
+}
+
+" >> settings.py
+
+    python manage.py makemigrations aidb
+    python manage.py migrate
+    echo "done"
+
+else
+    echo "Project already installed, updating from Aidb repository..."
+    cd /app/Aidb
+    pip install --upgrade --index https://pypi.biimea.io megamicros
+    python manage.py makemigrations
+    python manage.py migrate
+    echo "done"
+fi
+
+echo "exec Megamicros-Aidb..."
+exec python /app/Aidb/manage.py runserver 0.0.0.0:8000
 ```
 
 #### Docker-compose 
