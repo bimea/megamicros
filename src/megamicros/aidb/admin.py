@@ -14,17 +14,7 @@ from megamicros import mqtt
 log.setLevel( logging.INFO )
 
 
-MEGAMICROS = {
-    'MQTT_BROKER_HOST': 'parisparc.biimea.tech',
-    'MQTT_BROKER_PORT': 1883,
-    'MQTT_CLIENT_ID': 'megamicros/aidb/unknown',
-    'MQTT_LOG_TOPIC': 'megamicros/aidb/unknown/log',
-    'MQTT_LOG_QOS': 1,
-}
-
 MEGAMICROS = getattr( settings, "MEGAMICROS", None )
-
-print( 'MEGAMICROS=', MEGAMICROS )
 
 if MEGAMICROS  is None:
     log.info( f" .Cannot set MQTT log handler: no parameters found in settings" )

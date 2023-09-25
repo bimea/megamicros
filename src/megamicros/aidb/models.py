@@ -27,11 +27,10 @@ Megamicros AIDB models
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
-
 from datetime import date
 from email.policy import default
 from django.db import models
-
+from django.conf import settings
 
 
 class Config( models.Model ):
@@ -49,6 +48,7 @@ class Tagcat( models.Model ):
 
     def __str__( self ):
         return f"{self.name}"
+
 
 class Tag( models.Model ):
     name = models.CharField( 'Nom de l\'étiquette', max_length=32 )

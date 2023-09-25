@@ -32,7 +32,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 from megamicros.log import log
 from megamicros.exception import MuException
-from megamicros.db.query import AidbSession
+from megamicros.aidb.query import AidbSession
 from megamicros.data import MuAudio
 
 
@@ -480,7 +480,7 @@ class MemsArrayDB( MemsArray ):
                 log.info( f" .Got {samples_number} samples on {mems_number} MEMs" )
 
             except Exception as e:
-                raise( f"Connection to database {dbhost} failed: {e}" )
+                raise MuException( f"Connection to database {dbhost} failed: {e}" )
 
     def __iter__( self ) :
         """ Init iterations over the antenna data """

@@ -123,8 +123,17 @@ Then from within the directory of the python-project you wish to upload, issue t
 ```bash
     > python setup.py sdist upload -r biimea
 ```
-
 See the [Python private repository](python_repos.md) section for building a private repository.
+
+In some cases the uploading may failed on MacOs systems with the message:
+
+```bash
+    error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate
+```
+
+You may solve this issue by clicking on the ``/Application/Python 3.10/Install Certificates.command`` command.
+
+
 
 ## Documentation
 
