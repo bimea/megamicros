@@ -41,6 +41,128 @@ FILETYPE_MUH5 = 4
 class AidbSession( RestDBSession ):
 
 # =============================================================================
+# User interface
+# =============================================================================
+
+    def getInfo( self ) -> dict :
+        """ get general info about database content 
+        
+        Returns
+        -------
+        result: list
+            list of dictionaries giving info on domains registered in database
+        """
+
+        result = {}
+        result["domains"] = self.getDomains()
+
+        return result
+
+
+    def getDomains( self ) -> list :
+        """ get domains info
+        
+        Returns
+        -------
+        domains: list
+            list of dictionaries giving info on domains registered in database
+        """
+
+        domains = self.get( '/domain' ).json()["results"]
+
+        result = []
+        for domain in domains:
+            result.append( {
+                "name": domain["name"],
+                "id": domain["id"],
+            } )
+
+        return result
+    
+
+    def getCampaigns( self, domain_id: int ) -> list :
+        """ get all campaigns belonging to a domain
+         
+        Parameters
+        ----------
+        domain_id: int
+            domain identier in database
+
+        Returns
+        -------
+        campaigns: list
+            list of campaigns found in database
+        """
+
+        try:
+            campaigns = self.get( f'/campaign/?domain={domain_id}' ).json()["results"]
+        except MuDbException:
+            return []
+
+        result = []
+        for campaign in campaigns:
+            result.append( {
+                "name": campaign["name"],
+                "id": campaign["id"],
+                "date": campaign["date"]
+            } )            
+
+        return result
+
+
+    def getDevices( self ) -> list :
+        """ get devices info
+        
+        Returns
+        -------
+        devices: list
+            list of dictionaries giving info on devices registered in database
+        """
+
+        devices = self.get( '/device' ).json()["results"]
+
+        result = []
+        for device in devices:
+            result.append( {
+                "name": device["name"],
+                "id": device["id"],
+                "type": device["type"],
+                "identifier": device["identifier"]
+            } )
+
+        return result
+
+
+    def getSourcefiles( self ) -> dict :
+        """ get sourcefiles info
+        
+        Returns
+        -------
+        devices: list
+            list of dictionaries giving info on files containing audio signals in database
+        """
+
+        result = {}
+        sourcefiles = self.get( '/sourcefile' ).json()
+
+        result["count"] = sourcefiles["count"]
+        result["content"] = []
+        
+        for src in sourcefiles["results"]:
+            result["content"].append( {
+                "id": src['id'],
+                "filename": src["filename"],
+                "type": src["type"],
+                "datetime": src["datetime"],
+                "duration": src["duration"]
+            } )
+        
+        return result
+
+
+
+
+# =============================================================================
 # Generics
 # =============================================================================
 
@@ -169,10 +291,10 @@ class AidbSession( RestDBSession ):
         * file_datetime: the datetime string (format: YYYY-MM-DDThh:mm:ss.0Z) of the file
         """ 
 
-        assert (
-            file_type == FILETYPE_MUH5 or file_type == FILETYPE_WAV or file_type == FILETYPE_MP4 or file_type == FILETYPE_H5, 
-            f"Unknown file type '{file_type}"
-        )
+        #assert (
+        #    file_type == FILETYPE_MUH5 or file_type == FILETYPE_WAV or file_type == FILETYPE_MP4 or file_type == FILETYPE_H5, 
+        #    f"Unknown file type '{file_type}"
+        #)
 
         log.info( f" .Downloading files of type {file_type} at date {file_datetime} from directory {id}..."  )
         url_request = f"/directory/{str(id)}/files/{str(file_type)}/datetime/{file_datetime}/?limit={str(limit)}"

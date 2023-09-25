@@ -292,6 +292,7 @@ It updates it each time the container is restarted:
 
 if [ ! -d /app/Aidb ] ; then
     echo "This is a first installation: cloning Aidb repository..."
+    pip install --upgrade --index https://pypi.biimea.io megamicros
     cd /app
     django-admin startproject Aidb
     cd /app/Aidb
