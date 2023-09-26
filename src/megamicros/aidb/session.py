@@ -255,6 +255,7 @@ class RestDBSession:
             if not full_url:
                 request = f"{self.__dbhost}{request}"
 
+            log.info( f" .Send a database request on endpoint: {request}" )
             response  = self.session.get( request, timeout=timeout )
             if not response.ok:
                 log.warning( f"[GET] request failed on database '{self.__dbhost}' with status code: {response.status_code}" )

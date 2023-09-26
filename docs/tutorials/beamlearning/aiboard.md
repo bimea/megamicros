@@ -1,36 +1,54 @@
 
 # Using Aiboard for data labeling
 
+*AiBoard* is a Megamicros application that lets you create a database of labeled signals from raw sound signals.
+
 ## Install it
 
-Get a local copy of the *AiBoard* repository, then create your Python virtual environnment and load the python modules which are needed for your system to work:
+!!! Warning
+    *megamicros* and *dash-websocket* packages are private packages.
+    Please see [downloading from private repository section](../megamicros/get_started.md) for downloading them.
+
+For *AiBoard* to work, you need to have installed the following libraries: *megamicros*, *dash* and some of its components, *plotly* for signal tracing and various other libraries:
 
 ```bash
-    $ > git clone git@github.com:beameo/Aiboard.git
-    $ > cd Aibord
+    $ > cd your_project_path
     $ > virtualenv venv
     $ > source venv/bin/activate
     (venv) $ > pip install --upgrade pip
-    (venv) $ > pip install numpy scipy dash dash-bootstrap-components plotly pandas requests
+    (venv) $ > pip install scipy dash dash-bootstrap-components plotly pandas requests
+    (venv) $ > pip install megamicros dash-websocket
 ```
+
+Note that ``dash-websocket`` is a *Megamicros* component. As such it should be loaded from the *Megamicros* repository.
 
 Start *AiBoard*. A web server is launched that you can target at ``http://localhost:8050``:
 
 ```bash
-    $ > python src/main.py
-    2022-12-06 14:26:58,670 [INFO]: Starting Mu32aiboard...
+    $ > megamicros-aiboard
+    2023-09-26 14:45:30,255 [INFO]: Starting Aiboard...
+    2023-09-26 14:45:30,255 [INFO]:  .Set verbose level to [debug]
+    Dash is running on http://127.0.0.1:8050/
+```
+
+If you have downloaded *Megamicros* sources from the GitHub repository you can access the *AiBoard* application from the source:
+
+```bash
+    $ > python src/megamicros/aiboard/main.py
+    2023-09-26 14:45:30,255 [INFO]: Starting Aiboard...
+    2023-09-26 14:45:30,255 [INFO]:  .Set verbose level to [debug]
     Dash is running on http://127.0.0.1:8050/
 ```
 
 ## Aiboard user manual
 
-Avant toute utilisation, vous devez configurer *AiBoard* en connectant l'application à une base de donnée *Aidb*.
-Connectez vous ensuite, puis accedez aux pages suivantes de l'application:
+Before use, you must configure *AiBoard* by connecting the application to an *Aidb* database.
+Then log in, and access the following pages of the application:
 
-* *Configuration*: la page de connexion et de configuration;
-* *Labels*: la page de définition les labels;
-* *Etiquetage*: la page d'étiquetage des données;
-* *Dataset*: la page pour construire des bases d'apprentissage téléchargeables.
+* *Configuration*: the login and configuration page;
+* *Labels*: the label definition page;
+* *Labeling*: the data labeling page;
+* *Dataset*: the page for building downloadable learning databases.
 
 ### Configuration
 
@@ -40,11 +58,7 @@ Connectez vous ensuite, puis accedez aux pages suivantes de l'application:
 
 ### Dataset
 
-Sur cette page vous pouvez lister toutes les bases segmentées créées, créer de nouvelles bases, modifier et supprimer des bases.
-Vous pouvez également visualiser les caractéristiques d'une bases et en écouter des extraits.
-Vous pouvez enfin télécharger des bases.
-
-
-
-
+On this page you can list all segmented bases created, create new bases, modify and delete bases.
+You can also view the characteristics of a base and listen to extracts.
+Finally, you can download bases.
 

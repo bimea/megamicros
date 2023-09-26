@@ -22,7 +22,7 @@
 # THE SOFTWARE.
 
 
-"""Provide the base class of MEMs arrays.
+""" Provide the base class of MEMs arrays.
 
 Documentation
 -------------
@@ -51,7 +51,6 @@ class MemsArray:
     Les positions des microphones peuvent ne pas être tutes déterminées. 
     C'est le cas lorsque des microphones sont devenus hors d'usage au moement de la mesure.
     Ces microphpjnes sont toujours identifiés comme *available*, mais ils doivent être désactivés dans l'antenne lorsque leurs signaux sont absents du flux entrant.
- 
 
     Antenna microphones must be numbered from 0 to `available_mems_number`. 
     Some may not be *active*. `mems_number` gives the number of active microphones. 
@@ -374,125 +373,6 @@ class MemsArray:
         """ next iteration over the antenna data 
 
         Note that as MemsArray is a base class without any data inside, one can only return random data
-        """
-
-        self.__it += 1
-
-        if self.__counter is None or ( self.__counter == False or ( self.__counter == True and self.__counter_skip==True ) ):
-            # send data without counter state
-            return np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1
-        else:
-            # add counter values
-            counter = np.array( [[i for i in range(self.__frame_length)]] ).T + self.__it * self.__frame_length
-            return np.concatenate( ( counter, ( np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
-
-
-
-class MemsArrayDB( MemsArray ):
-    """ MEMs array class with input stream connected to a remote database.
-
-    """
-
-    __source: np.ndarray|None = None
-    __available_frames_number: int|None = None
-
-    def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
-        """ Connect the antenna input stream to a labelized database 
-
-        The connection to the database is verified. If the database is not available, an exception is raised. 
-        If the `preload` parameter is set to `True`, the antenna signals are uploaded and buffered once from this stage. 
-        
-        Parameters
-        ----------
-        dbhost: str
-            the database host address in the form ``http(s)://www.database.io``
-        login: str
-            database account login
-        email: str
-            database user email
-        passwd: str
-            account password
-        label_id: int
-            signal label
-        file_id: int, optional
-            file identifier. Default is all files containing the labelized signals
-        sequence_id: int, optional
-            sequence identifier. Default is all the sequences located in the file
-        preload: bool, optional
-            Whether to load the whool sequence once or not. Default is `False` 
-        """
-
-
-        if file_id is None:
-            raise MuException( f"Sorry, working on several files is not yet implemented" )
-        
-        # test connection to database
-        if preload == False:
-            try:
-                with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
-                    # get meta data
-                    meta = session.get_sourcefile( file_id )
-                    self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                    self.setAvailableMems( len( meta['info']['mems'] ) )
-                    self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
-                    self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
-
-            except MuException as e:
-                raise( f"Connection to database {dbhost} failed: {e}" )
-            
-        # test connection and get signals from database
-        else:
-            try:
-                with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
-                    # get meta data
-                    meta = session.get_sourcefile( file_id )
-                    self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                    self.setAvailableMems( len( meta['info']['mems'] ) )
-                    self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
-                    self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
-
-                    # get signal
-                    log.info( f" .Downloading..." )
-                    try:
-                        # get all sequences
-                        signal: list = session.load_labelized( 
-                            sourcefile_id=file_id, 
-                            label_id=label_id, 
-                            limit=100, 
-                            channels=self.mems
-                        )
- 
-                    except Exception as e:
-                        raise f" .Downloading failed: {e}"
-                    
-                # Save signals as ND array
-                if sequence_id is None:
-                    self.__source = np.concatenate( signal, axis=1 )
-                else:
-                    self.__source = signal[sequence_id]
-
-                # check status channel
-                # >>>>>>>
-
-                samples_number, mems_number = self.__source.shape
-                log.info( f" .Got {samples_number} samples on {mems_number} MEMs" )
-
-            except Exception as e:
-                raise MuException( f"Connection to database {dbhost} failed: {e}" )
-
-    def __iter__( self ) :
-        """ Init iterations over the antenna data """
-
-        if self.__source is None:
-            raise MuException( f"No input source stream. Cannot iterate" )
-        self.__it = 0
-        return self
-
-    def __next__( self ) -> np.ndarray|None :
-        """ next iteration over the antenna data 
-
         """
 
         self.__it += 1

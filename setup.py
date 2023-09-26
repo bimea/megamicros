@@ -186,6 +186,7 @@ setup(
     entry_points={  # Optional
         "console_scripts": [
             "megamicros-version = megamicros.apps.version:main",
+            "megamicros-aiboard = megamicros.apps.aiboard:main"
         ],
     },
     # List additional URLs that are relevant to your project as a dict.

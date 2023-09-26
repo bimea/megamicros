@@ -30,7 +30,7 @@ from megamicros.aidb.exception import MuDbException
 from megamicros.aidb.session import RestDBSession, DEFAULT_TIMEOUT
 
 
-DEFAULT_LIMIT = 100
+DEFAULT_LIMIT = 20
 DATABASE_TABLES = ['config', 'domain', 'campaign', 'device', 'directory', 'sourcefile', 'tagcat', 'tag', 'context', 'label', 'filelabeling', 'dataset']
 
 FILETYPE_H5 = 1
@@ -59,34 +59,41 @@ class AidbSession( RestDBSession ):
         return result
 
 
-    def getDomains( self ) -> list :
+    def getDomains( self, limit: int=DEFAULT_LIMIT ) -> list :
         """ get domains info
         
+        Parameters
+        ----------
+        limit: int
+            limit number of responses 
+
         Returns
         -------
         domains: list
             list of dictionaries giving info on domains registered in database
         """
 
-        domains = self.get( '/domain' ).json()["results"]
+        response = self.get( f"/domain/?limit={limit}" ).json()['results']
 
-        result = []
-        for domain in domains:
-            result.append( {
+        domains = []
+        for domain in response:
+            domains.append( {
                 "name": domain["name"],
                 "id": domain["id"],
             } )
 
-        return result
+        return domains
     
 
-    def getCampaigns( self, domain_id: int ) -> list :
+    def getCampaigns( self, domain_id: int, limit: int=DEFAULT_LIMIT ) -> list :
         """ get all campaigns belonging to a domain
          
         Parameters
         ----------
         domain_id: int
             domain identier in database
+        limit: int
+            limit number of responses 
 
         Returns
         -------
@@ -95,46 +102,56 @@ class AidbSession( RestDBSession ):
         """
 
         try:
-            campaigns = self.get( f'/campaign/?domain={domain_id}' ).json()["results"]
+            response = self.get( f'/campaign/?domain={domain_id}&limit={limit}' ).json()["results"]
         except MuDbException:
             return []
 
-        result = []
-        for campaign in campaigns:
-            result.append( {
+        campaigns = []
+        for campaign in response:
+            campaigns.append( {
                 "name": campaign["name"],
                 "id": campaign["id"],
                 "date": campaign["date"]
             } )            
 
-        return result
+        return campaigns
 
 
-    def getDevices( self ) -> list :
+    def getDevices( self, limit: int = DEFAULT_LIMIT ) -> list :
         """ get devices info
         
+        Parameters
+        ----------
+        limit: int
+            limit number of responses 
+
         Returns
         -------
         devices: list
             list of dictionaries giving info on devices registered in database
         """
 
-        devices = self.get( '/device' ).json()["results"]
+        response = self.get( f'/device/?limit={limit}' ).json()["results"]
 
-        result = []
-        for device in devices:
-            result.append( {
+        devices = []
+        for device in response:
+            devices.append( {
                 "name": device["name"],
                 "id": device["id"],
                 "type": device["type"],
                 "identifier": device["identifier"]
             } )
 
-        return result
+        return devices
 
 
-    def getSourcefiles( self ) -> dict :
-        """ get sourcefiles info
+    def getSourcefiles( self, limit: int = DEFAULT_LIMIT ) -> dict :
+        """ Get sourcefiles info
+        
+        Parameters
+        ----------
+        limit: int
+            limit number of responses 
         
         Returns
         -------
@@ -142,14 +159,14 @@ class AidbSession( RestDBSession ):
             list of dictionaries giving info on files containing audio signals in database
         """
 
-        result = {}
-        sourcefiles = self.get( '/sourcefile' ).json()
+        sourcefiles = {}
+        response = self.get( f'/sourcefile/?limit={limit}' ).json()
 
-        result["count"] = sourcefiles["count"]
-        result["content"] = []
+        sourcefiles["count"] = response["count"]
+        sourcefiles["content"] = []
         
-        for src in sourcefiles["results"]:
-            result["content"].append( {
+        for src in response["results"]:
+            sourcefiles["content"].append( {
                 "id": src['id'],
                 "filename": src["filename"],
                 "type": src["type"],
@@ -157,10 +174,75 @@ class AidbSession( RestDBSession ):
                 "duration": src["duration"]
             } )
         
-        return result
+        return sourcefiles
+    
+
+    def getSourcefileInfo( self, id: int|None=None, url: str|None=None, filename: str|None=None ) -> dict :
+        """ Get sourcefiles infos from source file identifier or url
+        
+        Parameters
+        ----------
+        id: int
+            sourcefile DB identifier
+        url: str
+            sourcefile DB address
+        filename: str
+            name of the source file with its extension
+        
+        Return
+        ------
+        info: dict
+            sourcefiles info dictionaries
+        """
+        
+        if id is not None:
+            try:
+                response = self.get( f'/sourcefile/{id}' ).json()
+            except MuDbException as e:
+                log.info( f" .{e}" )
+                return {}
+            
+        elif url is not None:
+            try:
+                response = self.get( url, full_url=True ).json()
+            except MuDbException as e:
+                log.info( f" .{e}" )
+                return {}
+            
+        elif filename is not None:
+            try:
+                response = self.get( f'/sourcefile/?filename={filename}' ).json()
+            except MuDbException as e:
+                log.info( f" .{e}" )
+                return {}
+        else:
+            raise MuDbException( f"Cannot get file from DB: no id, url or file name given as input" )
+                 
+        return response
 
 
+    def loadSourcefile( self, id: int ):
+        """ Upload a sound file from database 
 
+        Parameters
+        ----------
+        id: int
+            sourcefile DB identifier
+        
+        Return
+        ------
+        signal: np.ndarray
+            muh5 file
+        """
+
+        try:
+            response = self.get( f'/sourcefile/{id}/upload' ).content
+        except MuDbException as e:
+            log.info( f" .{e}" )
+            return {}
+        
+        return response
+ 
 
 # =============================================================================
 # Generics
