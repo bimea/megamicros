@@ -36,6 +36,7 @@ import megamicros.core.base as base
 
 
 DEFAULT_REMOTE_PORT = 9002
+DEFAULT_REMOTE_ADDRESS = 'localhost'
 
 # =============================================================================
 # Exception dedicaced to Megamicros websocket systems
@@ -47,7 +48,7 @@ class MuWSException( MuException ):
 
 
 # =============================================================================
-# The class MegamicrosWS base class
+# The MemsArrayWS base class
 # =============================================================================
 
 
@@ -56,9 +57,24 @@ class MemsArrayWS( base.MemsArray ):
 
     """
 
-    def __init__( self, remote_host: str, remote_port=DEFAULT_REMOTE_PORT ):
+    __remote_host: str = DEFAULT_REMOTE_ADDRESS
+    __remote_port: int = DEFAULT_REMOTE_PORT
 
-        pass
+    def __init__( self, host: str, port: int=DEFAULT_REMOTE_PORT ):
+        """ Connect the antenna input stream to a remote antenna 
+
+        The connection to the remote server is verified. If the server is not available, an exception is raised. 
+
+        Parameters
+        ----------
+        host: str
+            The remote host address
+        port: int, optional
+            The remote port (default is 9002)
+        """
+
+        
+
 
 
 

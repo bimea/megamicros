@@ -35,6 +35,17 @@ from megamicros.exception import MuException
 from megamicros.aidb.query import AidbSession
 import megamicros.core.base as base
 
+# =============================================================================
+# Exception dedicaced to Megamicros Aidb systems
+# =============================================================================
+
+class MuDBException( MuException ):
+    """Exception base class for Megamicros Aidb systems """
+
+
+# =============================================================================
+# The MemsArrayDB base class
+# =============================================================================
 
 class MemsArrayDB( base.MemsArray ):
     """ MEMs array class with input stream connected to a remote database.
