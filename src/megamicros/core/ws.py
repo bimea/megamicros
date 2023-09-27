@@ -190,12 +190,16 @@ class MemsArrayWS( base.MemsArray ):
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
 
+        log.info( f" .Starting run execution" )
+
         # Check direct args
         if len( args ) != 0:
             raise MuWSException( "Direct arguments are not accepted for run() method" )
                 
         # Set base settings      
         try:  
+            log.info( f" .Install run settings" )
+
             if 'mems' in kwargs:
                 self.setActiveMems( kwargs['mems'] )
 
@@ -212,7 +216,7 @@ class MemsArrayWS( base.MemsArray ):
                 self.setSamplingFrequency( kwargs['sampling_frequency'] )
             
             if 'duration' in kwargs:
-                self.SetDuration( kwargs['duration'] )
+                self.setDuration( kwargs['duration'] )
 
             if 'frame_length' in kwargs:
                 self.setFrameLength( kwargs['frame_length'] )
@@ -222,6 +226,8 @@ class MemsArrayWS( base.MemsArray ):
             
         # Check for running
         try:
+            log.info( f" .Pre-execution checks" )
+
             if self.mems is None or len( self.mems )==0:
                 raise MuWSException( f"No activated MEMs" )
             
@@ -267,7 +273,7 @@ class MemsArrayWS( base.MemsArray ):
             asyncio.run( self.__run() )
         except MuWSException as e:
             log.info( f" .Run thread halted on error: {e}" )
-            self._async_transfer_thread_exception = True
+            self._async_transfer_thread_exception = e
 
 
     async def __run( self ):
@@ -279,22 +285,21 @@ class MemsArrayWS( base.MemsArray ):
             response = json.loads( await websocket.recv() )
             error = self.__check_mbs_error( response )
             if error:
-                raise MuWSException( f"Connection to server failed: {error}" )
+                raise MuWSException( f"Connection to server failed: {error}" )        
 
             # send settings to server
-            #log.info( f" .Send settings to server" )
             background_mode: bool = False
             settings = {
-                'mems': self._mems,
+                'mems': self.mems,
                 'analogs': self.analogs,
-                'counter': self._counter,
-                'counter_skip': self._counter_skip,
-                'status': self._status,
+                'counter': self.counter,
+                'counter_skip': self.counter_skip,
+                'status': False,
                 'clockdiv': self._clockdiv,
-                'sampling_frequency': self._sampling_frequency,
-                'datatype': self._datatype,
+                'sampling_frequency': self.sampling_frequency,
+                'datatype': 'int32',
                 'mems_init_wait': self._mems_init_wait,
-                'duration': self._duration
+                'duration': self.duration
             }
 
             # Add H5 settings if H5_pass_through mode is on:
