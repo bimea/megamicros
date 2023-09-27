@@ -92,10 +92,10 @@ class MemsArrayDB( base.MemsArray ):
                     # get meta data
                     meta = session.get_sourcefile( file_id )
                     self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                    self.setAvailableMems( len( meta['info']['mems'] ) )
+                    self.setAvailableMems( available_mems_number=len( meta['info']['mems'] ) )
                     self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
                     self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
+                    self.setAvailableAnalogs( available_analogs_number=len( meta['info']['analogs'] ) )
 
             except MuException as e:
                 raise( f"Connection to database {dbhost} failed: {e}" )
@@ -107,10 +107,10 @@ class MemsArrayDB( base.MemsArray ):
                     # get meta data
                     meta = session.get_sourcefile( file_id )
                     self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                    self.setAvailableMems( len( meta['info']['mems'] ) )
+                    self.setAvailableMems( available_mems_number=len( meta['info']['mems'] ) )
                     self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
                     self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
+                    self.setAvailableAnalogs( available_analogs_number=len( meta['info']['analogs'] ) )
 
                     # get signal
                     log.info( f" .Downloading..." )
