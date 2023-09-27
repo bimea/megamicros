@@ -96,6 +96,8 @@ class MemsArrayWS( base.MemsArray ):
 
         if loop and loop.is_running():
             # One cannot add a second asyncio loop in an existant loop (in a Jupyterlab loop for example)
+            # Next lines create a task with a return callback with no more execution after.
+            #
             log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
             task = loop.create_task( self.__try_connect() )
             task.add_done_callback( self.__try_connect_check_error )
@@ -114,7 +116,7 @@ class MemsArrayWS( base.MemsArray ):
 
     def __try_connect_check_error( self, t ):
 
-        if t.result == True:
+        if t.result() == True:
             log.info( ' .Starting MegamicrosWS device [ready]' ) 
         else:
             log.error( f"Unable to connect to remote server {self.__server_host}:{self.__server_port}" )
@@ -130,7 +132,7 @@ class MemsArrayWS( base.MemsArray ):
             async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
                 # check server response
                 response = json.loads( await websocket.recv() )
-                error = self.__check_error( response )
+                error = self.__check_mbs_error( response )
                 if error:
                     raise MuWSException( f"Connection to server failed with error: {error}" )
                 else:
@@ -140,16 +142,20 @@ class MemsArrayWS( base.MemsArray ):
                 log.info( f" .Getting settings values from remote receiver..." )
                 await websocket.send( json.dumps( {'request': 'settings'} ) )
                 response = json.loads( await websocket.recv() )
-                error = self.__check_error( response )
+                error = self.__check_mbs_error( response )
                 if error:
                     raise MuWSException( f"Unable to get settings from server: {error}" )
-                else:
-                    import pprint
-                    print( "settings: " )
-                    pprint( response )
-                    self.__set_settings_from_server_dict( response['response'] )
-
                 log.info( f" .Received settings from server [ok]" )
+
+                # init object with server response
+                settings = response["response"]
+                self.setSamplingFrequency( settings['sampling_frequency'] )
+                self.setAvailableMems( len( settings['available_mems'] ) )
+                self.setCounter() if settings['counter']==True else self.unsetCounter()
+                self.setCounterSkip() if settings['counter_skip']==True else self.unsetCounterSkip()
+                self.setAvailableAnalogs( len( settings['available_analogs'] ) )
+
+
                 
         except websockets.exceptions.WebSocketException as e:
             log.error( f"Server connection failed due to websocket failure: {e}" )
@@ -163,8 +169,8 @@ class MemsArrayWS( base.MemsArray ):
         return True
 
 
-    def __check_error( self, response ) -> bool|str :
-        """ Check the response from server concerning the presence of errors 
+    def __check_mbs_error( self, response ) -> bool|str :
+        """ Check the response from MBS server concerning the presence of errors 
         
         Parameters
         ----------
