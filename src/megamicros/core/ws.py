@@ -41,8 +41,12 @@ from megamicros.exception import MuException
 import megamicros.core.base as base
 
 
-DEFAULT_MBS_SERVER_ADDRESS = 'localhost'
-DEFAULT_MBS_SERVER_PORT = 9002
+DEFAULT_MBS_SERVER_ADDRESS      = 'localhost'
+DEFAULT_MBS_SERVER_PORT         = 9002
+
+# Megamicros dependances
+DEFAULT_MEMS_INIT_WAIT          = 1000                                          # Mems initializing time in milliseconds
+DEFAULT_DATATYPE				= "int32"									    # Default receiver incoming data type ("int32" or "float32") 
 
 
 # =============================================================================
