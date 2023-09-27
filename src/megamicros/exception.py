@@ -36,4 +36,6 @@ from megamicros.log import log
 
 class MuException( Exception ):
     """Exception base class for Megamicros """
-    pass
+
+    def __init__( self, message: str="" ):
+        super().__init__( message )

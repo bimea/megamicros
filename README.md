@@ -34,13 +34,13 @@ or by adding the following lines to ~/.pip/pip.conf:
 Installing *megamicros* becomes as simple as:
 
 ```bash
-  > pip install meagmicros
+  > pip install megamicros
 ```
 
 Upgrading:
 
 ```bash
-  > pip instamm --upgrade megamicros
+  > pip install --upgrade megamicros
 ```
 
 ### Installing from the GitHub repository 

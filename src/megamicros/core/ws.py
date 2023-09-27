@@ -30,13 +30,18 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
 import numpy as np
+import websockets
+import json
+import asyncio
+
 from megamicros.log import log
 from megamicros.exception import MuException
 import megamicros.core.base as base
 
 
-DEFAULT_REMOTE_PORT = 9002
-DEFAULT_REMOTE_ADDRESS = 'localhost'
+DEFAULT_MBS_SERVER_ADDRESS = 'localhost'
+DEFAULT_MBS_SERVER_PORT = 9002
+
 
 # =============================================================================
 # Exception dedicaced to Megamicros websocket systems
@@ -44,6 +49,9 @@ DEFAULT_REMOTE_ADDRESS = 'localhost'
 
 class MuWSException( MuException ):
     """Exception base class for Megamicros Winsokets systems """
+    
+    def __init__( self, message: str="" ):
+        super().__init__( message )
 
 
 
@@ -57,10 +65,11 @@ class MemsArrayWS( base.MemsArray ):
 
     """
 
-    __remote_host: str = DEFAULT_REMOTE_ADDRESS
-    __remote_port: int = DEFAULT_REMOTE_PORT
+    __server_host: str = DEFAULT_MBS_SERVER_ADDRESS
+    __server_port: int = DEFAULT_MBS_SERVER_PORT
+    __flag_success: bool = None
 
-    def __init__( self, host: str, port: int=DEFAULT_REMOTE_PORT ):
+    def __init__( self, host: str, port: int=DEFAULT_MBS_SERVER_PORT ):
         """ Connect the antenna input stream to a remote antenna 
 
         The connection to the remote server is verified. If the server is not available, an exception is raised. 
@@ -73,123 +82,103 @@ class MemsArrayWS( base.MemsArray ):
             The remote port (default is 9002)
         """
 
+        self.__server_host = host
+        self.__server_port = port
+
+        # check connection to the server
+        #asyncio.run( self.__try_connect() 
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  
+            # There is no current event loop...
+            loop = None
+
+        if loop and loop.is_running():
+            # One cannot add a second asyncio loop in an existant loop (in a Jupyterlab loop for example)
+            log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
+            task = loop.create_task( self.__try_connect() )
+            task.add_done_callback( self.__try_connect_check_error )
+        else:
+            asyncio.run( self.__try_connect() )
+
+            if self.__flag_success == False:
+                log.error( f"Unable to connect to remote server {self.__server_host}:{self.__server_port}" )
+                raise MuWSException( f"Unable to connect to remote server {self.__server_host}:{self.__server_port}" )
+            else:
+                log.info( ' .Starting MegamicrosWS device [ready]' ) 
+                return
+
+        # Next lines are never seen...
+
+
+    def __try_connect_check_error( self, t ):
+
+        if t.result == True:
+            log.info( ' .Starting MegamicrosWS device [ready]' ) 
+        else:
+            log.error( f"Unable to connect to remote server {self.__server_host}:{self.__server_port}" )
         
 
+    async def __try_connect( self ) -> bool :
+        """ Open a connection to the server then get server settings before closing """
+
+        self.__flag_success = False
+        try:
+            log.info( f" .Try connecting to ws://{self.__server_host}:{str(self.__server_port)}...") 
+
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                # check server response
+                response = json.loads( await websocket.recv() )
+                error = self.__check_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed with error: {error}" )
+                else:
+                    log.info( f" .Received positive answer from server" )
+
+                # get remote settings and set them
+                log.info( f" .Getting settings values from remote receiver..." )
+                await websocket.send( json.dumps( {'request': 'settings'} ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_error( response )
+                if error:
+                    raise MuWSException( f"Unable to get settings from server: {error}" )
+                else:
+                    import pprint
+                    print( "settings: " )
+                    pprint( response )
+                    self.__set_settings_from_server_dict( response['response'] )
+
+                log.info( f" .Received settings from server [ok]" )
+                
+        except websockets.exceptions.WebSocketException as e:
+            log.error( f"Server connection failed due to websocket failure: {e}" )
+            return False
+
+        except Exception as e:
+            log.error( f"Server connection failed: {e}" )
+            return False
+        
+        self.__flag_success = True
+        return True
 
 
-
-
-# >>>>>>>>>>>>>>>>>>
-
-
-    __source: np.ndarray|None = None
-    __available_frames_number: int|None = None
-
-    def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
-        """ Connect the antenna input stream to a labelized database 
-
-        The connection to the database is verified. If the database is not available, an exception is raised. 
-        If the `preload` parameter is set to `True`, the antenna signals are uploaded and buffered once from this stage. 
+    def __check_error( self, response ) -> bool|str :
+        """ Check the response from server concerning the presence of errors 
         
         Parameters
         ----------
-        dbhost: str
-            the database host address in the form ``http(s)://www.database.io``
-        login: str
-            database account login
-        email: str
-            database user email
-        passwd: str
-            account password
-        label_id: int
-            signal label
-        file_id: int, optional
-            file identifier. Default is all files containing the labelized signals
-        sequence_id: int, optional
-            sequence identifier. Default is all the sequences located in the file
-        preload: bool, optional
-            Whether to load the whool sequence once or not. Default is `False` 
-        """
-
-
-        if file_id is None:
-            raise MuException( f"Sorry, working on several files is not yet implemented" )
+        response: dict
+            Response given by the remote server after its transformation in Python object
         
-        # test connection to database
-        if preload == False:
-            try:
-                with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
-                    # get meta data
-                    meta = session.get_sourcefile( file_id )
-                    self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                    self.setAvailableMems( len( meta['info']['mems'] ) )
-                    self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
-                    self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
-
-            except MuException as e:
-                raise( f"Connection to database {dbhost} failed: {e}" )
-            
-        # test connection and get signals from database
-        else:
-            try:
-                with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
-                    # get meta data
-                    meta = session.get_sourcefile( file_id )
-                    self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                    self.setAvailableMems( len( meta['info']['mems'] ) )
-                    self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
-                    self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                    self.setAvailableAnalogs( len( meta['info']['analogs'] ) )
-
-                    # get signal
-                    log.info( f" .Downloading..." )
-                    try:
-                        # get all sequences
-                        signal: list = session.load_labelized( 
-                            sourcefile_id=file_id, 
-                            label_id=label_id, 
-                            limit=100, 
-                            channels=self.mems
-                        )
- 
-                    except Exception as e:
-                        raise f" .Downloading failed: {e}"
-                    
-                # Save signals as ND array
-                if sequence_id is None:
-                    self.__source = np.concatenate( signal, axis=1 )
-                else:
-                    self.__source = signal[sequence_id]
-
-                # check status channel
-                # >>>>>>>
-
-                samples_number, mems_number = self.__source.shape
-                log.info( f" .Got {samples_number} samples on {mems_number} MEMs" )
-
-            except Exception as e:
-                raise MuException( f"Connection to database {dbhost} failed: {e}" )
-
-    def __iter__( self ) :
-        """ Init iterations over the antenna data """
-
-        if self.__source is None:
-            raise MuException( f"No input source stream. Cannot iterate" )
-        self.__it = 0
-        return self
-
-    def __next__( self ) -> np.ndarray|None :
-        """ next iteration over the antenna data 
-
+        Returns
+        -------
+        message: str|bool 
+            string error message received from server or False if no message
         """
 
-        self.__it += 1
-
-        if self.__counter is None or ( self.__counter == False or ( self.__counter == True and self.__counter_skip==True ) ):
-            # send data without counter state
-            return np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1
+        if response['type'] == 'status' and response['response'] == 'error':
+            return response['message'] if 'message' in response else 'Unknown error'
         else:
-            # add counter values
-            counter = np.array( [[i for i in range(self.__frame_length)]] ).T + self.__it * self.__frame_length
-            return np.concatenate( ( counter, ( np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
+            return False
+
