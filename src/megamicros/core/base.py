@@ -31,6 +31,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 
 import numpy as np
 import queue
+from enum import Enum
 from megamicros.log import log
 from megamicros.exception import MuException
 from megamicros.aidb.query import AidbSession
@@ -40,6 +41,16 @@ from megamicros.data import MuAudio
 DEFAULT_FRAME_LENGTH =              256
 DEFAULT_SAMPLING_FREQUENCY =        50000
 DEFAULT_QUEUE_SIZE =                2			# Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_DATATYPE				    = "int32"									# Default receiver incoming data type ("int32" or "float32") 
+
+# Default H5 values
+DEFAULT_H5_RECORDING				= False									    # Whether H5 recording is On or Off
+DEFAULT_H5_SEQUENCE_DURATION		= 1										    # Time duration of a dataset in seconds
+DEFAULT_H5_FILE_DURATION			= 15*60									    # Time duration of a complete H5 file in seconds
+DEFAULT_H5_COMPRESSING				= False									    # Whether compression mode is On or Off
+DEFAULT_H5_COMPRESSION_ALGO 		= 'gzip'								    # Compression algorithm (gzip, lzf, szip)
+DEFAULT_H5_GZIP_LEVEL 				= 4										    # compression level for gzip algo (0 to 9, default 4) 
+DEFAULT_H5_DIRECTORY				= './'									    # The default directory where H5 files are saved
 
 
 class MemsArray:
@@ -63,6 +74,61 @@ class MemsArray:
     Calls to antenna definition parameters should follow the order: setAvailableMems(), setMemsPosition(), then setActiveMems()  
     """
 
+    class Datatype(Enum):
+        """ Antenna datatype enumeration
+
+        Datatype decide for the output data format of the antenna
+
+        Values
+        ------
+        unknown: 0
+            no dataype specified
+        int32: 1
+            np.ndarray of 32bits integer data
+        float32: 2
+            np.ndarray of 32bits float data
+        bint32: 3
+            binary buffer of 32bits integer data
+        bfloat32: 4
+            binary buffer of 32bits float data
+        """
+
+        unknown = 0
+        int32 = 1
+        float32 = 2
+        bint32 = 3
+        bfloat32 = 4
+
+        def __str__( self ):
+            """ Convert a datatype integer code into its string enumeration """
+            if self == self.unknown:
+                return "Unknown"
+            elif self == self.int32:
+                return "int32"
+            elif self == self.float32:
+                return "float32"
+            elif self == self.bint32:
+                return "bint32"
+            elif self == self.bfloat32:
+                return "bfloat32"
+            else:
+                return "Unknown datatype"  
+
+        def __int__( self ):
+            """ Convert a datatype enumeration into its integer code """
+            if self == self.unknown:
+                return 0
+            elif self == self.int32:
+                return 1
+            elif self == self.float32:
+                return 2
+            elif self == self.bint32:
+                return 3
+            elif self == self.bfloat32:
+                return 4
+            else:
+                return -1
+            
     # Antenna dimensions
     __mems: tuple|None = None
     __available_mems: tuple|None = None
@@ -71,6 +137,7 @@ class MemsArray:
     __mems_position: np.ndarray|None|None = None
     __counter: bool|None = None
     __counter_skip: bool|None = None
+    __status: bool|None = None
 
     # Antenna properties
     __sampling_frequency: float = DEFAULT_SAMPLING_FREQUENCY
@@ -78,6 +145,7 @@ class MemsArray:
     # Output buffering
     __frame_length: int = DEFAULT_FRAME_LENGTH
     __it: int = 0
+    __datatype: Datatype = getattr( Datatype, DEFAULT_DATATYPE ) 
 
     # Running properties
     __duration: int|None = None
@@ -92,6 +160,50 @@ class MemsArray:
     _async_transfer_thread = None
     _async_transfer_thread_exception: MuException = None
 
+    # H5 attributes
+    __h5_recording: bool = DEFAULT_H5_RECORDING
+    __h5_rootdir: str = DEFAULT_H5_DIRECTORY
+    __h5_dataset_duration: int = DEFAULT_H5_SEQUENCE_DURATION
+    __h5_file_duration: int  = DEFAULT_H5_FILE_DURATION
+    __h5_compressing: bool = DEFAULT_H5_COMPRESSING
+    __h5_compression_algo: str = DEFAULT_H5_COMPRESSION_ALGO
+    __h5_gzip_level: int = DEFAULT_H5_GZIP_LEVEL
+
+
+    @property
+    def h5_recording( self ) -> bool:
+        """ Get the H5 recording flag """
+        return self.__h5_recording
+
+    @property
+    def h5_rootdir( self ) -> str:
+        """ Get the H5 recording root directory """
+        return self.__h5_rootdir
+
+    @property
+    def h5_dataset_duration( self ) -> int:
+        """ Get the MuH5 dataset duration """
+        return self.__h5_dataset_duration
+
+    @property
+    def h5_file_duration( self ) -> int:
+        """ Get the time duration of a complete MuH5 file in seconds """
+        return self.__h5_file_duration
+
+    @property
+    def h5_compressing( self ) -> bool:
+        """ Get the H5 compression boolean flag """
+        return self.__h5_compressing
+
+    @property
+    def h5_compression_algo( self ) -> str:
+        """ Get the H5 compression algorithm """
+        return self.__h5_compression_algo
+    
+    @property
+    def h5_gzip_level( self ) -> int:
+        """ Get the H5 gzip compression level """
+        return self.__h5_gzip_level
 
     @property
     def mems_number( self ) -> int:
@@ -131,8 +243,13 @@ class MemsArray:
     
     @property
     def mems( self ) -> tuple | None:
-        """ Get the activated memes list """
+        """ Get the activated MEMss list """
         return self.__mems
+    
+    @property
+    def analogs( self ) -> tuple | None:
+        """ Get the activated analog channels list """
+        return self.__analogs
 
     @property
     def counter( self ) -> bool | None:
@@ -144,6 +261,16 @@ class MemsArray:
         """ Get the counter skipping status """
         return self.__counter_skip
     
+    @property
+    def status( self ) -> bool | None:
+        """ Get the status state """
+        return self.__status
+    
+    @property
+    def datatype( self ) -> Datatype :
+        """ Get the antenna output datatype """
+        return self.__datatype
+
     @property
     def frame_length( self ) -> int:
         """ Get the output frames length """
@@ -215,6 +342,71 @@ class MemsArray:
         log.info( f" .Created a new antenna" )
 
 
+    def setH5Recording( self ) -> None :
+        """ Set the H5 recording on """
+        self.__h5_recording = True
+
+
+    def unsetH5Recording( self ) -> None :
+        """ Set the H5 recording off """
+        self.__h5_recording = False
+
+
+    def setH5Rootdir( self, dir: str ) -> None :
+        """ Set the H5 recording root directory """
+        self.__h5_rootdir = dir
+
+
+    def setH5DatasetDuration( self, duration: int ) -> None :
+        """ Set the H5 dataset duration in seconds """
+        self.__h5_dataset_duration = duration
+
+
+    def setH5FileDuration( self, duration: int ) -> None :
+        """ Set the H5 file duration in seconds """
+        self.__h5_file_duration = duration
+
+
+    def setH5Compressing( self, algo: str=DEFAULT_H5_COMPRESSION_ALGO, level: int=DEFAULT_H5_GZIP_LEVEL ) -> None :
+        """ Set the H5 recording compressing mode on """
+
+        if str != 'gzip':
+            raise MuException( f"The H5 compressing algo '{algo}' is not implemented" )
+        if algo == 'gzip' and ( level <0 or level > 9 ):
+            raise MuException( f"Wrong compressing level <{level}>. Accepted values are between 0 and 9" )
+        
+        self.__h5_compressing = True
+        self.__h5_compression_algo = algo
+        self.__h5_gzip_level = level
+
+
+    def unsetH5Compressing( self ) -> None :
+        """ Set the H5 recording compressing mode off """
+        self.__h5_compressing = False
+        self.__h5_compression_algo = DEFAULT_H5_COMPRESSION_ALGO
+        self.__h5_gzip_level = DEFAULT_H5_GZIP_LEVEL
+
+
+    def setStatus( self ) -> None :
+        """ Make status channel available. Status state will be added to output signals 
+
+        See
+        ---
+            MemsArray.unsetStatus()
+        """
+        self.__status = True
+
+
+    def unsetStatus( self ) -> None :
+        """ Make status unavailable.
+
+        See
+        ---
+            MemsArray.setStatus()
+        """
+        self.__status = False
+
+
     def setCounter( self ) -> None :
         """ Make counter available. Counter state will be added to output signals 
 
@@ -252,6 +444,18 @@ class MemsArray:
             MemsArray.setCounterSkip()
         """
         self.__counter_skip = False
+
+
+    def setDatatype( self, datatype: Datatype ) -> None :
+        """ Set the output antenna data type
+
+        Parameters
+        ----------
+        datatype: MemsArray.Datatype
+            the antenna output data type among int32, float32, bint32, bfloat32...
+        """
+
+        self.__datatype = datatype
 
 
     def setAvailableMems( self, available_mems_number: int ) -> None :

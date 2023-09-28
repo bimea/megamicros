@@ -43,10 +43,11 @@ import megamicros.core.base as base
 
 DEFAULT_MBS_SERVER_ADDRESS      = 'localhost'
 DEFAULT_MBS_SERVER_PORT         = 9002
+DEFAULT_H5_PASS_THROUGH         = False                     # whether server performs H5 saving or client 
 
-# Megamicros dependances
-DEFAULT_MEMS_INIT_WAIT          = 1000                                          # Mems initializing time in milliseconds
-DEFAULT_DATATYPE				= "int32"									    # Default receiver incoming data type ("int32" or "float32") 
+
+# Megamicros dependances (should be removed)
+DEFAULT_MEMS_INIT_WAIT          = 1000                      # Mems initializing time in milliseconds
 
 
 # =============================================================================
@@ -74,6 +75,16 @@ class MemsArrayWS( base.MemsArray ):
     __server_host: str = DEFAULT_MBS_SERVER_ADDRESS
     __server_port: int = DEFAULT_MBS_SERVER_PORT
     __flag_success: bool = None
+
+    # H5 attributes
+    __h5_pass_through: bool = DEFAULT_H5_PASS_THROUGH
+
+
+    @property
+    def h5_pass_through( self ) -> bool:
+        """ Get the H5 compression local (False) or remote (True) flag """
+        return self.__h5_pass_through
+    
 
     def __init__( self, host: str, port: int=DEFAULT_MBS_SERVER_PORT ):
         """ Connect the antenna input stream to a remote antenna 
@@ -216,15 +227,53 @@ class MemsArrayWS( base.MemsArray ):
             if 'counter_skip' in kwargs:
                 self.setCounterSkip() if kwargs['counter_skip'] is True else self.unsetCounterSkip()
 
+            if 'status' in kwargs:
+                self.setStatus() if kwargs['status'] is True else self.unsetStatus()
+
             if 'sampling_frequency' in kwargs:
                 self.setSamplingFrequency( kwargs['sampling_frequency'] )
-            
+
+            if 'datatype' in kwargs:
+                if kwargs['datatype'] is str:
+                    try:
+                        self.setDatatype( getattr( base.MemsArray.Datatype, kwargs['datatype'] ) )
+                    except:
+                        raise MuWSException( f"Unknown output datatype '{kwargs['datatype']}'" )
+                elif kwargs['datatype'] is int:
+                    try:
+                        self.setDatatype( base.MemsArray.Datatype( kwargs['datatype'] ) )
+                    except:
+                        raise MuWSException( f"Unknown output datatype code '{kwargs['datatype']}'" )                    
+                elif kwargs['datatype'] is base.MemsArray.Datatype :
+                    self.setDatatype( kwargs['datatype'] )
+
             if 'duration' in kwargs:
                 self.setDuration( kwargs['duration'] )
 
             if 'frame_length' in kwargs:
                 self.setFrameLength( kwargs['frame_length'] )
+
+            if 'h5_recording' in kwargs:
+                self.setH5Recording( kwargs['h5_recording'] )
         
+            if 'h5_rootdir' in kwargs:
+                self.setH5Rootdir( kwargs['h5_rootdir'] )
+
+            if 'h5_dataset_duration' in kwargs:
+                self.setH5DatasetDuration( kwargs['h5_dataset_duration'] )
+
+            if 'h5_file_duration' in kwargs:
+                self.setH5FileDuration( kwargs['h5_file_duration'] )
+
+            if 'h5_compressing' in kwargs:
+                if kwargs['h5_compressing'] == True:
+                    algo = kwargs['h5_compression_algo'] if 'h5_compression_algo' in kwargs else base.DEFAULT_H5_COMPRESSION_ALGO
+                    level =  kwargs['h5_gzip_level'] if 'h5_gzip_level' in kwargs else base.DEFAULT_H5_GZIP_LEVEL
+                    self.setH5Compressing( algo=algo, level=level )
+                else:
+                    self.unsetH5Compressing()
+                    
+
         except MuException as e:
             raise MuWSException( f"Run failed on settings: {e}")
             
@@ -241,13 +290,20 @@ class MemsArrayWS( base.MemsArray ):
             
             if self.counter_skip is None:
                 log.info( f" .Counter skipping not set -> set to False" )
-                self.unsetCounterSkip()                
+                self.unsetCounterSkip()       
+
+            if self.status is None:
+                log.info( f" .Status was not set -> set to False" )
+                self.unsetStatus()         
 
             if self.sampling_frequency is None:
                 raise MuWSException( f"No sampling frequency set" )
 
             if self.duration is None:
                 raise MuWSException( f"No running duration set" )
+            
+            if self.datatype is base.MemsArray.Datatype.unknown:
+                raise MuWSException( f"No datatype set" )
             
             if self.frame_length is None:
                 log.info( f" .Frame length not set -> set to default" )
@@ -257,7 +313,6 @@ class MemsArrayWS( base.MemsArray ):
                 log.info( f" .Data transfer using queue" )
             else:
                 log.info( f" .Data transfer using the user callback function" )
-
 
         except MuException as e:
             raise MuWSException( f"Run check failed: {e}")
@@ -292,30 +347,31 @@ class MemsArrayWS( base.MemsArray ):
                 raise MuWSException( f"Connection to server failed: {error}" )        
 
             # send settings to server
+            # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
             background_mode: bool = False
             settings = {
                 'mems': self.mems,
                 'analogs': self.analogs,
                 'counter': self.counter,
                 'counter_skip': self.counter_skip,
-                'status': False,
-                'clockdiv': self._clockdiv,
+                'status': self.status,
+                'clockdiv': int( 500000 // self.sampling_frequency ) - 1,
                 'sampling_frequency': self.sampling_frequency,
-                'datatype': 'int32',
-                'mems_init_wait': self._mems_init_wait,
+                'datatype': 'int32' if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32 else 'float32',
+                'mems_init_wait': DEFAULT_MEMS_INIT_WAIT,
                 'duration': self.duration
             }
 
             # Add H5 settings if H5_pass_through mode is on:
-            if self._h5_recording and self.__h5_pass_through:
+            if self.h5_recording and self.h5_pass_through:
                 settings.update( {
                     'h5_recording': True,
-                    'h5_rootdir': self._h5_rootdir,
-                    'h5_dataset_duration': self._h5_dataset_duration,
-                    'h5_file_duration': self._h5_file_duration,
-                    'h5_compressing': self._h5_compressing,
-                    'h5_compression_algo': self._h5_compression_algo,
-                    'h5_gzip_level': self._h5_gzip_level
+                    'h5_rootdir': self.h5_rootdir,
+                    'h5_dataset_duration': self.h5_dataset_duration,
+                    'h5_file_duration': self.h5_file_duration,
+                    'h5_compressing': self.h5_compressing,
+                    'h5_compression_algo': self.h5_compression_algo,
+                    'h5_gzip_level': self.h5_gzip_level
                 } )
                 # Play in background mode -> no more communicatiobn with the server 
                 background_mode = True
