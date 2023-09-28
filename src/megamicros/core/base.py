@@ -40,17 +40,18 @@ from megamicros.data import MuAudio
 
 DEFAULT_FRAME_LENGTH =              256
 DEFAULT_SAMPLING_FREQUENCY =        50000
-DEFAULT_QUEUE_SIZE =                2			# Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
-DEFAULT_DATATYPE				    = "int32"									# Default receiver incoming data type ("int32" or "float32") 
+DEFAULT_QUEUE_SIZE =                2			        # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_DATATYPE				    = "int32"	        # Default receiver incoming data type ("int32" or "float32") 
+DEFAULT_SYNC_MODE                   = False             # Default run mode is asynchronous
 
 # Default H5 values
-DEFAULT_H5_RECORDING				= False									    # Whether H5 recording is On or Off
-DEFAULT_H5_SEQUENCE_DURATION		= 1										    # Time duration of a dataset in seconds
-DEFAULT_H5_FILE_DURATION			= 15*60									    # Time duration of a complete H5 file in seconds
-DEFAULT_H5_COMPRESSING				= False									    # Whether compression mode is On or Off
-DEFAULT_H5_COMPRESSION_ALGO 		= 'gzip'								    # Compression algorithm (gzip, lzf, szip)
-DEFAULT_H5_GZIP_LEVEL 				= 4										    # compression level for gzip algo (0 to 9, default 4) 
-DEFAULT_H5_DIRECTORY				= './'									    # The default directory where H5 files are saved
+DEFAULT_H5_RECORDING				= False				# Whether H5 recording is On or Off
+DEFAULT_H5_SEQUENCE_DURATION		= 1					# Time duration of a dataset in seconds
+DEFAULT_H5_FILE_DURATION			= 15*60				# Time duration of a complete H5 file in seconds
+DEFAULT_H5_COMPRESSING				= False				# Whether compression mode is On or Off
+DEFAULT_H5_COMPRESSION_ALGO 		= 'gzip'			# Compression algorithm (gzip, lzf, szip)
+DEFAULT_H5_GZIP_LEVEL 				= 4					# compression level for gzip algo (0 to 9, default 4) 
+DEFAULT_H5_DIRECTORY				= './'				# The default directory where H5 files are saved
 
 
 class MemsArray:
@@ -152,6 +153,7 @@ class MemsArray:
     __callback_fn = None
     __callback_user_data = None
     __post_callback_fn = None
+    __sync: bool = DEFAULT_SYNC_MODE
     __signal_q = queue.Queue()
     __signal_q_size = DEFAULT_QUEUE_SIZE
     __signal_buffer = None
@@ -169,6 +171,11 @@ class MemsArray:
     __h5_compression_algo: str = DEFAULT_H5_COMPRESSION_ALGO
     __h5_gzip_level: int = DEFAULT_H5_GZIP_LEVEL
 
+
+    @property
+    def sync( self ) -> bool:
+        """ Get the synchronous (True) or asynchronous (False) mode of execution """
+        return self.__sync
 
     @property
     def h5_recording( self ) -> bool:
@@ -341,6 +348,18 @@ class MemsArray:
 
         log.info( f" .Created a new antenna" )
 
+
+    def setSync( self ) -> None :
+        """ Set the synchronous mode of execution """
+        self.__sync = True
+
+    def setAsync( self ) -> None :
+        """ Set the asynchronous mode of execution """
+        self.__sync = False
+
+    def unsetH5Recording( self ) -> None :
+        """ Set the H5 recording off """
+        self.__h5_recording = False
 
     def setH5Recording( self ) -> None :
         """ Set the H5 recording on """

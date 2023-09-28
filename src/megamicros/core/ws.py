@@ -44,6 +44,7 @@ import megamicros.core.base as base
 DEFAULT_MBS_SERVER_ADDRESS      = 'localhost'
 DEFAULT_MBS_SERVER_PORT         = 9002
 DEFAULT_H5_PASS_THROUGH         = False                     # whether server performs H5 saving or client 
+DEFAULT_BACKGROUND_MODE         = False                     # whether background execution mode in on (True) or off (False)
 
 
 # Megamicros dependances (should be removed)
@@ -75,6 +76,7 @@ class MemsArrayWS( base.MemsArray ):
     __server_host: str = DEFAULT_MBS_SERVER_ADDRESS
     __server_port: int = DEFAULT_MBS_SERVER_PORT
     __flag_success: bool = None
+    __background_mode: bool = DEFAULT_BACKGROUND_MODE
 
     # H5 attributes
     __h5_pass_through: bool = DEFAULT_H5_PASS_THROUGH
@@ -85,6 +87,31 @@ class MemsArrayWS( base.MemsArray ):
         """ Get the H5 compression local (False) or remote (True) flag """
         return self.__h5_pass_through
     
+    @property
+    def background_mode( self ) -> bool:
+        """ Check if bacground mode is on (True) or off (False) """
+        return self.__background_mode
+
+
+    def setBackgroundMode( self ) -> None :
+        """ Set the execution background mode on """
+        self.__background_mode = True
+
+
+    def unsetBackgroundMode( self ) -> None :
+        """ Set the execution background mode off """
+        self.__background_mode = False
+
+
+    def setH5RecordingPassthrough( self ) -> None :
+        """ Set the H5 recording passthrough mode on """
+        self.__h5_pass_through = True
+
+
+    def unsetH5RecordingPassthrough( self ) -> None :
+        """ Set the H5 recording passthrough mode off """
+        self.__h5_pass_through = False
+
 
     def __init__( self, host: str, port: int=DEFAULT_MBS_SERVER_PORT ):
         """ Connect the antenna input stream to a remote antenna 
@@ -254,7 +281,10 @@ class MemsArrayWS( base.MemsArray ):
                 self.setFrameLength( kwargs['frame_length'] )
 
             if 'h5_recording' in kwargs:
-                self.setH5Recording( kwargs['h5_recording'] )
+                self.setH5Recording() if kwargs['h5_recording'] else self.unsetH5Recording()
+
+            if 'h5_pass_through' in kwargs:
+                self.setH5RecordingPassthrough() if kwargs['h5_pass_through'] else self.unsetH5RecordingPassthrough()
         
             if 'h5_rootdir' in kwargs:
                 self.setH5Rootdir( kwargs['h5_rootdir'] )
@@ -272,8 +302,11 @@ class MemsArrayWS( base.MemsArray ):
                     self.setH5Compressing( algo=algo, level=level )
                 else:
                     self.unsetH5Compressing()
-                    
 
+            if 'background_mode' in kwargs:
+                self.setBackgroundMode() if kwargs['background_mode']== True else self.unsetBackgroundMode()
+
+                    
         except MuException as e:
             raise MuWSException( f"Run failed on settings: {e}")
             
@@ -309,22 +342,48 @@ class MemsArrayWS( base.MemsArray ):
                 log.info( f" .Frame length not set -> set to default" )
                 self.setFrameLength( base.DEFAULT_FRAME_LENGTH )
 
-            if self.callback_fn is None:
-                log.info( f" .Data transfer using queue" )
-            else:
-                log.info( f" .Data transfer using the user callback function" )
+            if self.h5_recording and self.h5_pass_through and not self.background_mode:
+                raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
 
         except MuException as e:
             raise MuWSException( f"Run check failed: {e}")
-        
-        # Start run
 
+        # verbose
+        if self.duration == 0:
+            log.info( f" .Run infinite loop (duration=0)" )
+        else :
+            log.info( f" .Perform a {self.duration}s run loop" )
+        
+        if self.callback_fn is not None:
+            log.info( f" .Data transfer using the user callback function" )
+
+        if self.h5_recording:
+            if self.h5_pass_through:
+                log.info( f" .Remote H5 recording by server on (pass-through mode)" )
+            else:
+                log.info( f" .Local H5 recording on" )
+        else:
+            log.info( f" .H5 recording off" )
+
+        if self.background_mode:
+            log.info( f" .Background execution mode on" )
+        else:
+            log.info( f" .Background execution mode off" )
+
+        if self.sync:
+            log.info( " .Starting run synchronous execution..." )
+        else:
+            log.info( " .Starting run asynchronous execution..." )
+
+        
+        # Start run thread
         log.info( " .Starting run thread execution..." )
         self._async_transfer_thread = threading.Thread( target= self.run_thread )
         self._async_transfer_thread.start()
 
         # Wait until the thread terminates in sync mode:
-        self._async_transfer_thread.join()
+        if self.sync:
+            self._async_transfer_thread.join()
 
 
     def run_thread( self ):
@@ -348,7 +407,6 @@ class MemsArrayWS( base.MemsArray ):
 
             # send settings to server
             # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
-            background_mode: bool = False
             settings = {
                 'mems': self.mems,
                 'analogs': self.analogs,
@@ -373,8 +431,9 @@ class MemsArrayWS( base.MemsArray ):
                     'h5_compression_algo': self.h5_compression_algo,
                     'h5_gzip_level': self.h5_gzip_level
                 } )
-                # Play in background mode -> no more communicatiobn with the server 
-                background_mode = True
+
+            if self.background_mode:
+                # Play in background mode -> no more communicatiobn with the server
                 run_command = {'request': 'run', 'settings': settings, 'origin': 'background'}
             else:
                 run_command = {'request': 'run', 'settings': settings}
@@ -388,13 +447,15 @@ class MemsArrayWS( base.MemsArray ):
                 raise MuWSException( f"Run command failed on remote server: {error}" )
 
             # Start listening unless background mode is ON
-            if not background_mode:
+            if not self.background_mode:
                 log.info( " .Run command accepted by server" )
                 # Start server listening 
                 await self.__remote_run( websocket )
 
                 # Stop H5 recording if noy yet stopped
-                if self._h5_recording and not self.__h5_pass_through and self._h5_started:
+                # The following should be done at the base level :
+                """
+                if self.h5_recording and not self.__h5_pass_through and self._h5_started:
                     self.h5_close()
                 
                 if self.__transfer_index != 0:
@@ -404,8 +465,21 @@ class MemsArrayWS( base.MemsArray ):
                     log.info( f" .Data rate estimation: {self.transfer_rate/1000:.2f} Ko/s (real time is: {self.sampling_frequency*4*self.channels_number/1000:.2f} Ko/s)" )
                 else:
                     log.info( f" .No transfers received" )
+                """
             else:
                 log.info( " .Run command accepted by server in background mode: halt connection with server and exit" )
+
+
+    async def __remote_run( self, websocket ):
+        """ Remote run command in foreground mode 
+        
+        Get data from server and populate the internal data queue - or call the user callback function 
+
+        Parameters
+        ----------
+        websocket: 
+            The open connection websocket
+        """
 
 
 
