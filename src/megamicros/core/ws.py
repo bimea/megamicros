@@ -34,7 +34,7 @@ import websockets
 import json
 import asyncio
 import threading
-
+import time
 
 from megamicros.log import log
 from megamicros.exception import MuException
@@ -452,7 +452,7 @@ class MemsArrayWS( base.MemsArray ):
                 # Start server listening 
                 await self.__remote_run( websocket )
 
-                # Stop H5 recording if noy yet stopped
+                # Stop H5 recording if not yet stopped
                 # The following should be done at the base level :
                 """
                 if self.h5_recording and not self.__h5_pass_through and self._h5_started:
@@ -467,7 +467,11 @@ class MemsArrayWS( base.MemsArray ):
                     log.info( f" .No transfers received" )
                 """
             else:
-                log.info( " .Run command accepted by server in background mode: halt connection with server and exit" )
+                log.info( " .Run command accepted by server in background mode" )
+
+                # wait 2 seconds before halting 
+                time.sleep( 2 )
+                log.info( " .Halt connection with server and exit" )
 
 
     async def __remote_run( self, websocket ):
