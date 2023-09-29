@@ -371,23 +371,22 @@ class MemsArrayWS( base.MemsArray ):
             log.info( f" .Background execution mode off" )
 
         if self.sync:
-            log.info( " .Starting run synchronous execution..." )
+            log.info( " .Synchronous execution mode on" )
         else:
-            log.info( " .Starting run asynchronous execution..." )
+            log.info( " .Asynchronous execution mode on" )
 
-        
         # Start run thread
-        log.info( " .Starting run thread execution..." )
         self._async_transfer_thread = threading.Thread( target= self.run_thread )
         self._async_transfer_thread.start()
 
         # Wait until the thread terminates in sync mode:
-        if self.sync:
-            self._async_transfer_thread.join()
+        #if self.sync:
+        self._async_transfer_thread.join()
 
 
     def run_thread( self ):
         try:
+            log.info( " .Run thread execution started" )
             asyncio.run( self.__run() )
         except MuWSException as e:
             log.info( f" .Run thread halted on error: {e}" )
@@ -395,11 +394,11 @@ class MemsArrayWS( base.MemsArray ):
 
 
     async def __run( self ):
-        """
-        Perform a run execution on Megamicros remote receiver.
-        """
+        """ Perform a run execution on Megamicros remote receiver """
 
+        log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
         async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+            log.info( " .Connected" )
             response = json.loads( await websocket.recv() )
             error = self.__check_mbs_error( response )
             if error:
