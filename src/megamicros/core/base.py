@@ -32,6 +32,8 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 import queue
 from enum import Enum
+import threading
+
 from megamicros.log import log
 from megamicros.exception import MuException
 from megamicros.aidb.query import AidbSession
@@ -41,6 +43,7 @@ from megamicros.data import MuAudio
 DEFAULT_FRAME_LENGTH =              256
 DEFAULT_SAMPLING_FREQUENCY =        50000
 DEFAULT_QUEUE_SIZE =                2			        # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_QUEUE_TIMEOUT =             5                   # The block delay until the queue is considered as empty  
 DEFAULT_DATATYPE				    = "int32"	        # Default receiver incoming data type ("int32" or "float32") 
 DEFAULT_SYNC_MODE                   = False             # Default run mode is asynchronous
 
@@ -130,11 +133,33 @@ class MemsArray:
             else:
                 return -1
             
+
+    class Queue( queue.Queue ):
+        """ Thread safe queue adapted to the MemsArray class 
+        
+        Original comportment is that insertion blocks once maxsize is reached, until queue items are consumed.
+        This implementation pop up the last element of the queue if maxsize is reached.
+        """
+
+        __transfert_lost: int = 0
+
+        def __init__( self, maxsize: int = 0 ):
+            super().__init__( maxsize )
+
+        def put( self, data ):
+            if self.maxsize > 0 and self.qsize() >= self.maxsize:
+                self.get()
+                self.__transfert_lost += 1
+            super().put( data )
+
+
+
+
     # Antenna dimensions
-    __mems: tuple|None = None
-    __available_mems: tuple|None = None
-    __analogs: tuple|None = None
-    __available_analogs: tuple|None = None
+    __mems: tuple = []
+    __available_mems: tuple = []
+    __analogs: tuple = []
+    __available_analogs: tuple = []
     __mems_position: np.ndarray|None|None = None
     __counter: bool|None = None
     __counter_skip: bool|None = None
@@ -146,17 +171,12 @@ class MemsArray:
     # Output buffering
     __frame_length: int = DEFAULT_FRAME_LENGTH
     __it: int = 0
+    __max_it: int = 0
     __datatype: Datatype = getattr( Datatype, DEFAULT_DATATYPE ) 
+    __signal_q = Queue( maxsize=DEFAULT_QUEUE_SIZE )
 
     # Running properties
     __duration: int|None = None
-    __callback_fn = None
-    __callback_user_data = None
-    __post_callback_fn = None
-    __sync: bool = DEFAULT_SYNC_MODE
-    __signal_q = queue.Queue()
-    __signal_q_size = DEFAULT_QUEUE_SIZE
-    __signal_buffer = None
     
     # Internal run parameters
     _async_transfer_thread = None
@@ -170,12 +190,6 @@ class MemsArray:
     __h5_compressing: bool = DEFAULT_H5_COMPRESSING
     __h5_compression_algo: str = DEFAULT_H5_COMPRESSION_ALGO
     __h5_gzip_level: int = DEFAULT_H5_GZIP_LEVEL
-
-
-    @property
-    def sync( self ) -> bool:
-        """ Get the synchronous (True) or asynchronous (False) mode of execution """
-        return self.__sync
 
     @property
     def h5_recording( self ) -> bool:
@@ -294,25 +308,14 @@ class MemsArray:
         return self.__duration
 
     @property
-    def signal_q( self ) -> queue.Queue:
+    def signal_q( self ) -> Queue:
         """ Get the default queue """
         return self.__signal_q
 
     @property
-    def signal_q_size( self ) -> int:
+    def signal_q_maxsize( self ) -> int:
         """ Get the max length of the queue """
-        return self.__signal_q_size
-
-    @property
-    def callback_fn( self ):
-        """ Get the user callback function """
-        return self.__callback_fn
-
-    @property
-    def post_callback_fn( self ):
-        """ Get the user post callback function """
-        return self.__post_callback_fn
-
+        return self.signal_q.maxsize
 
 
     #def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None|None=None, unit: str|None=None ):
@@ -336,26 +339,11 @@ class MemsArray:
         # No args -> nothing to do
         if len( kwargs ) == 0:
             return
+        else:
+            self._set_settings( args, kwargs )
                 
-        if 'available_mems_number' in kwargs:
-            self.setAvailableMems( kwargs['available_mems_number'] )
-
-        if 'mems_position' in kwargs:
-            self.setMemsPosition( kwargs['mems_position'], unit=kwargs['unit'] if 'unit' in kwargs else None )
-        
-        if 'mems' in kwargs:
-            self.setActiveMems( kwargs['mems'] )
-
         log.info( f" .Created a new antenna" )
 
-
-    def setSync( self ) -> None :
-        """ Set the synchronous mode of execution """
-        self.__sync = True
-
-    def setAsync( self ) -> None :
-        """ Set the asynchronous mode of execution """
-        self.__sync = False
 
     def unsetH5Recording( self ) -> None :
         """ Set the H5 recording off """
@@ -365,26 +353,21 @@ class MemsArray:
         """ Set the H5 recording on """
         self.__h5_recording = True
 
-
     def unsetH5Recording( self ) -> None :
         """ Set the H5 recording off """
         self.__h5_recording = False
-
 
     def setH5Rootdir( self, dir: str ) -> None :
         """ Set the H5 recording root directory """
         self.__h5_rootdir = dir
 
-
     def setH5DatasetDuration( self, duration: int ) -> None :
         """ Set the H5 dataset duration in seconds """
         self.__h5_dataset_duration = duration
 
-
     def setH5FileDuration( self, duration: int ) -> None :
         """ Set the H5 file duration in seconds """
         self.__h5_file_duration = duration
-
 
     def setH5Compressing( self, algo: str=DEFAULT_H5_COMPRESSION_ALGO, level: int=DEFAULT_H5_GZIP_LEVEL ) -> None :
         """ Set the H5 recording compressing mode on """
@@ -398,13 +381,11 @@ class MemsArray:
         self.__h5_compression_algo = algo
         self.__h5_gzip_level = level
 
-
     def unsetH5Compressing( self ) -> None :
         """ Set the H5 recording compressing mode off """
         self.__h5_compressing = False
         self.__h5_compression_algo = DEFAULT_H5_COMPRESSION_ALGO
         self.__h5_gzip_level = DEFAULT_H5_GZIP_LEVEL
-
 
     def setStatus( self ) -> None :
         """ Make status channel available. Status state will be added to output signals 
@@ -415,7 +396,6 @@ class MemsArray:
         """
         self.__status = True
 
-
     def unsetStatus( self ) -> None :
         """ Make status unavailable.
 
@@ -424,7 +404,6 @@ class MemsArray:
             MemsArray.setStatus()
         """
         self.__status = False
-
 
     def setCounter( self ) -> None :
         """ Make counter available. Counter state will be added to output signals 
@@ -464,7 +443,6 @@ class MemsArray:
         """
         self.__counter_skip = False
 
-
     def setDatatype( self, datatype: Datatype ) -> None :
         """ Set the output antenna data type
 
@@ -476,7 +454,6 @@ class MemsArray:
 
         self.__datatype = datatype
 
-
     def setAvailableMems( self, available_mems_number: int ) -> None :
         """Init antenna available MEMs.
         
@@ -487,19 +464,26 @@ class MemsArray:
         available_mems_number: int
             Antenna available MEMs number which will be numbered from 0 to `available_mems_number-1`
         """
-        self.__available_mems = [i for i in range( available_mems_number )]
+
+        if available_mems_number == 0:
+            self.__available_mems = []
+        else:
+            self.__available_mems = [i for i in range( available_mems_number )]
 
         # Deactivate MEMs
-        if self.__mems is not None and max(self.__mems) >= available_mems_number:
+        if len( self.__mems ) > 0 and max( self.__mems ) >= available_mems_number:
             log.warning( f"Some MEMs are activated that do not match the new antenna definition: all MEMs are now unactivated" )
-            self.__mems = None
+            self.__mems = []
 
         # Check positions matching if any
         if self.__mems_position is not None:
             if self.__mems_position.shape[0] != len( self.__available_mems ):
                 raise MuException( f"Available_mems_number({available_mems_number}) do not match with MEMs positions ({self.__mems_position.shape[0]} MEMs)" )
 
-        log.info( f" .Set {available_mems_number} MEMs numbered from 0 to {available_mems_number-1}" )
+        if available_mems_number > 0:
+            log.info( f" .Set {available_mems_number} available MEMs numbered from 0 to {available_mems_number-1}" )
+        else:
+            log.info( f" .No MEMs available" )
 
 
     def setMemsPosition( self, mems_position: np.ndarray|None, unit: str="meters" ) -> None :
@@ -515,7 +499,7 @@ class MemsArray:
             raise MuException( f"Array dimensions are not correct: shape is {mems_position.shape} but should be (mems_number, 3)" )
 
         # Build the available MEMs list if needed or check availability 
-        if self.__available_mems is None:
+        if len( self.__available_mems) == 0:
             log.info( f" .Setting available MEMs numbered from 0 to {mems_position.shape[0]-1}" )
             self.__available_mems = [i for i in range(mems_position.shape[0])]
         else:
@@ -532,7 +516,7 @@ class MemsArray:
             log.info( f" .Following MEMS are unlocated: {unlocated_mems}" )
         
         # check matching with activated MEMs
-        if self.__mems is not None:
+        if len( self.__mems ) != 0:
             unlocated_activated = list( set( self.__mems ) & set( unlocated_mems ) )
             if len( unlocated_activated ) > 0:
                 log.warning( f"Some activated MEMs are not located. Please check for {unlocated_activated} MEMs" )
@@ -558,7 +542,7 @@ class MemsArray:
             list or tuple of mems number to activate
         """
 
-        if self.__available_mems is None:
+        if len( self.__available_mems ) == 0:
             raise MuException( f"Cannot activate MEMs on antenna with no available MEMs" )
 
         # Check if activated MEMs are available. Raise an exception if not
@@ -592,14 +576,20 @@ class MemsArray:
             Antenna available analogs number which will be numbered from 0 to `available_analogs_number-1`
         """
 
-        self.__available_analogs = [i for i in range( available_analogs_number )]
+        if available_analogs_number == 0:
+            self.__available_analogs = []
+        else:
+            self.__available_analogs = [i for i in range( available_analogs_number )]
 
         # Deactivate analogs
-        if self.__analogs is not None and max(self.__analogs) >= available_analogs_number:
+        if len( self.__analogs ) > 0 and max(self.__analogs) >= available_analogs_number:
             log.warning( f"Some analogs are activated that do not match the new antenna definition: all analogic channels are now unactivated" )
-            self.__analogs = None
+            self.__analogs = []
 
-        log.info( f" .Set {available_analogs_number} analog channels numbered from 0 to {available_analogs_number-1}" )
+        if available_analogs_number > 0:
+            log.info( f" .Set {available_analogs_number} available analog channels numbered from 0 to {available_analogs_number-1}" )
+        else:
+            log.info( f" .No analogic channels available" )
 
 
     def setActiveAnalogs( self, analogs: tuple ) -> None :
@@ -613,7 +603,7 @@ class MemsArray:
             list or tuple of analogs number to activate
         """
 
-        if self.__available_analogs is None:
+        if len( self.__available_analogs ) == 0:
             raise MuException( f"Cannot activate analogs channels on antenna with no available analogs" )
 
         # Check if activated analogs are available. Raise an exception if not
@@ -662,48 +652,217 @@ class MemsArray:
 
 
     def setQueueSize( self, queue_size: int ) -> None :
-        """ Set the signal queue size 
+        """ Set the signal queue size. Beware that the current queue elements are lost
         
         Parameters
         ----------
         queue_size: int
-            The new queue size value
+            The new queue size value. 0 means no size
         """
-        self.__signal_q_size = queue_size
+        self.__signal_q = None
+        self.__signal_q = MemsArray.Queue( maxsize=queue_size )
 
 
-    def setCallback( self, callback ) -> None :
-        """ Set user callback funcion 
+    def _set_settings( self, args, kwargs ) -> None :
+        """ Set settings for MemsArray constructor and run method
         
         Parameters
         ----------
-        callback: 
-            user call back function
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
         """
 
-        self.__callback_fn = callback
+        try:
+            log.info( f" .Install MemsArray.run() settings" )
+
+            if 'available_mems_number' in kwargs:
+                self.setAvailableMems( kwargs['available_mems_number'] )
+
+            if 'mems' in kwargs:
+                self.setActiveMems( kwargs['mems'] )
+
+            if 'available_analogs_number' in kwargs:
+                self.setAvailableAnalogs( kwargs['available_analogs_number'] )
+
+            if 'analogs' in kwargs:
+                self.setActiveAnalogs( kwargs['analogs'] )
+
+            if 'counter' in kwargs:
+                self.setCounter() if kwargs['counter'] is True else self.unsetCounter()
+
+            if 'counter_skip' in kwargs:
+                self.setCounterSkip() if kwargs['counter_skip'] is True else self.unsetCounterSkip()
+
+            if 'status' in kwargs:
+                self.setStatus() if kwargs['status'] is True else self.unsetStatus()
+
+            if 'sampling_frequency' in kwargs:
+                self.setSamplingFrequency( kwargs['sampling_frequency'] )
+
+            if 'datatype' in kwargs:
+                if kwargs['datatype'] is str:
+                    try:
+                        self.setDatatype( getattr( MemsArray.Datatype, kwargs['datatype'] ) )
+                    except:
+                        raise MuException( f"Unknown output datatype '{kwargs['datatype']}'" )
+                elif kwargs['datatype'] is int:
+                    try:
+                        self.setDatatype( MemsArray.Datatype( kwargs['datatype'] ) )
+                    except:
+                        raise MuException( f"Unknown output datatype code '{kwargs['datatype']}'" )                    
+                elif kwargs['datatype'] is MemsArray.Datatype :
+                    self.setDatatype( kwargs['datatype'] )
+
+            if 'duration' in kwargs:
+                self.setDuration( kwargs['duration'] )
+
+            if 'frame_length' in kwargs:
+                self.setFrameLength( kwargs['frame_length'] )
+
+            if 'h5_recording' in kwargs:
+                self.setH5Recording() if kwargs['h5_recording'] else self.unsetH5Recording()
+
+            if 'h5_rootdir' in kwargs:
+                self.setH5Rootdir( kwargs['h5_rootdir'] )
+
+            if 'h5_dataset_duration' in kwargs:
+                self.setH5DatasetDuration( kwargs['h5_dataset_duration'] )
+
+            if 'h5_file_duration' in kwargs:
+                self.setH5FileDuration( kwargs['h5_file_duration'] )
+
+            if 'h5_compressing' in kwargs:
+                if kwargs['h5_compressing'] == True:
+                    algo = kwargs['h5_compression_algo'] if 'h5_compression_algo' in kwargs else DEFAULT_H5_COMPRESSION_ALGO
+                    level =  kwargs['h5_gzip_level'] if 'h5_gzip_level' in kwargs else DEFAULT_H5_GZIP_LEVEL
+                    self.setH5Compressing( algo=algo, level=level )
+                else:
+                    self.unsetH5Compressing()
+
+            if 'signal_q_size' in kwargs:
+                self.setQueueSize( kwargs['signal_q_size'] )
+
+        except Exception as e:
+            raise MuException( f"Run failed on settings: {e}")
 
 
-    def setPostCallback( self, callback ) -> None :
-        """ Set user post callback funcion 
+    def _check_settings( self, args, kwargs ) -> None :
+        """ Check settings values for MemsArray.run() 
         
         Parameters
         ----------
-        callback: 
-            user call back function
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
         """
 
-        self.__post_callback_fn = callback
+        log.info( f" .Pre-execution checks for MemsArray.run()" )
+
+        if self.mems is None or len( self.mems )==0:
+            raise MuException( f"No activated MEMs" )
+        
+        if self.counter is None:
+            log.info( f" .Counter was not set -> set to False" )
+            self.unsetCounter()
+        
+        if self.counter_skip is None:
+            log.info( f" .Counter skipping not set -> set to False" )
+            self.unsetCounterSkip()       
+
+        if self.status is None:
+            log.info( f" .Status was not set -> set to False" )
+            self.unsetStatus()         
+
+        if self.sampling_frequency is None:
+            raise MuException( f"No sampling frequency set" )
+
+        if self.duration is None:
+            raise MuException( f"No running duration set" )
+        
+        if self.datatype is MemsArray.Datatype.unknown:
+            raise MuException( f"No datatype set" )
+        
+        if self.frame_length is None:
+            log.info( f" .Frame length not set -> set to default" )
+            self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
 
-    def setCallbackData( self, callback_data ) -> None :
-        """ Set user data for callback function 
+    def run( self, *args, **kwargs ) :
+        """ The main run method that run the antenna """
 
-        callback_data: Any
-            user callback function data
+        log.info( f" .Starting run execution" )
+                
+        # Set base settings      
+        try:
+            self._set_settings( args, kwargs )
+        except Exception as e:
+            raise MuException( f"Cannot run: settings loading failed ({type(e).__name__}): {e}" )
+            
+        # Check settings values
+        try:
+            self._check_settings( args, kwargs )
+        except Exception as e:
+            raise MuException( f"Unable to execute run: control failure ({type(e).__name__}): {e}" )
+
+        # verbose
+        if self.duration == 0:
+            log.info( f" .Run infinite loop (duration=0)" )
+        else :
+            log.info( f" .Perform a {self.duration}s run loop" )
+
+        if self.h5_recording:
+            log.info( f" .Local H5 recording" )
+
+        # Start run thread
+        self._async_transfer_thread = threading.Thread( target= self.__run_thread )
+        self._async_transfer_thread.start()
+
+
+    def wait( self ) -> None :
+        """ Wait for the end of the thread execution on async mode """
+        
+        if self._async_transfer_thread is not None:
+            self._async_transfer_thread.join()
+            self._async_transfer_thread = None
+
+        if self._async_transfer_thread_exception is not None:
+            thread_exception = MuException( f"Thread exception ({type(self._async_transfer_thread_exception).__name__}): {self._async_transfer_thread_exception}" )
+            self._async_transfer_thread_exceptio = None
+            raise thread_exception
+        
+
+    def __run_thread( self ) -> None :
+        """ Start run execution
+
+        Generates random data
         """
 
-        self.__callback_user_data = callback_data
+        try:
+            log.info( " .Run thread execution started" )
+            
+            transfer_lost: int = 0
+
+            # generates random data
+            if self.counter is None or ( self.counter == False or ( self.counter == True and self.counter_skip==True ) ):
+                # send data without counter state
+                data = np.random.rand( self.frame_length, self.mems_number ) * 2 - 1
+            else:
+                # add counter values
+                counter = np.array( [[i for i in range(self.frame_length)]] ).T + self.__it * self.frame_length
+                data = np.concatenate( ( counter, ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
+            if self.status is not None and self.status == True:
+                status =np.zeros( ( self.frame_length, 1 ) )
+                data = np.concatenate(( data, status ), axis=1 )
+
+            # post them in the internal queue
+            self.signal_q.put( data )
+
+        except Exception as e:
+            log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )
+            self._async_transfer_thread_exception = e
 
 
     def __iter__( self ) :
@@ -712,18 +871,20 @@ class MemsArray:
         self.__it = 0
         return self
 
-    def __next__( self ) -> np.ndarray|None :
-        """ next iteration over the antenna data 
 
-        Note that as MemsArray is a base class without any data inside, one can only return random data
-        """
+    def __next__( self ) -> np.ndarray|StopIteration :
+        """ next iteration over the antenna data """
+        
+        try:
+            data = self.signal_q.get( timeout=DEFAULT_QUEUE_TIMEOUT )
+            self.__it += 1
+            return data
+        
+        except queue.Empty:
+            raise StopIteration
 
-        self.__it += 1
+        
 
-        if self.__counter is None or ( self.__counter == False or ( self.__counter == True and self.__counter_skip==True ) ):
-            # send data without counter state
-            return np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1
-        else:
-            # add counter values
-            counter = np.array( [[i for i in range(self.__frame_length)]] ).T + self.__it * self.__frame_length
-            return np.concatenate( ( counter, ( np.random.rand( self.__frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
+
+
+

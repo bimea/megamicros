@@ -139,7 +139,6 @@ class MemsArrayWS( base.MemsArray ):
         if loop and loop.is_running():
             # One cannot add a second asyncio loop in an existant loop (in a Jupyterlab loop for example)
             # Next lines create a task with a return callback with no more execution after.
-            #
             log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
             task = loop.create_task( self.__try_connect() )
             task.add_done_callback( self.__try_connect_check_error )
@@ -191,10 +190,7 @@ class MemsArrayWS( base.MemsArray ):
 
                 # init object with server response
                 settings = response["response"]
-                #self.setSamplingFrequency( settings['sampling_frequency'] )
                 self.setAvailableMems( available_mems_number=len( settings['available_mems'] ) )
-                #self.setCounter() if settings['counter']==True else self.unsetCounter()
-                #self.setCounterSkip() if settings['counter_skip']==True else self.unsetCounterSkip()
                 self.setAvailableAnalogs( available_analogs_number=len( settings['available_analogs'] ) )
                 
         except websockets.exceptions.WebSocketException as e:
@@ -229,133 +225,75 @@ class MemsArrayWS( base.MemsArray ):
             return False
 
 
-    def run( self, *args, **kwargs ) :
-        """ The main run method that run the remote antenna """
+    def __set_settings( self, args, kwargs ) -> None :
+        """ Set settings for MemsArrayWS.run() 
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
+        """
 
-        log.info( f" .Starting run execution" )
+        super()._set_settings( args, kwargs )
 
         # Check direct args
         if len( args ) != 0:
             raise MuWSException( "Direct arguments are not accepted for run() method" )
-                
-        # Set base settings      
+        
         try:  
-            log.info( f" .Install run settings" )
-
-            if 'mems' in kwargs:
-                self.setActiveMems( kwargs['mems'] )
-
-            if 'analogs' in kwargs:
-                self.setActiveAnalogs( kwargs['analogs'] )
-
-            if 'counter' in kwargs:
-                self.setCounter() if kwargs['counter'] is True else self.unsetCounter()
-
-            if 'counter_skip' in kwargs:
-                self.setCounterSkip() if kwargs['counter_skip'] is True else self.unsetCounterSkip()
-
-            if 'status' in kwargs:
-                self.setStatus() if kwargs['status'] is True else self.unsetStatus()
-
-            if 'sampling_frequency' in kwargs:
-                self.setSamplingFrequency( kwargs['sampling_frequency'] )
-
-            if 'datatype' in kwargs:
-                if kwargs['datatype'] is str:
-                    try:
-                        self.setDatatype( getattr( base.MemsArray.Datatype, kwargs['datatype'] ) )
-                    except:
-                        raise MuWSException( f"Unknown output datatype '{kwargs['datatype']}'" )
-                elif kwargs['datatype'] is int:
-                    try:
-                        self.setDatatype( base.MemsArray.Datatype( kwargs['datatype'] ) )
-                    except:
-                        raise MuWSException( f"Unknown output datatype code '{kwargs['datatype']}'" )                    
-                elif kwargs['datatype'] is base.MemsArray.Datatype :
-                    self.setDatatype( kwargs['datatype'] )
-
-            if 'duration' in kwargs:
-                self.setDuration( kwargs['duration'] )
-
-            if 'frame_length' in kwargs:
-                self.setFrameLength( kwargs['frame_length'] )
-
-            if 'h5_recording' in kwargs:
-                self.setH5Recording() if kwargs['h5_recording'] else self.unsetH5Recording()
+            log.info( f" .Install MemsArrayWS.run() settings" )
 
             if 'h5_pass_through' in kwargs:
                 self.setH5RecordingPassthrough() if kwargs['h5_pass_through'] else self.unsetH5RecordingPassthrough()
-        
-            if 'h5_rootdir' in kwargs:
-                self.setH5Rootdir( kwargs['h5_rootdir'] )
-
-            if 'h5_dataset_duration' in kwargs:
-                self.setH5DatasetDuration( kwargs['h5_dataset_duration'] )
-
-            if 'h5_file_duration' in kwargs:
-                self.setH5FileDuration( kwargs['h5_file_duration'] )
-
-            if 'h5_compressing' in kwargs:
-                if kwargs['h5_compressing'] == True:
-                    algo = kwargs['h5_compression_algo'] if 'h5_compression_algo' in kwargs else base.DEFAULT_H5_COMPRESSION_ALGO
-                    level =  kwargs['h5_gzip_level'] if 'h5_gzip_level' in kwargs else base.DEFAULT_H5_GZIP_LEVEL
-                    self.setH5Compressing( algo=algo, level=level )
-                else:
-                    self.unsetH5Compressing()
 
             if 'background_mode' in kwargs:
                 self.setBackgroundMode() if kwargs['background_mode']== True else self.unsetBackgroundMode()
-
-                    
-        except MuException as e:
+            
+        except Exception as e:
             raise MuWSException( f"Run failed on settings: {e}")
-            
-        # Check for running
+        
+
+    def __check_settings( self, args, kwargs ) -> None :
+        """ Check settings values for MemsArrayWS.run() 
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
+        """
+
+        super()._check_settings( args, kwargs )
+
+        if self.h5_recording and self.h5_pass_through and not self.background_mode:
+            raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
+
+
+    def run( self, *args, **kwargs ) :
+        """ The main run method that run the remote antenna """
+
+        log.info( f" .Starting run execution" )
+                
+        # Set base settings      
         try:
-            log.info( f" .Pre-execution checks" )
-
-            if self.mems is None or len( self.mems )==0:
-                raise MuWSException( f"No activated MEMs" )
+            self.__set_settings( args, kwargs )
+        except Exception as e:
+            raise MuWSException( f"Cannot run: settings laoding failed ({type(e).__name__}): {e}" )
             
-            if self.counter is None:
-                log.info( f" .Counter was not set -> set to False" )
-                self.unsetCounter()
-            
-            if self.counter_skip is None:
-                log.info( f" .Counter skipping not set -> set to False" )
-                self.unsetCounterSkip()       
-
-            if self.status is None:
-                log.info( f" .Status was not set -> set to False" )
-                self.unsetStatus()         
-
-            if self.sampling_frequency is None:
-                raise MuWSException( f"No sampling frequency set" )
-
-            if self.duration is None:
-                raise MuWSException( f"No running duration set" )
-            
-            if self.datatype is base.MemsArray.Datatype.unknown:
-                raise MuWSException( f"No datatype set" )
-            
-            if self.frame_length is None:
-                log.info( f" .Frame length not set -> set to default" )
-                self.setFrameLength( base.DEFAULT_FRAME_LENGTH )
-
-            if self.h5_recording and self.h5_pass_through and not self.background_mode:
-                raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
-
-        except MuException as e:
-            raise MuWSException( f"Run check failed: {e}")
+        # Check settings values
+        try:
+            self.__check_settings( args, kwargs )
+        except Exception as e:
+            raise MuWSException( f"Unable to execute run: control failure  ({type(e).__name__}): {e}" )
 
         # verbose
         if self.duration == 0:
             log.info( f" .Run infinite loop (duration=0)" )
         else :
             log.info( f" .Perform a {self.duration}s run loop" )
-        
-        if self.callback_fn is not None:
-            log.info( f" .Data transfer using the user callback function" )
 
         if self.h5_recording:
             if self.h5_pass_through:
@@ -370,107 +308,106 @@ class MemsArrayWS( base.MemsArray ):
         else:
             log.info( f" .Background execution mode off" )
 
-        if self.sync:
-            log.info( " .Synchronous execution mode on" )
-        else:
-            log.info( " .Asynchronous execution mode on" )
-
         # Start run thread
-        self._async_transfer_thread = threading.Thread( target= self.run_thread )
+        self._async_transfer_thread = threading.Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
 
-        # Wait until the thread terminates in sync mode:
-        #if self.sync:
-        self._async_transfer_thread.join()
 
+    def __run_thread( self ) -> None :
+        """ Start run execution in asynchronous mode with asyncio.run() """
 
-    def run_thread( self ):
         try:
             log.info( " .Run thread execution started" )
             asyncio.run( self.__run() )
         except MuWSException as e:
             log.info( f" .Run thread halted on error: {e}" )
             self._async_transfer_thread_exception = e
-
+                    
 
     async def __run( self ):
         """ Perform a run execution on Megamicros remote receiver """
 
         log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
-        async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
-            log.info( " .Connected" )
-            response = json.loads( await websocket.recv() )
-            error = self.__check_mbs_error( response )
-            if error:
-                raise MuWSException( f"Connection to server failed: {error}" )        
+        try:
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                log.info( " .Connected" )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed: {error}" )        
 
-            # send settings to server
-            # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
-            settings = {
-                'mems': self.mems,
-                'analogs': self.analogs,
-                'counter': self.counter,
-                'counter_skip': self.counter_skip,
-                'status': self.status,
-                'clockdiv': int( 500000 // self.sampling_frequency ) - 1,
-                'sampling_frequency': self.sampling_frequency,
-                'datatype': 'int32' if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32 else 'float32',
-                'mems_init_wait': DEFAULT_MEMS_INIT_WAIT,
-                'duration': self.duration
-            }
+                # send settings to server
+                # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
+                settings = {
+                    'mems': self.mems,
+                    'analogs': self.analogs,
+                    'counter': self.counter,
+                    'counter_skip': self.counter_skip,
+                    'status': self.status,
+                    'clockdiv': int( 500000 // self.sampling_frequency ) - 1,
+                    'sampling_frequency': self.sampling_frequency,
+                    'datatype': 'int32' if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32 else 'float32',
+                    'mems_init_wait': DEFAULT_MEMS_INIT_WAIT,
+                    'duration': self.duration
+                }
 
-            # Add H5 settings if H5_pass_through mode is on:
-            if self.h5_recording and self.h5_pass_through:
-                settings.update( {
-                    'h5_recording': True,
-                    'h5_rootdir': self.h5_rootdir,
-                    'h5_dataset_duration': self.h5_dataset_duration,
-                    'h5_file_duration': self.h5_file_duration,
-                    'h5_compressing': self.h5_compressing,
-                    'h5_compression_algo': self.h5_compression_algo,
-                    'h5_gzip_level': self.h5_gzip_level
-                } )
+                # Add H5 settings if H5_pass_through mode is on:
+                if self.h5_recording and self.h5_pass_through:
+                    settings.update( {
+                        'h5_recording': True,
+                        'h5_rootdir': self.h5_rootdir,
+                        'h5_dataset_duration': self.h5_dataset_duration,
+                        'h5_file_duration': self.h5_file_duration,
+                        'h5_compressing': self.h5_compressing,
+                        'h5_compression_algo': self.h5_compression_algo,
+                        'h5_gzip_level': self.h5_gzip_level
+                    } )
 
-            if self.background_mode:
-                # Play in background mode -> no more communicatiobn with the server
-                run_command = {'request': 'run', 'settings': settings, 'origin': 'background'}
-            else:
-                run_command = {'request': 'run', 'settings': settings}
-
-            # send run command to server:
-            log.info( f" .Send running job command" )        
-            await websocket.send( json.dumps( run_command ) )
-            response = json.loads( await websocket.recv() )
-            error = self.__check_mbs_error( response )
-            if error:
-                raise MuWSException( f"Run command failed on remote server: {error}" )
-
-            # Start listening unless background mode is ON
-            if not self.background_mode:
-                log.info( " .Run command accepted by server" )
-                # Start server listening 
-                await self.__remote_run( websocket )
-
-                # Stop H5 recording if not yet stopped
-                # The following should be done at the base level :
-                """
-                if self.h5_recording and not self.__h5_pass_through and self._h5_started:
-                    self.h5_close()
-                
-                if self.__transfer_index != 0:
-                    log.info( f" .Total transfers received: {self.__transfer_index}. Total lost: {self.__transfer_lost} ({self.__transfer_lost*100/self.__transfer_index:.2f}%)")
-                    log.info( f" .Total elapsed time: {self.__elapsed_time:.2f} s ({self.__elapsed_time*1000/self.__transfer_index:.2f} ms / frame)" )
-                    log.info( f" .Mean completion time: {self.__mean_completion_time*1000:.2f} ms")
-                    log.info( f" .Data rate estimation: {self.transfer_rate/1000:.2f} Ko/s (real time is: {self.sampling_frequency*4*self.channels_number/1000:.2f} Ko/s)" )
+                if self.background_mode:
+                    # Play in background mode -> no more communicatiobn with the server
+                    run_command = {'request': 'run', 'settings': settings, 'origin': 'background'}
                 else:
-                    log.info( f" .No transfers received" )
-                """
-            else:
-                log.info( " .Run command accepted by server in background mode" )
+                    run_command = {'request': 'run', 'settings': settings}
 
-                # wait 2 seconds before halting 
-                time.sleep( 2 )
-                log.info( " .Halt connection with server and exit" )
+                # send run command to server:
+                log.info( f" .Send running job command" )        
+                await websocket.send( json.dumps( run_command ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Run command failed on remote server: {error}" )
+
+                # Start listening unless background mode is ON
+                if not self.background_mode:
+                    log.info( " .Run command accepted by server" )
+                    # Start server listening 
+                    await self.__remote_run( websocket )
+
+                    # Stop H5 recording if not yet stopped
+                    # The following should be done at the base level :
+                    """
+                    if self.h5_recording and not self.__h5_pass_through and self._h5_started:
+                        self.h5_close()
+                    
+                    if self.__transfer_index != 0:
+                        log.info( f" .Total transfers received: {self.__transfer_index}. Total lost: {self.__transfer_lost} ({self.__transfer_lost*100/self.__transfer_index:.2f}%)")
+                        log.info( f" .Total elapsed time: {self.__elapsed_time:.2f} s ({self.__elapsed_time*1000/self.__transfer_index:.2f} ms / frame)" )
+                        log.info( f" .Mean completion time: {self.__mean_completion_time*1000:.2f} ms")
+                        log.info( f" .Data rate estimation: {self.transfer_rate/1000:.2f} Ko/s (real time is: {self.sampling_frequency*4*self.channels_number/1000:.2f} Ko/s)" )
+                    else:
+                        log.info( f" .No transfers received" )
+                    """
+                else:
+                    log.info( " .Run command accepted by server in background mode" )
+
+                    # wait 2 seconds before halting 
+                    time.sleep( 2 )
+                    log.info( " .Halt connection with server and exit" )
+
+        except Exception as e:
+            log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
+            if type(e).__name__=='RuntimeError':
+                log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
 
 
     async def __remote_run( self, websocket ):
@@ -484,5 +421,83 @@ class MemsArrayWS( base.MemsArray ):
             The open connection websocket
         """
 
+        listening = True                    # processing flag
+        halt_registered: bool = False       # halt registration flag (to avoid multiple sending)
+        signal_buffer = None
+        transfer_index = 0                  # transfers counter
+        transfer_lost = 0                   # lost transfers counter
+        start_time: float = 0
+        elapsed_time: float = 0
+        sample_time: float = None
+        mean_completion_time: float = None
+
+        try:
+            while True:
+                # If listening turnes to False, send the stop command to the remote server
+                # and wait until receiving of the completed status message
+                if listening == False and halt_registered == False:
+                    log.info( " .Send stop command" )
+                    await websocket.send( json.dumps( {'request': 'halt'} ) )
+                    halt_registered = True
+        
+                # wait for signal recept from network
+                signal_buffer = await websocket.recv()
+                sample_time = time.time()
+                if start_time == 0:
+                    start_time = sample_time
+
+                if isinstance( signal_buffer, str ):
+                    # If a message is received, it means that the server has experienced a problem, 
+                    # or that the server decided to stop the acquisition.
+                    # In both two cases we stop the transfer loop either by raising an exception or by normal exit.
+                    response = json.loads( signal_buffer )
+                    error = self.__check_mbs_error( response )
+                    if error:
+                        # Server error: throw an exception
+                        raise MuWSException( f"Received error message from server: {error}" )
+                    elif response['type'] == 'status' and response['response'] == 'completed':
+                        # End of processing message received from server -> leave the loop
+                        log.info( f" .Received end of service from server. Stop running." )
+                        break
+                    elif response['request'] == 'halt' and response['type'] == 'status':
+                        if response['response']=="ok":
+                            log.info( f" .Received aknowledgment reponse from halt request. Stop running." )
+                            break
+                        else:
+                            raise MuException( f"Received server error or unknown response from halt request: {response['response']}" )
+                    else:
+                        # Unknown message reception: throw an exception
+                        raise MuWSException( f"Received unexpected message from server: {response['response']}" )
+                    
+                else:
+                    # If listening mode is False, the remaining data on the network are lost
+                    # It's simply a matter of speeding up the end of treatment.
+                    if listening:
+                        # Process binary data by pushing them in the queue 
+                        # Thanks to the queue, data are not lost if the reading process is too slow compared to the filling speed.
+                        # However, the queue introduces a latency that can become problematic.
+                        # If the user accepts the loss of data, it is possible to limit the size of the queue.
+                        # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
+                        self.signal_q.put( signal_buffer )
+
+                        # Transfers counting
+                        # Note that the loop control is conducted by the remote server.
+                        # The loop stops as soon as a 'completed' message is received from the server  
+                        transfer_index += 1
+                        elapsed_time += time.time() - sample_time
+
+                    else:
+                        transfer_lost += 1
+
+            elapsed_time = sample_time - start_time
+            mean_completion_time = elapsed_time/transfer_index if transfer_index != 0 else 0
+
+
+        except MuWSException as e:
+            # Known exception:
+            log.info( f" .Listening loop was stopped: {e}" )
+        except Exception as e:
+            # Uknnown exception:
+            log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
 
 
