@@ -333,14 +333,134 @@ class MemsArray:
             The unit used for mems_position ("meters", "centimeters", "millimeters"), default is "meters"
         """
         
-        if len( args ) != 0:
-            raise MuException( "Direct arguments are not accepted for MemsArray objects" )
-
         # No args -> nothing to do
-        if len( kwargs ) > 0:
+        if len( args ) > 0 or len( kwargs ) > 0:
             self._set_settings( args, kwargs )
                 
         log.info( f" .Created a new antenna" )
+
+
+    def _set_settings( self, args, kwargs ) -> None :
+        """ Set settings for MemsArray constructor and run method
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
+        """
+        
+        if len( args ) > 0:
+            print( f"args={args}" )
+            raise MuException( "Direct arguments are not accepted for MemsArray objects" )
+        
+        try:
+            log.info( f" .Install MemsArray.run() settings" )
+
+            if 'available_mems_number' in kwargs:
+                self.setAvailableMems( kwargs['available_mems_number'] )
+
+            if 'mems' in kwargs:
+                self.setActiveMems( kwargs['mems'] )
+
+            if 'available_analogs_number' in kwargs:
+                self.setAvailableAnalogs( kwargs['available_analogs_number'] )
+
+            if 'analogs' in kwargs:
+                self.setActiveAnalogs( kwargs['analogs'] )
+
+            if 'counter' in kwargs:
+                self.setCounter() if kwargs['counter'] is True else self.unsetCounter()
+
+            if 'counter_skip' in kwargs:
+                self.setCounterSkip() if kwargs['counter_skip'] is True else self.unsetCounterSkip()
+
+            if 'status' in kwargs:
+                self.setStatus() if kwargs['status'] is True else self.unsetStatus()
+
+            if 'sampling_frequency' in kwargs:
+                self.setSamplingFrequency( kwargs['sampling_frequency'] )
+
+            if 'datatype' in kwargs:
+                if kwargs['datatype'] is str:
+                    try:
+                        self.setDatatype( getattr( MemsArray.Datatype, kwargs['datatype'] ) )
+                    except:
+                        raise MuException( f"Unknown output datatype '{kwargs['datatype']}'" )
+                elif kwargs['datatype'] is int:
+                    try:
+                        self.setDatatype( MemsArray.Datatype( kwargs['datatype'] ) )
+                    except:
+                        raise MuException( f"Unknown output datatype code '{kwargs['datatype']}'" )                    
+                elif kwargs['datatype'] is MemsArray.Datatype :
+                    self.setDatatype( kwargs['datatype'] )
+
+            if 'duration' in kwargs:
+                self.setDuration( kwargs['duration'] )
+
+            if 'frame_length' in kwargs:
+                self.setFrameLength( kwargs['frame_length'] )
+
+            if 'h5_recording' in kwargs:
+                self.setH5Recording() if kwargs['h5_recording'] else self.unsetH5Recording()
+
+            if 'h5_rootdir' in kwargs:
+                self.setH5Rootdir( kwargs['h5_rootdir'] )
+
+            if 'h5_dataset_duration' in kwargs:
+                self.setH5DatasetDuration( kwargs['h5_dataset_duration'] )
+
+            if 'h5_file_duration' in kwargs:
+                self.setH5FileDuration( kwargs['h5_file_duration'] )
+
+            if 'h5_compressing' in kwargs:
+                if kwargs['h5_compressing'] == True:
+                    algo = kwargs['h5_compression_algo'] if 'h5_compression_algo' in kwargs else DEFAULT_H5_COMPRESSION_ALGO
+                    level =  kwargs['h5_gzip_level'] if 'h5_gzip_level' in kwargs else DEFAULT_H5_GZIP_LEVEL
+                    self.setH5Compressing( algo=algo, level=level )
+                else:
+                    self.unsetH5Compressing()
+
+            if 'signal_q_size' in kwargs:
+                self.setQueueSize( kwargs['signal_q_size'] )
+
+        except Exception as e:
+            raise MuException( f"Run failed on settings: {e}")
+
+
+    def _check_settings( self ) -> None :
+        """ Check settings values for MemsArray """
+
+        log.info( f" .Pre-execution checks for MemsArray.run()" )
+
+        if self.mems is None or len( self.mems )==0:
+            raise MuException( f"No activated MEMs" )
+        
+        if self.counter is None:
+            log.info( f" .Counter was not set -> set to False" )
+            self.unsetCounter()
+        
+        if self.counter_skip is None:
+            log.info( f" .Counter skipping not set -> set to False" )
+            self.unsetCounterSkip()       
+
+        if self.status is None:
+            log.info( f" .Status was not set -> set to False" )
+            self.unsetStatus()         
+
+        if self.sampling_frequency is None:
+            raise MuException( f"No sampling frequency set" )
+
+        if self.duration is None:
+            raise MuException( f"No running duration set" )
+        
+        if self.datatype is MemsArray.Datatype.unknown:
+            raise MuException( f"No datatype set" )
+        
+        if self.frame_length is None:
+            log.info( f" .Frame length not set -> set to default" )
+            self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
 
     def unsetH5Recording( self ) -> None :
@@ -661,133 +781,6 @@ class MemsArray:
         self.__signal_q = MemsArray.Queue( maxsize=queue_size )
 
 
-    def _set_settings( self, args, kwargs ) -> None :
-        """ Set settings for MemsArray constructor and run method
-        
-        Parameters
-        ----------
-        args: array
-            direct arguments of the run function
-        args: array
-            named arguments of the run function
-        """
-
-        try:
-            log.info( f" .Install MemsArray.run() settings" )
-
-            if 'available_mems_number' in kwargs:
-                self.setAvailableMems( kwargs['available_mems_number'] )
-
-            if 'mems' in kwargs:
-                self.setActiveMems( kwargs['mems'] )
-
-            if 'available_analogs_number' in kwargs:
-                self.setAvailableAnalogs( kwargs['available_analogs_number'] )
-
-            if 'analogs' in kwargs:
-                self.setActiveAnalogs( kwargs['analogs'] )
-
-            if 'counter' in kwargs:
-                self.setCounter() if kwargs['counter'] is True else self.unsetCounter()
-
-            if 'counter_skip' in kwargs:
-                self.setCounterSkip() if kwargs['counter_skip'] is True else self.unsetCounterSkip()
-
-            if 'status' in kwargs:
-                self.setStatus() if kwargs['status'] is True else self.unsetStatus()
-
-            if 'sampling_frequency' in kwargs:
-                self.setSamplingFrequency( kwargs['sampling_frequency'] )
-
-            if 'datatype' in kwargs:
-                if kwargs['datatype'] is str:
-                    try:
-                        self.setDatatype( getattr( MemsArray.Datatype, kwargs['datatype'] ) )
-                    except:
-                        raise MuException( f"Unknown output datatype '{kwargs['datatype']}'" )
-                elif kwargs['datatype'] is int:
-                    try:
-                        self.setDatatype( MemsArray.Datatype( kwargs['datatype'] ) )
-                    except:
-                        raise MuException( f"Unknown output datatype code '{kwargs['datatype']}'" )                    
-                elif kwargs['datatype'] is MemsArray.Datatype :
-                    self.setDatatype( kwargs['datatype'] )
-
-            if 'duration' in kwargs:
-                self.setDuration( kwargs['duration'] )
-
-            if 'frame_length' in kwargs:
-                self.setFrameLength( kwargs['frame_length'] )
-
-            if 'h5_recording' in kwargs:
-                self.setH5Recording() if kwargs['h5_recording'] else self.unsetH5Recording()
-
-            if 'h5_rootdir' in kwargs:
-                self.setH5Rootdir( kwargs['h5_rootdir'] )
-
-            if 'h5_dataset_duration' in kwargs:
-                self.setH5DatasetDuration( kwargs['h5_dataset_duration'] )
-
-            if 'h5_file_duration' in kwargs:
-                self.setH5FileDuration( kwargs['h5_file_duration'] )
-
-            if 'h5_compressing' in kwargs:
-                if kwargs['h5_compressing'] == True:
-                    algo = kwargs['h5_compression_algo'] if 'h5_compression_algo' in kwargs else DEFAULT_H5_COMPRESSION_ALGO
-                    level =  kwargs['h5_gzip_level'] if 'h5_gzip_level' in kwargs else DEFAULT_H5_GZIP_LEVEL
-                    self.setH5Compressing( algo=algo, level=level )
-                else:
-                    self.unsetH5Compressing()
-
-            if 'signal_q_size' in kwargs:
-                self.setQueueSize( kwargs['signal_q_size'] )
-
-        except Exception as e:
-            raise MuException( f"Run failed on settings: {e}")
-
-
-    def _check_settings( self, args, kwargs ) -> None :
-        """ Check settings values for MemsArray.run() 
-        
-        Parameters
-        ----------
-        args: array
-            direct arguments of the run function
-        args: array
-            named arguments of the run function
-        """
-
-        log.info( f" .Pre-execution checks for MemsArray.run()" )
-
-        if self.mems is None or len( self.mems )==0:
-            raise MuException( f"No activated MEMs" )
-        
-        if self.counter is None:
-            log.info( f" .Counter was not set -> set to False" )
-            self.unsetCounter()
-        
-        if self.counter_skip is None:
-            log.info( f" .Counter skipping not set -> set to False" )
-            self.unsetCounterSkip()       
-
-        if self.status is None:
-            log.info( f" .Status was not set -> set to False" )
-            self.unsetStatus()         
-
-        if self.sampling_frequency is None:
-            raise MuException( f"No sampling frequency set" )
-
-        if self.duration is None:
-            raise MuException( f"No running duration set" )
-        
-        if self.datatype is MemsArray.Datatype.unknown:
-            raise MuException( f"No datatype set" )
-        
-        if self.frame_length is None:
-            log.info( f" .Frame length not set -> set to default" )
-            self.setFrameLength( DEFAULT_FRAME_LENGTH )
-
-
     def run( self, *args, **kwargs ) :
         """ The main run method that run the antenna """
 
@@ -801,7 +794,7 @@ class MemsArray:
             
         # Check settings values
         try:
-            self._check_settings( args, kwargs )
+            self._check_settings()
         except Exception as e:
             raise MuException( f"Unable to execute run: control failure ({type(e).__name__}): {e}" )
 

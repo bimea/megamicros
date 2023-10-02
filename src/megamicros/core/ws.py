@@ -62,7 +62,6 @@ class MuWSException( MuException ):
         super().__init__( message )
 
 
-
 # =============================================================================
 # The MemsArrayWS base class
 # =============================================================================
@@ -127,11 +126,11 @@ class MemsArrayWS( base.MemsArray ):
         """
         
         # Init base class
-        super().__init__( [],  kwargs )
+        super().__init__( kwargs=kwargs )
 
         # Set WS settings
         if len( kwargs ) > 0:
-            self.__set_settings( [], kwargs )
+            self._set_settings( [], kwargs )
 
         self.__server_host = host
         self.__server_port = port
@@ -160,6 +159,44 @@ class MemsArrayWS( base.MemsArray ):
                 return
 
         # Next lines are never seen...
+
+
+    def _set_settings( self, args, kwargs ) -> None :
+        """ Set settings for MemsArrayWS objects 
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
+        """
+
+        # Check direct args
+        if len( args ) != 0:
+            raise MuWSException( "Direct arguments are not accepted" )
+        
+        try:  
+            log.info( f" .Install MemsArrayWS settings" )
+
+            if 'h5_pass_through' in kwargs:
+                self.setH5RecordingPassthrough() if kwargs['h5_pass_through'] else self.unsetH5RecordingPassthrough()
+
+            if 'background_mode' in kwargs:
+                self.setBackgroundMode() if kwargs['background_mode']== True else self.unsetBackgroundMode()
+            
+        except Exception as e:
+            raise MuWSException( f"Run failed on settings: {e}")
+        
+
+    def _check_settings( self ) -> None :
+        """ Check settings values for MemsArrayWS and parents settings """
+
+        super()._check_settings()
+
+        if self.h5_recording and self.h5_pass_through and not self.background_mode:
+            raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
+
 
 
     def __try_connect_check_error( self, t ):
@@ -232,67 +269,26 @@ class MemsArrayWS( base.MemsArray ):
             return False
 
 
-    def __set_settings( self, args, kwargs ) -> None :
-        """ Set settings for MemsArrayWS objects 
-        
-        Parameters
-        ----------
-        args: array
-            direct arguments of the run function
-        args: array
-            named arguments of the run function
-        """
-
-        super()._set_settings( args, kwargs )
-
-        # Check direct args
-        if len( args ) != 0:
-            raise MuWSException( "Direct arguments are not accepted" )
-        
-        try:  
-            log.info( f" .Install MemsArrayWS settings" )
-
-            if 'h5_pass_through' in kwargs:
-                self.setH5RecordingPassthrough() if kwargs['h5_pass_through'] else self.unsetH5RecordingPassthrough()
-
-            if 'background_mode' in kwargs:
-                self.setBackgroundMode() if kwargs['background_mode']== True else self.unsetBackgroundMode()
-            
-        except Exception as e:
-            raise MuWSException( f"Run failed on settings: {e}")
-        
-
-    def __check_settings( self, args, kwargs ) -> None :
-        """ Check settings values for MemsArrayWS.run() 
-        
-        Parameters
-        ----------
-        args: array
-            direct arguments of the run function
-        args: array
-            named arguments of the run function
-        """
-
-        super()._check_settings( args, kwargs )
-
-        if self.h5_recording and self.h5_pass_through and not self.background_mode:
-            raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
-
-
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
 
+        if len( args ) > 0:
+            raise MuWSException( f"Run() method does not accept direct arguments" )
+        
         log.info( f" .Starting run execution" )
                 
-        # Set base settings      
+        # Set all settings
+        # Run does not call the super().run() method so that we have to handle all settings here      
         try:
-            self.__set_settings( args, kwargs )
+            super()._set_settings( [], kwargs=kwargs )
+            self._set_settings( [], kwargs=kwargs )
+
         except Exception as e:
             raise MuWSException( f"Cannot run: settings laoding failed ({type(e).__name__}): {e}" )
             
         # Check settings values
         try:
-            self.__check_settings( args, kwargs )
+            self._check_settings()
         except Exception as e:
             raise MuWSException( f"Unable to execute run: control failure  ({type(e).__name__}): {e}" )
 

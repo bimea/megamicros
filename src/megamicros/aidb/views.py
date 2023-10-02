@@ -242,6 +242,26 @@ class SourceFileViewSet( viewsets.ModelViewSet ):
 
     @action( detail=True, methods=['get'], url_path=r'range/(?P<first>\d+(.\d+)?)/(?P<last>\d+(.\d+)?)/channels/(?P<l>\d+)/(?P<r>\d+)' )
     def range(self, request, first, last, l, r, *args, **kwargs):
+        """
+        Get range signals for MEMs given as query parameter
+        
+        channels query parameter overwrites the channels/left/right endpoint 
+                
+        Endpoint parameters
+        -------------------
+        /sourcefile/range/<first>/<last>/channels/<left>/<right>/<?channels=1,2,3,4,...>
+        first: float
+            the beginning of the range
+        last: float
+            the end of the range
+        left: int
+            left microphone number
+        right: int
+            right microphone number
+        ?channels: list
+            liste of MEMs from which to get signal
+        """
+
         file = self.get_object()
         try:
             serializer = SourceFileUploadRangeSerializer( file=file, start=float( first ), stop=float( last ), left=int(l), right=int(r), request=request )
