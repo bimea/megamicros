@@ -113,7 +113,7 @@ class MemsArrayWS( base.MemsArray ):
         self.__h5_pass_through = False
 
 
-    def __init__( self, host: str, port: int=DEFAULT_MBS_SERVER_PORT ):
+    def __init__( self, host: str, port: int=DEFAULT_MBS_SERVER_PORT, **kwargs ):
         """ Connect the antenna input stream to a remote antenna 
 
         The connection to the remote server is verified. If the server is not available, an exception is raised. 
@@ -125,6 +125,13 @@ class MemsArrayWS( base.MemsArray ):
         port: int, optional
             The remote port (default is 9002)
         """
+        
+        # Init base class
+        super().__init__( [],  kwargs )
+
+        # Set WS settings
+        if len( kwargs ) > 0:
+            self.__set_settings( [], kwargs )
 
         self.__server_host = host
         self.__server_port = port
@@ -226,7 +233,7 @@ class MemsArrayWS( base.MemsArray ):
 
 
     def __set_settings( self, args, kwargs ) -> None :
-        """ Set settings for MemsArrayWS.run() 
+        """ Set settings for MemsArrayWS objects 
         
         Parameters
         ----------
@@ -240,10 +247,10 @@ class MemsArrayWS( base.MemsArray ):
 
         # Check direct args
         if len( args ) != 0:
-            raise MuWSException( "Direct arguments are not accepted for run() method" )
+            raise MuWSException( "Direct arguments are not accepted" )
         
         try:  
-            log.info( f" .Install MemsArrayWS.run() settings" )
+            log.info( f" .Install MemsArrayWS settings" )
 
             if 'h5_pass_through' in kwargs:
                 self.setH5RecordingPassthrough() if kwargs['h5_pass_through'] else self.unsetH5RecordingPassthrough()

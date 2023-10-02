@@ -55,7 +55,8 @@ class MemsArrayDB( base.MemsArray ):
     __source: np.ndarray|None = None
     __available_frames_number: int|None = None
 
-    def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
+    #def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
+    def __init__( self, dbhost: str, login: str, email: str, passwd: str, **kwargs ) -> None :
         """ Connect the antenna input stream to a labelized database 
 
         The connection to the database is verified. If the database is not available, an exception is raised. 
@@ -71,16 +72,14 @@ class MemsArrayDB( base.MemsArray ):
             database user email
         passwd: str
             account password
-        label_id: int
-            signal label
-        file_id: int, optional
-            file identifier. Default is all files containing the labelized signals
-        sequence_id: int, optional
-            sequence identifier. Default is all the sequences located in the file
-        preload: bool, optional
-            Whether to load the whool sequence once or not. Default is `False` 
         """
 
+        # Set base class settings
+        super().__init__( [], kwargs )
+
+        # Set DB settings
+        if len( kwargs ) > 0:
+            self.__set_settings( kwargs )
 
         if file_id is None:
             raise MuException( f"Sorry, working on several files is not yet implemented" )
@@ -140,6 +139,48 @@ class MemsArrayDB( base.MemsArray ):
 
             except Exception as e:
                 raise MuException( f"Connection to database {dbhost} failed: {e}" )
+
+
+    def __set_settings( self, args, kwargs ) -> None :
+        """ Set settings for MemsArrayDB objects 
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
+        """
+
+        super()._set_settings( args, kwargs )
+
+        # Check direct args
+        if len( args ) > 0:
+            raise MuDBException( "Direct arguments are not accepted for run() method" )
+        
+        try:  
+            log.info( f" .Install MemsArrayDB settings" )
+
+            # TO DO...
+            # ...
+            
+        except Exception as e:
+            raise MuDBException( f"Run failed on settings: {e}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def __iter__( self ) :
         """ Init iterations over the antenna data """

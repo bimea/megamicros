@@ -337,9 +337,7 @@ class MemsArray:
             raise MuException( "Direct arguments are not accepted for MemsArray objects" )
 
         # No args -> nothing to do
-        if len( kwargs ) == 0:
-            return
-        else:
+        if len( kwargs ) > 0:
             self._set_settings( args, kwargs )
                 
         log.info( f" .Created a new antenna" )
