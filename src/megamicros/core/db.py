@@ -136,9 +136,62 @@ class MemsArrayDB( base.MemsArray ):
         """
         self.__sequence_id = sequence_id
 
+    def setCounter( self, force:bool=False ) -> None :
+        """ Overload the parent `setCounter()` method by doing nothing.
+        Indeed counter state is defined in the remote H5 file and cannot be modified.
+        """
+
+        if force:
+            super().setCounter()
+        else:
+            log.warning( f"The counter status cannot be modified, as it is defined in the remote H5 file. Use `counter_skip` instead" )
+
+    def unsetCounter( self, force:bool=False ) -> None :
+        """ Overload the parent `unsetCounter()` method by doing nothing.
+        Indeed counter state is defined in the remote H5 file and cannot be modified. 
+        """
+        
+        if force:
+            super().unsetCounter()
+        else:
+            log.warning( f"The counter status cannot be modified, as it is defined in the remote H5 file. Use `counter_skip` instead" )
+
+    def setStatus( self, force:bool=False ) -> None :
+        """ Overload the parent `setStatus()` method by doing nothing.
+        """
+
+        if force:
+            super().setStatus()
+        else:
+            log.warning( f"The channel status cannot be modified. There is usually no status channel in MuH5 files." )
+
+    def unsetStatus( self, force:bool=False ) -> None :
+        """ Overload the parent `unsetStatus()` method by doing nothing.
+        """
+
+        if force:
+            super().unsetStatus()
+        else:
+            log.warning( f"The channel status cannot be modified. There is usually no status channel in MuH5 files." )
+
+    def setSamplingFrequency( self, sampling_frequency: float, force:bool=False ) -> None :
+        """ Overload the parent `setSamplingFrequency()` method by doing nothing.
+        
+        Parameters:
+        -----------
+        sampling_frequency : float
+            The sampling frequency (default is given by DEFAULT_SAMPLING_FREQUENCY)
+        force: bool
+            Force to update sampling frequency
+        """
+
+        if force:
+            super().setSamplingFrequency( sampling_frequency )
+        else:
+            log.warning( f"The sampling frequency cannot be modified as it is defined in the remote H5 file" )
 
 
-    #def __init__( self, dbhost: str, login: str, email: str, passwd: str, label_id:int, file_id: int|None=None, sequence_id: int|None=None, preload: bool=False ) -> None :
+
     def __init__( self, dbhost: str, login: str, email: str, password: str, dbport=DEFAULT_DB_PORT, **kwargs ) -> None :
         """ Connect the antenna input stream to a labelized database 
 
@@ -174,10 +227,10 @@ class MemsArrayDB( base.MemsArray ):
             with AidbSession( dbhost=self.dbhost, login=self.login, email=self.email, password=self.__password ) as session:
                 # get meta data
                 meta = session.get_sourcefile( self.file_id )
-                self.setSamplingFrequency( meta['info']['sampling_frequency'] )
+                self.setSamplingFrequency( meta['info']['sampling_frequency'], force=True  )
                 self.setAvailableMems( available_mems_number=len( meta['info']['mems'] ) )
-                self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
-                self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
+                self.setCounter( force=True ) if meta['info']['counter']==True else self.unsetCounter( force=True )
+                self.unsetStatus( force=True )
                 self.setAvailableAnalogs( available_analogs_number=len( meta['info']['analogs'] ) )
 
         except MuException as e:
@@ -259,7 +312,28 @@ class MemsArrayDB( base.MemsArray ):
     def _check_settings( self ) -> None :
         """ Check settings values for MemsArrayDB """
 
-        super()._check_settings()
+        # We cannot call the parent check_settings() method as it is not compatible for DB
+        log.info( f" .Pre-execution checks for MemsArray.run()" )
+
+        if self.mems is None or len( self.mems )==0:
+            raise MuException( f"No activated MEMs" )
+                
+        if self.counter_skip is None:
+            log.info( f" .Counter skipping not set -> set to False" )
+            self.unsetCounterSkip()       
+     
+        if self.duration is None:
+            raise MuException( f"No running duration set" )
+        
+        if self.datatype is base.MemsArray.Datatype.unknown:
+            raise MuException( f"No datatype set" )
+        
+        if self.frame_length is None:
+            log.info( f" .Frame length not set -> set to default" )
+            self.setFrameLength( base.DEFAULT_FRAME_LENGTH )
+
+        # Here we are
+        log.info( f" .Pre-execution checks for MemsArrayDB.run()" )
 
         if self.sequence_id and ( not self.file_id or not self.label_id ) :
             raise MuDBException( f"Settings check failed: 'sequence_id' is defnied while 'label_id' or 'file_id' are not" )
@@ -267,6 +341,9 @@ class MemsArrayDB( base.MemsArray ):
         if self.label_id and not self.file_id:
             raise MuDBException( f"Settings check failed: 'label_id' is defined but not 'file_id'. Cannot iterate over all files" )
         
+        if self.counter_skip and not self.counter:
+            log.warning( f"`counter_skip` is set to True while `counter` is not available" )
+
 
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
@@ -298,6 +375,13 @@ class MemsArrayDB( base.MemsArray ):
         else :
             log.info( f" .Perform a {self.duration}s run loop" )
 
+        log.info( f" .Frame length: {self.frame_length} samples (chunk size: {self.frame_length * 5 * 4} Bytes)" )
+        log.info( f" .Sampling frequency: {self.sampling_frequency} Hz" )
+        log.info( f" .Active MEMs: {self.mems}" )
+        log.info( f" .Active analogic channels: {self.analogs}" )
+        log.info( f" .Whether counter is active: {self.counter}" )
+        log.info( f" .Skipping counter: {self.counter_skip}" )
+
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
@@ -305,7 +389,22 @@ class MemsArrayDB( base.MemsArray ):
 
     def __run_thread( self ):
 
-        url = f"{self.dbhost}/sourcefile/{str(self.file_id)}/upload/"
+        # check for the counter channel but not for the status channel
+        channels = self.mems
+        if self.counter and not self.counter_skip:
+            channels = [0] + list( np.array( channels ) + 1 )
+
+        # Set chunk size
+        channels_number = len( channels )
+        chunk_size = self.frame_length * channels_number * 4
+
+        # set endpoint url
+        channels_str = ( ''.join( str( integer ) + ',' for integer in channels ) )[:-1]
+        #channels_str = channels_str[:-1]
+
+        url = f"{self.dbhost}sourcefile/{self.file_id}/range/1/10/channels/0/0/?channels={channels_str}"
+
+        log.info( f" .Endpoint url: {url}" )
 
         try:
             with requests.get(url, stream=True) as response:
@@ -313,7 +412,7 @@ class MemsArrayDB( base.MemsArray ):
                 response.raise_for_status()
 
                 # Open the local file in binary write mode
-                for chunk in response.iter_content(chunk_size=self.frame_length):
+                for chunk in response.iter_content( chunk_size=chunk_size ):
                     # Process binary data by pushing them in the queue 
                     # Thanks to the queue, data are not lost if the reading process is too slow compared to the filling speed.
                     # However, the queue introduces a latency that can become problematic.
