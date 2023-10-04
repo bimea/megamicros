@@ -419,6 +419,7 @@ class MemsArrayDB( base.MemsArray ):
                 response.raise_for_status()
 
                 # Get chunk of data from remote DB server
+                self.setRunningFlag( True )
                 for chunk in response.iter_content( chunk_size=chunk_size ):
                     # Process binary data by pushing them in the queue 
                     # Thanks to the queue, data are not lost if the reading process is too slow compared to the filling speed.

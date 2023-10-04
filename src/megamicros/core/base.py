@@ -149,12 +149,13 @@ class MemsArray:
             super().__init__( maxsize )
 
         def put( self, data ):
+            # pop up the last element of the queue if maxsize is reached.
             if self.maxsize > 0 and self.qsize() >= self.maxsize:
                 self.get()
                 self.__transfert_lost += 1
+
+            # Let parent class do the work 
             super().put( data )
-
-
 
 
     # Antenna dimensions
@@ -265,6 +266,11 @@ class MemsArray:
         """ Get the available analogs number """
         return len( self.__available_analogs )
     
+    @property
+    def channels_number( self ) -> int:
+        """ Get the active channels number including counter and status if any """
+        return self.mems_number + self.analogs_number + ( 1 if self.counter and not self.counter_skip else 0 ) + (1 if self.status else 0 )
+
     @property
     def mems_position( self ) -> np.ndarray|None | None:
         """ Get the antenna mems positions
@@ -926,6 +932,13 @@ class MemsArray:
     def __iter__( self ) :
         """ Init iterations over the antenna data """
 
+        if self.datatype == self.Datatype.bint32:
+            log.info( f" .Starting iterations: will produce data as binary buffer of int32" )
+        elif self.datatype == self.Datatype.int32:
+            log.info( f" .Starting iterations: will produce data as numpy array of int32 ({self.frame_length} x {self.channels_number} size)" )
+        else:
+            raise MuException( f"Sorry, converting data into float32 is not yet implemented" )
+
         self.__it = 0
         return self
 
@@ -936,7 +949,34 @@ class MemsArray:
         try:
             data = self.signal_q.get( timeout=DEFAULT_QUEUE_TIMEOUT )
             self.__it += 1
-            return data
+
+            # User wants data as binary buffer of int32 
+            if self.datatype == self.Datatype.bint32:
+
+                # Data is already binary buffer of int32 
+                if type( data ).__name__ == 'bytes':
+                    return data
+                
+                # Convert numpy array in binary buffer of int32
+                else:
+                    return np.ndarray.tobytes( data )
+
+            # User wants data as numpy array of int32 
+            elif self.datatype == self.Datatype.int32:   
+                
+                # Convert binary buffer into numpy array of int32
+                if type( data ).__name__ == 'bytes':
+                    
+                    # build np array from binary buffer
+                    data = np.frombuffer( data, dtype=np.int32 )
+
+                    # reshape MEMs signals column wise ( samples number X channels_number )
+                    # Warning : this is the aidb format... 
+                    return np.reshape( data, ( self.channels_number,  self.frame_length ) ).T
+                
+                # Data is already a numpy array: nothing to do
+                else:
+                    return data
         
         except queue.Empty:
             raise StopIteration
