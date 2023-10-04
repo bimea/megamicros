@@ -50,11 +50,11 @@ from megamicros.log import log
 from megamicros.core.db import MemsArrayDB
 
 
-MEMS = (7, 23)					# the two Mu32 antenna microphones used
+MEMS = (2, 4)					# the two Mu32 antenna microphones used
 DURATION = 0					# Time recording in seconds. 0 means infinite acquisition loop: use Ctrl C for stopping
 DEFAULT_HOST = 'http://dbwelfare.biimea.io/'      # server host  
 DEFAULT_PORT = 80               # server port
-BLOCKSIZE = 256					# Number of stereo samples per block.
+FRAME_LENGTH = 256					# Number of stereo samples per block.
 OUTPUT_DEVICE = 2               # audio device
 MEMS_NUMBER = len( MEMS )
 SAMPLE_WIDTH = 4
@@ -64,6 +64,7 @@ SAMPLING_FREQUENCY = 500000 / (CLOCKDIV+1)
 LOGIN = 'ailab'
 EMAIL = 'bruno.gas@biimea.com'
 PASSWORD = '#T;uZnQ5UJ_JC~&'
+FILE_ID = 1
 
 log.setLevel( "DEBUG" )
 
@@ -108,10 +109,8 @@ def main():
         antenna.run( 
             mems=MEMS,
             duration=duration,
-            clockdiv = clockdiv,
-            frame_length=BLOCKSIZE,
-            counter = False,
-            sync=False,
+            frame_length=FRAME_LENGTH,
+            counter_skip = True,
             signal_q_size=0
         )
         
@@ -122,9 +121,9 @@ def main():
         stream = p.open(
             format = pyaudio.paFloat32,
             channels = MEMS_NUMBER,
-            rate = int( megamicros.sampling_frequency ),
+            rate = int( antenna.sampling_frequency ),
             output=True,
-            frames_per_buffer=BLOCKSIZE,
+            frames_per_buffer=FRAME_LENGTH,
         )
 
         # input-output loop
@@ -137,7 +136,7 @@ def main():
             while( True ):
                 # get megamicro antenna frame from queue
                 try:
-                    data = megamicros.signal_q.get( timeout=1 )
+                    data = antenna.signal_q.get( timeout=1 )
                 except queue.Empty:
                     continue
 
@@ -145,13 +144,13 @@ def main():
                 data = np.frombuffer( data, dtype=np.int32 )
 
                 # reshape MEMs signals column wise ( samples number X mems_number )
-                data = np.reshape( data, ( megamicros.frame_length, megamicros.channels_number ) ).T
+                data = np.reshape( data, ( antenna.frame_length, antenna.mems_number ) ).T
 
                 # convert into float and normalize with MEMs sensibility
-                data = ( data.astype( np.float32 ).T * megamicros.sensibility )
+                data = ( data.astype( np.float32 ).T * antenna.sensibility )
 
                 # write into audio stream
-                stream.write( data, num_frames=BLOCKSIZE )
+                stream.write( data, num_frames=FRAME_LENGTH )
                 transfers_counter += 1
 
         except KeyboardInterrupt:
@@ -164,7 +163,8 @@ def main():
         stream.close()            
         p.terminate()
 
-        megamicros.stop()
+        antenna.stop()
+        antenna.wait()
 
 
     except Exception as e:

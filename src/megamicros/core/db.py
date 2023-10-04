@@ -382,6 +382,13 @@ class MemsArrayDB( base.MemsArray ):
         log.info( f" .Whether counter is active: {self.counter}" )
         log.info( f" .Skipping counter: {self.counter_skip}" )
 
+        # If running time is limited: create the time delay thread as dameon thread and run it
+        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
+        if self.duration > 0:            
+            self._async_duration_thread = threading.Thread( target= self._duration_thread, args=( self.duration, ) )
+            self._async_duration_thread.daemon = True
+            self._async_duration_thread.start()
+
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
@@ -411,7 +418,7 @@ class MemsArrayDB( base.MemsArray ):
                 # Check if the request was successful
                 response.raise_for_status()
 
-                # Open the local file in binary write mode
+                # Get chunk of data from remote DB server
                 for chunk in response.iter_content( chunk_size=chunk_size ):
                     # Process binary data by pushing them in the queue 
                     # Thanks to the queue, data are not lost if the reading process is too slow compared to the filling speed.
@@ -419,6 +426,9 @@ class MemsArrayDB( base.MemsArray ):
                     # If the user accepts the loss of data, it is possible to limit the size of the queue.
                     # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
                     self.signal_q.put( chunk )
+                    if self.running == False:
+                        log.info( " .Running stopped: normal thread termination" )
+                        break
 
         except MuDBException as e:
             # Known exception:

@@ -29,10 +29,11 @@ Documentation
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
+import time
 import numpy as np
 import queue
 from enum import Enum
-import threading
+from threading import Thread, Event
 
 from megamicros.log import log
 from megamicros.exception import MuException
@@ -40,21 +41,22 @@ from megamicros.aidb.query import AidbSession
 from megamicros.data import MuAudio
 
 
-DEFAULT_FRAME_LENGTH =              256
-DEFAULT_SAMPLING_FREQUENCY =        50000
-DEFAULT_QUEUE_SIZE =                2			        # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
-DEFAULT_QUEUE_TIMEOUT =             5                   # The block delay until the queue is considered as empty  
-DEFAULT_DATATYPE				    = "int32"	        # Default receiver incoming data type ("int32" or "float32") 
-DEFAULT_SYNC_MODE                   = False             # Default run mode is asynchronous
+DEFAULT_FRAME_LENGTH                = 256
+DEFAULT_SAMPLING_FREQUENCY          = 50000
+DEFAULT_QUEUE_SIZE                  = 2			            # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_QUEUE_TIMEOUT               = 5                     # The block delay until the queue is considered as empty  
+DEFAULT_DATATYPE			        = "int32"	            # Default receiver incoming data type ("int32" or "float32") 
+DEFAULT_SYNC_MODE                   = False                 # Default run mode is asynchronous
+DEFAULT_MEMS_SENSIBILITY		    = 1/((2**(24-1))*10**(-26/20)/3.17)	    # Default MEMs sensibility factor (-26dBFS for 104 dB that is 3.17 Pa)
 
 # Default H5 values
-DEFAULT_H5_RECORDING				= False				# Whether H5 recording is On or Off
-DEFAULT_H5_SEQUENCE_DURATION		= 1					# Time duration of a dataset in seconds
-DEFAULT_H5_FILE_DURATION			= 15*60				# Time duration of a complete H5 file in seconds
-DEFAULT_H5_COMPRESSING				= False				# Whether compression mode is On or Off
-DEFAULT_H5_COMPRESSION_ALGO 		= 'gzip'			# Compression algorithm (gzip, lzf, szip)
-DEFAULT_H5_GZIP_LEVEL 				= 4					# compression level for gzip algo (0 to 9, default 4) 
-DEFAULT_H5_DIRECTORY				= './'				# The default directory where H5 files are saved
+DEFAULT_H5_RECORDING				= False				    # Whether H5 recording is On or Off
+DEFAULT_H5_SEQUENCE_DURATION		= 1					    # Time duration of a dataset in seconds
+DEFAULT_H5_FILE_DURATION			= 15*60				    # Time duration of a complete H5 file in seconds
+DEFAULT_H5_COMPRESSING				= False				    # Whether compression mode is On or Off
+DEFAULT_H5_COMPRESSION_ALGO 		= 'gzip'			    # Compression algorithm (gzip, lzf, szip)
+DEFAULT_H5_GZIP_LEVEL 				= 4					    # compression level for gzip algo (0 to 9, default 4) 
+DEFAULT_H5_DIRECTORY				= './'				    # The default directory where H5 files are saved
 
 
 class MemsArray:
@@ -167,6 +169,7 @@ class MemsArray:
 
     # Antenna properties
     __sampling_frequency: float = DEFAULT_SAMPLING_FREQUENCY
+    __sensibility: float = DEFAULT_MEMS_SENSIBILITY
 
     # Output buffering
     __frame_length: int = DEFAULT_FRAME_LENGTH
@@ -181,6 +184,8 @@ class MemsArray:
     # Internal run parameters
     _async_transfer_thread = None
     _async_transfer_thread_exception: MuException = None
+    _duration_thread = None
+    __running: bool = False
 
     # H5 attributes
     __h5_recording: bool = DEFAULT_H5_RECORDING
@@ -190,6 +195,20 @@ class MemsArray:
     __h5_compressing: bool = DEFAULT_H5_COMPRESSING
     __h5_compression_algo: str = DEFAULT_H5_COMPRESSION_ALGO
     __h5_gzip_level: int = DEFAULT_H5_GZIP_LEVEL
+
+
+    @property
+    def running( self ) -> bool:
+        """ Get the running status """
+        return self.__running
+    
+    @property
+    def sensibility( self ) -> bool:
+        """ Get the MEMs sensibility factor. 
+        
+        Default sensibility is set to Megamicros MEMs sensibility (-26dBFS for 104 dB that is 3.17 Pa) 
+        """
+        return self.__sensibility
 
     @property
     def h5_recording( self ) -> bool:
@@ -462,6 +481,20 @@ class MemsArray:
             log.info( f" .Frame length not set -> set to default" )
             self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
+
+    def setRunningFlag( self, status: bool ) -> None:
+        self.__running = status
+
+    def setSensibility( self, sensibility: float ) -> None :
+        """ Set MEMs sensibility value 
+        
+        Parameter
+        ---------
+        sensibility: float
+            The new sensibility value
+        """
+
+        self.__sensibility = sensibility
 
     def unsetH5Recording( self ) -> None :
         """ Set the H5 recording off """
@@ -807,13 +840,32 @@ class MemsArray:
         if self.h5_recording:
             log.info( f" .Local H5 recording" )
 
+        # If running time is limited: create the time delay thread as dameon thread and run it
+        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
+        if self.duration > 0:            
+            self._async_duration_thread = Thread( target= self._duration_thread, args=( self.duration, ) )
+            self._async_duration_thread.daemon = True
+            self._async_duration_thread.start()
+
         # Start run thread
-        self._async_transfer_thread = threading.Thread( target= self.__run_thread )
+        self._async_transfer_thread = Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
 
 
+    def _duration_thread( self, duration: int ) -> None : 
+        """ Control the run execution time """
+        
+        log.info( f" .Starting duration timer for {self.duration}s running time..." )
+        time.sleep( duration )
+        log.info( f" .End of timer thread" )
+
+        # Stop running
+        if self.running:
+            self.setRunningFlag( False )
+
+
     def wait( self ) -> None :
-        """ Wait for the end of the thread execution on async mode """
+        """ Wait for the end of the thread execution """
         
         if self._async_transfer_thread is not None:
             self._async_transfer_thread.join()
@@ -821,9 +873,21 @@ class MemsArray:
 
         if self._async_transfer_thread_exception is not None:
             thread_exception = MuException( f"Thread exception ({type(self._async_transfer_thread_exception).__name__}): {self._async_transfer_thread_exception}" )
-            self._async_transfer_thread_exceptio = None
+            self._async_transfer_thread_exception = None
             raise thread_exception
         
+
+    def stop( self ) -> None :
+        """ Stop current running """
+
+        log.info( " .Request for stopping thread execution" )
+
+        if self.running:
+            log.info( " .Stopping current run thread execution..." )
+            self.setRunningFlag( False )
+        else:
+            log.warning( "Failed to stop: No current thread running" )
+
 
     def __run_thread( self ) -> None :
         """ Start run execution
@@ -835,21 +899,24 @@ class MemsArray:
             log.info( " .Run thread execution started" )
             
             transfer_lost: int = 0
+            self.setRunningFlag( True )
+            while self.running:
+                # generates random data
+                if self.counter is None or ( self.counter == False or ( self.counter == True and self.counter_skip==True ) ):
+                    # send data without counter state
+                    data = np.random.rand( self.frame_length, self.mems_number ) * 2 - 1
+                else:
+                    # add counter values
+                    counter = np.array( [[i for i in range(self.frame_length)]] ).T + self.__it * self.frame_length
+                    data = np.concatenate( ( counter, ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
+                if self.status is not None and self.status == True:
+                    status =np.zeros( ( self.frame_length, 1 ) )
+                    data = np.concatenate(( data, status ), axis=1 )
 
-            # generates random data
-            if self.counter is None or ( self.counter == False or ( self.counter == True and self.counter_skip==True ) ):
-                # send data without counter state
-                data = np.random.rand( self.frame_length, self.mems_number ) * 2 - 1
-            else:
-                # add counter values
-                counter = np.array( [[i for i in range(self.frame_length)]] ).T + self.__it * self.frame_length
-                data = np.concatenate( ( counter, ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
-            if self.status is not None and self.status == True:
-                status =np.zeros( ( self.frame_length, 1 ) )
-                data = np.concatenate(( data, status ), axis=1 )
+                # post them in the internal queue
+                self.signal_q.put( data )
 
-            # post them in the internal queue
-            self.signal_q.put( data )
+            log.info( " .Running stopped: normal thread termination" )
 
         except Exception as e:
             log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )
@@ -875,6 +942,8 @@ class MemsArray:
             raise StopIteration
 
         
+
+
 
 
 
