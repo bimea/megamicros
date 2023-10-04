@@ -408,18 +408,21 @@ class MemsArray:
                 self.setSamplingFrequency( kwargs['sampling_frequency'] )
 
             if 'datatype' in kwargs:
-                if kwargs['datatype'] is str:
+                log.info( f" .Set datatype to {kwargs['datatype']} " )
+                if type( kwargs['datatype'] )is str:
                     try:
                         self.setDatatype( getattr( MemsArray.Datatype, kwargs['datatype'] ) )
                     except:
                         raise MuException( f"Unknown output datatype '{kwargs['datatype']}'" )
-                elif kwargs['datatype'] is int:
+                elif type( kwargs['datatype'] ) is int:
                     try:
                         self.setDatatype( MemsArray.Datatype( kwargs['datatype'] ) )
                     except:
                         raise MuException( f"Unknown output datatype code '{kwargs['datatype']}'" )                    
-                elif kwargs['datatype'] is MemsArray.Datatype :
+                elif type( kwargs['datatype'] ) is MemsArray.Datatype :
                     self.setDatatype( kwargs['datatype'] )
+                else:
+                    raise MuException( f"Unknown datatype '{kwargs['datatype']}'" )
 
             if 'duration' in kwargs:
                 self.setDuration( kwargs['duration'] )
@@ -936,8 +939,12 @@ class MemsArray:
             log.info( f" .Starting iterations: will produce data as binary buffer of int32" )
         elif self.datatype == self.Datatype.int32:
             log.info( f" .Starting iterations: will produce data as numpy array of int32 ({self.frame_length} x {self.channels_number} size)" )
+        elif self.datatype == self.Datatype.bfloat32:
+            log.info( f" .Starting iterations: will produce data as binary buffer of float32" )
+        elif self.datatype == self.Datatype.float32:
+            log.info( f" .Starting iterations: will produce data as numpy array of float32 ({self.frame_length} x {self.channels_number} size)" )
         else:
-            raise MuException( f"Sorry, converting data into float32 is not yet implemented" )
+            raise MuException( f"Bad or unknown datatype. May be a bug" )
 
         self.__it = 0
         return self
@@ -949,39 +956,11 @@ class MemsArray:
         try:
             data = self.signal_q.get( timeout=DEFAULT_QUEUE_TIMEOUT )
             self.__it += 1
-
-            # User wants data as binary buffer of int32 
-            if self.datatype == self.Datatype.bint32:
-
-                # Data is already binary buffer of int32 
-                if type( data ).__name__ == 'bytes':
-                    return data
-                
-                # Convert numpy array in binary buffer of int32
-                else:
-                    return np.ndarray.tobytes( data )
-
-            # User wants data as numpy array of int32 
-            elif self.datatype == self.Datatype.int32:   
-                
-                # Convert binary buffer into numpy array of int32
-                if type( data ).__name__ == 'bytes':
-                    
-                    # build np array from binary buffer
-                    data = np.frombuffer( data, dtype=np.int32 )
-
-                    # reshape MEMs signals column wise ( samples number X channels_number )
-                    # Warning : this is the aidb format... 
-                    return np.reshape( data, ( self.channels_number,  self.frame_length ) ).T
-                
-                # Data is already a numpy array: nothing to do
-                else:
-                    return data
+            return data
         
         except queue.Empty:
             raise StopIteration
 
-        
 
 
 

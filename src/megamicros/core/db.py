@@ -426,7 +426,7 @@ class MemsArrayDB( base.MemsArray ):
                     # However, the queue introduces a latency that can become problematic.
                     # If the user accepts the loss of data, it is possible to limit the size of the queue.
                     # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
-                    self.signal_q.put( chunk )
+                    self.signal_q.put( self.__run_process_data( chunk ) )
                     if self.running == False:
                         log.info( " .Running stopped: normal thread termination" )
                         break
@@ -437,3 +437,45 @@ class MemsArrayDB( base.MemsArray ):
         except Exception as e:
             # Uknnown exception:
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
+
+
+    def __run_process_data( self, data: bytes ) -> any :
+        """ Process data in the right format before sending it in the queue 
+        
+        Parameter
+        ---------
+        data: bytes
+            input data 
+        Return: bytes|np.ndarray
+            output data in the format required by the user
+        """
+        print( 'data=', data )
+
+        # User wants data as binary buffer of int32 
+        if self.datatype == self.Datatype.bint32:
+            pass
+        
+        # User wants data as numpy array of int32 
+        elif self.datatype == self.Datatype.int32:
+            # build np array from binary buffer
+            data = np.frombuffer( data, dtype=np.int32 )
+
+            # reshape MEMs signals column wise ( samples number X channels_number ) 
+            frame_length = len( data ) // self.channels_number
+            data =  np.reshape( data, ( self.channels_number, frame_length ) ).T
+            
+        # User wants data as numpy array of float32 
+        elif self.datatype == self.Datatype.float32:
+            # build np array from binary buffer
+            data = np.frombuffer( data, dtype=np.int32 ).astype( np.float32 ) * self.sensibility 
+
+            # reshape MEMs signals column wise ( samples number X channels_number )
+            frame_length = len( data ) // self.channels_number 
+            data = np.reshape( data, ( self.channels_number,  frame_length ) ).T
+
+        # User wants data as binary buffer of float32 
+        else:
+            data = np.frombuffer( data, dtype=np.int32 ).astype( np.float32 ) * self.sensibility 
+            data = np.ndarray.tobytes( data )
+            
+        return data
