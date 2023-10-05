@@ -456,8 +456,11 @@ class MemsArrayDB( base.MemsArray ):
 
 
     def __run_process_data( self, data: bytes ) -> any :
-        """ Process data in the right format before sending it in the queue 
+        """ Process data in the right format before sending it to the queue 
         
+        Notice that the antenna 'frame_length' value can cut signal into non integer parts number.
+        As a result, last chunk can be shorter with less than 'frame_length' samples
+
         Parameter
         ---------
         data: bytes
@@ -473,24 +476,16 @@ class MemsArrayDB( base.MemsArray ):
         
         # User wants data as numpy array of int32 
         elif self.datatype == self.Datatype.int32:
-            # build np array from binary buffer
-            # cannot convert in int32...
+            # build np array from binary buffer and reshape MEMs signals column wise
             data = ( np.frombuffer( data, dtype=np.float32 )/self.sensibility ).astype(np.int32)
-
-            # reshape MEMs signals column wise ( samples number X channels_number ) 
             frame_length = len( data ) // self.channels_number
-            #data =  np.reshape( data, ( self.channels_number, frame_length ) ).T
             data =  np.reshape( data, ( frame_length, self.channels_number ) )
-
 
         # User wants data as numpy array of float32 
         elif self.datatype == self.Datatype.float32:
-            # build np array from binary buffer
+            # build np array from binary buffer and reshape MEMs signals column wise
             data = np.frombuffer( data, dtype=np.float32 )
-
-            # reshape MEMs signals column wise ( samples number X channels_number )
             frame_length = len( data ) // self.channels_number 
-            #data = np.reshape( data, ( self.channels_number,  frame_length ) ).T
             data =  np.reshape( data, ( frame_length, self.channels_number ) )
 
         # User wants data as binary buffer of float32 -> nothing to do

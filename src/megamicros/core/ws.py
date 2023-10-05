@@ -311,6 +311,13 @@ class MemsArrayWS( base.MemsArray ):
         else:
             log.info( f" .Background execution mode off" )
 
+        # If running time is limited: create the time delay thread as dameon thread and run it
+        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
+        #if self.duration > 0:            
+        #    self._async_duration_thread = threading.Thread( target= self._duration_thread, args=( self.duration, ) )
+        #    self._async_duration_thread.daemon = True
+        #    self._async_duration_thread.start()
+
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
@@ -341,6 +348,7 @@ class MemsArrayWS( base.MemsArray ):
 
                 # send settings to server
                 # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
+                # Also notice that the 'int32' datatype is the only avaible datatype on MBS server 
                 settings = {
                     'mems': self.mems,
                     'analogs': self.analogs,
@@ -351,7 +359,8 @@ class MemsArrayWS( base.MemsArray ):
                     'sampling_frequency': self.sampling_frequency,
                     'datatype': 'int32' if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32 else 'float32',
                     'mems_init_wait': DEFAULT_MEMS_INIT_WAIT,
-                    'duration': self.duration
+                    'duration': self.duration,
+                    'datatype': 'int32'
                 }
 
                 # Add H5 settings if H5_pass_through mode is on:
@@ -424,7 +433,6 @@ class MemsArrayWS( base.MemsArray ):
             The open connection websocket
         """
 
-        listening = True                    # processing flag
         halt_registered: bool = False       # halt registration flag (to avoid multiple sending)
         signal_buffer = None
         transfer_index = 0                  # transfers counter
@@ -433,12 +441,13 @@ class MemsArrayWS( base.MemsArray ):
         elapsed_time: float = 0
         sample_time: float = None
         mean_completion_time: float = None
-
+        
         try:
+            self.setRunningFlag( True )
             while True:
-                # If listening turnes to False, send the stop command to the remote server
+                # If running turnes to False, send the stop command to the remote server
                 # and wait until receiving of the completed status message
-                if listening == False and halt_registered == False:
+                if self.running == False and halt_registered == False:
                     log.info( " .Send stop command" )
                     await websocket.send( json.dumps( {'request': 'halt'} ) )
                     halt_registered = True
@@ -473,15 +482,17 @@ class MemsArrayWS( base.MemsArray ):
                         raise MuWSException( f"Received unexpected message from server: {response['response']}" )
                     
                 else:
-                    # If listening mode is False, the remaining data on the network are lost
+                    # If running status is False, the remaining data on the network are lost
                     # It's simply a matter of speeding up the end of treatment.
-                    if listening:
+                    if not self.running:
+                        transfer_lost += 1
+                    else:
                         # Process binary data by pushing them in the queue 
                         # Thanks to the queue, data are not lost if the reading process is too slow compared to the filling speed.
                         # However, the queue introduces a latency that can become problematic.
                         # If the user accepts the loss of data, it is possible to limit the size of the queue.
                         # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
-                        self.signal_q.put( signal_buffer )
+                        self.signal_q.put( self.__run_process_data( signal_buffer ) )
 
                         # Transfers counting
                         # Note that the loop control is conducted by the remote server.
@@ -489,8 +500,6 @@ class MemsArrayWS( base.MemsArray ):
                         transfer_index += 1
                         elapsed_time += time.time() - sample_time
 
-                    else:
-                        transfer_lost += 1
 
             elapsed_time = sample_time - start_time
             mean_completion_time = elapsed_time/transfer_index if transfer_index != 0 else 0
@@ -504,3 +513,36 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
 
 
+    def __run_process_data( self, data: bytes ) -> any :
+        """ Process data in the right format before sending it to the queue 
+        
+        Parameter
+        ---------
+        data: bytes
+            input data. Default is int32 binary encoded data as the MBS server works with
+        Return: bytes|np.ndarray
+            output data in the format required by the user
+        """
+
+        # User wants data as binary buffer of int32 -> nothing to do
+        if self.datatype == self.Datatype.bint32:
+            pass
+
+        # User wants data as numpy array of int32 
+        elif self.datatype == self.Datatype.int32:
+            # build np array from binary buffer and eshape MEMs signals column wise
+            data = np.frombuffer( data, dtype=np.int32 )
+            data = np.reshape( data, ( self.channels_number, self.frame_length ) ).T
+
+        # User wants data as numpy array of float32 
+        elif self.datatype == self.Datatype.float32:
+            # build np array from binary buffer and reshape MEMs signals column wise
+            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
+            data = np.reshape( data, ( self.channels_number, self.frame_length ) ).T
+
+        # User wants data as binary buffer of float32
+        else:
+            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
+            data = np.ndarray.tobytes( data )
+
+        return data
