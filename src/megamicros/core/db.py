@@ -396,10 +396,15 @@ class MemsArrayDB( base.MemsArray ):
 
     def __run_thread( self ):
 
-        # check for the counter channel but not for the status channel
+        # Check for the counter channel but not for the status channel
         channels = self.mems
-        if self.counter and not self.counter_skip:
-            channels = [0] + list( np.array( channels ) + 1 )
+        if self.counter:
+            # If counter is in data but user wants to escape it, we have to remove it from the requested channels:
+            if self.counter_skip:
+                channels = list( np.array( channels ) + 1 )
+            # Otherwize we have to add it in the channel list: 
+            else:
+                channels = [0] + list( np.array( channels ) + 1 )
 
         # Set chunk size
         channels_number = len( channels )
@@ -411,10 +416,21 @@ class MemsArrayDB( base.MemsArray ):
 
         url = f"{self.dbhost}sourcefile/{self.file_id}/range/1/10/channels/0/0/?channels={channels_str}"
 
-        log.info( f" .Endpoint url: {url}" )
-
         try:
+            log.info( f" .Opening DB file on endpoint {url}" )
             with requests.get(url, stream=True) as response:
+
+                # Get the content type and length from the response headers
+                content_type = response.headers.get('content-type')
+                content_length = int( response.headers.get('content-length') )
+
+                log.info( f" .Got positive response from server with for {content_type} data of {content_length} bytes length" )
+                log.info( f" .Start receiving {content_length//chunk_size} paquets of size {self.frame_length} x {channels_number}" )
+                if (content_length%chunk_size) % (channels_number*4) != 0:
+                    raise MuDBException( f"Inconsistency between data received ({content_length}) bytes and query ({self.frame_length} x {channels_number})" )
+                
+                log.info( f" .Last chunk will carry {int( (content_length%chunk_size)/channels_number/4 )} remaining samples" )
+
                 # Check if the request was successful
                 response.raise_for_status()
 
@@ -445,37 +461,40 @@ class MemsArrayDB( base.MemsArray ):
         Parameter
         ---------
         data: bytes
-            input data 
+            input data. Default is float32 binary encoded data as the endpoint request works like this
         Return: bytes|np.ndarray
             output data in the format required by the user
         """
-        print( 'data=', data )
 
         # User wants data as binary buffer of int32 
         if self.datatype == self.Datatype.bint32:
-            pass
+            data = ( np.frombuffer( data, dtype=np.float32 )/self.sensibility ).astype(np.int32)
+            data = np.ndarray.tobytes( data )
         
         # User wants data as numpy array of int32 
         elif self.datatype == self.Datatype.int32:
             # build np array from binary buffer
-            data = np.frombuffer( data, dtype=np.int32 )
+            # cannot convert in int32...
+            data = ( np.frombuffer( data, dtype=np.float32 )/self.sensibility ).astype(np.int32)
 
             # reshape MEMs signals column wise ( samples number X channels_number ) 
             frame_length = len( data ) // self.channels_number
-            data =  np.reshape( data, ( self.channels_number, frame_length ) ).T
-            
+            #data =  np.reshape( data, ( self.channels_number, frame_length ) ).T
+            data =  np.reshape( data, ( frame_length, self.channels_number ) )
+
+
         # User wants data as numpy array of float32 
         elif self.datatype == self.Datatype.float32:
             # build np array from binary buffer
-            data = np.frombuffer( data, dtype=np.int32 ).astype( np.float32 ) * self.sensibility 
+            data = np.frombuffer( data, dtype=np.float32 )
 
             # reshape MEMs signals column wise ( samples number X channels_number )
             frame_length = len( data ) // self.channels_number 
-            data = np.reshape( data, ( self.channels_number,  frame_length ) ).T
+            #data = np.reshape( data, ( self.channels_number,  frame_length ) ).T
+            data =  np.reshape( data, ( frame_length, self.channels_number ) )
 
-        # User wants data as binary buffer of float32 
+        # User wants data as binary buffer of float32 -> nothing to do
         else:
-            data = np.frombuffer( data, dtype=np.int32 ).astype( np.float32 ) * self.sensibility 
-            data = np.ndarray.tobytes( data )
+            pass
             
         return data
