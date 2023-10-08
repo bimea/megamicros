@@ -234,48 +234,7 @@ class MemsArrayDB( base.MemsArray ):
                 self.setAvailableAnalogs( available_analogs_number=len( meta['info']['analogs'] ) )
 
         except MuException as e:
-            raise( f"Connection to database {dbhost} failed ({type(e).__name__}): {e}" )
-            
-        """
-        try:
-            with AidbSession( dbhost=dbhost, login=login, email=email, password=passwd ) as session:
-                # get meta data
-                meta = session.get_sourcefile( file_id )
-                self.setSamplingFrequency( meta['info']['sampling_frequency'] )
-                self.setAvailableMems( available_mems_number=len( meta['info']['mems'] ) )
-                self.setCounter() if meta['info']['counter']==True else self.unsetCounter()
-                self.setCounterSkip() if meta['info']['counter_skip']==True else self.unsetCounterSkip()
-                self.setAvailableAnalogs( available_analogs_number=len( meta['info']['analogs'] ) )
-
-                # get signal
-                log.info( f" .Downloading..." )
-                try:
-                    # get all sequences
-                    signal: list = session.load_labelized( 
-                        sourcefile_id=file_id, 
-                        label_id=label_id, 
-                        limit=100, 
-                        channels=self.mems
-                    )
-
-                except Exception as e:
-                    raise f" .Downloading failed: {e}"
-                
-            # Save signals as ND array
-            if sequence_id is None:
-                self.__source = np.concatenate( signal, axis=1 )
-            else:
-                self.__source = signal[sequence_id]
-
-            # check status channel
-            # >>>>>>>
-
-            samples_number, mems_number = self.__source.shape
-            log.info( f" .Got {samples_number} samples on {mems_number} MEMs" )
-
-        except Exception as e:
-            raise MuException( f"Connection to database {dbhost} failed: {e}" )
-            """
+            raise MuDBException( f"Connection to database {dbhost} failed ({type(e).__name__}): {e}" )
 
 
     def _set_settings( self, args, kwargs ) -> None :

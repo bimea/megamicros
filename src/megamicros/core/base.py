@@ -186,6 +186,8 @@ class MemsArray:
     _async_transfer_thread = None
     _async_transfer_thread_exception: MuException = None
     _duration_thread = None
+    _thread_timer = None
+    _thread_timer_flag: bool = False
     __running: bool = False
 
     # H5 attributes
@@ -262,6 +264,11 @@ class MemsArray:
         return len( self.__analogs )
     
     @property
+    def available_analogs( self ) -> tuple | None:
+        """ Get the available analogs channels """
+        return self.__available_analogs
+    
+    @property
     def available_analogs_number( self ) -> int:
         """ Get the available analogs number """
         return len( self.__available_analogs )
@@ -270,6 +277,11 @@ class MemsArray:
     def channels_number( self ) -> int:
         """ Get the active channels number including counter and status if any """
         return self.mems_number + self.analogs_number + ( 1 if self.counter and not self.counter_skip else 0 ) + (1 if self.status else 0 )
+
+    @property
+    def available_channels_number( self ) -> int:
+        """ Get the available channels number including counter and status if any """
+        return self.available_mems_number + self.available_analogs_number + ( 1 if self.counter else 0 ) + (1 if self.status else 0 )
 
     @property
     def mems_position( self ) -> np.ndarray|None | None:
@@ -381,7 +393,7 @@ class MemsArray:
             raise MuException( "Direct arguments are not accepted for MemsArray objects" )
         
         try:
-            log.info( f" .Install MemsArray.run() settings" )
+            log.info( f" .Install MemsArray settings" )
 
             if 'available_mems_number' in kwargs:
                 self.setAvailableMems( kwargs['available_mems_number'] )
@@ -702,6 +714,11 @@ class MemsArray:
             list or tuple of mems number to activate
         """
 
+        # No mems means removing current active mems
+        if len( mems ) == 0:
+            self.__mems = []
+            return
+        
         if len( self.__available_mems ) == 0:
             raise MuException( f"Cannot activate MEMs on antenna with no available MEMs" )
 
@@ -762,6 +779,11 @@ class MemsArray:
         analogs : tuple
             list or tuple of analogs number to activate
         """
+
+        # No analogs means removing current analogs
+        if len( analogs ) == 0:
+            self.__analogs = []
+            return
 
         if len( self.__available_analogs ) == 0:
             raise MuException( f"Cannot activate analogs channels on antenna with no available analogs" )
@@ -896,6 +918,14 @@ class MemsArray:
             self.setRunningFlag( False )
         else:
             log.warning( "Failed to stop: No current thread running" )
+
+
+    def _run_endding( self ) -> None:
+        """ Timer callback for running stop """
+
+        log.info( f" .Thread timer started for {self.duration}s duration" )
+        self.setRunningFlag( False )
+        self._thread_timer_flag = False
 
 
     def __run_thread( self ) -> None :
