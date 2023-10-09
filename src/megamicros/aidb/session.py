@@ -109,11 +109,12 @@ class RestDBSession:
     def __enter__( self ):
 
         self.__session = requests.Session()
-        log.info( f" .Try connecting on endpoint database {self.__dbhost}..." )
+        log.info( f" .Try connecting on endpoint database {self.__dbhost + '/dj-rest-auth/login/'}..." )
         try:
             response = self.__session.post( 
                 self.__dbhost + '/dj-rest-auth/login/', 
-                json={ 'username': self.__login, 'email': self.__email, 'password': self.__password }, 
+                #json={ 'username': self.__login, 'email': self.__email, 'password': self.__password },
+                json={ 'username': self.__login, 'password': self.__password }, 
                 timeout=DEFAULT_TIMEOUT 
             )
 

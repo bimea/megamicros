@@ -32,13 +32,16 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 import threading
 import requests
+from time import sleep, time
 
 from megamicros.log import log
 from megamicros.exception import MuException
 from megamicros.aidb.query import AidbSession
 import megamicros.core.base as base
 
-DEFAULT_DB_PORT         = 9002
+DEFAULT_DB_PORT                         = 9002
+DB_PROCESSING_DELAY_RATE				= 3/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
+
 
 # =============================================================================
 # Exception dedicaced to Megamicros Aidb systems
@@ -341,12 +344,11 @@ class MemsArrayDB( base.MemsArray ):
         log.info( f" .Whether counter is active: {self.counter}" )
         log.info( f" .Skipping counter: {self.counter_skip}" )
 
-        # If running time is limited: create the time delay thread as dameon thread and run it
-        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
-        if self.duration > 0:            
-            self._async_duration_thread = threading.Thread( target= self._duration_thread, args=( self.duration, ) )
-            self._async_duration_thread.daemon = True
-            self._async_duration_thread.start()
+        # Start the timer if a limited execution time is requested 
+        if self.duration > 0:
+            self._thread_timer = threading.Timer( self.duration, self._run_endding )
+            self._thread_timer_flag = True
+            self._thread_timer.start()
 
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
@@ -375,6 +377,9 @@ class MemsArrayDB( base.MemsArray ):
 
         url = f"{self.dbhost}sourcefile/{self.file_id}/range/1/10/channels/0/0/?channels={channels_str}"
 
+        initial_time: float = time()
+        elapsed_time: float = 0
+
         try:
             log.info( f" .Opening DB file on endpoint {url}" )
             with requests.get(url, stream=True) as response:
@@ -395,13 +400,26 @@ class MemsArrayDB( base.MemsArray ):
 
                 # Get chunk of data from remote DB server
                 self.setRunningFlag( True )
+                transfer_index = 0                                          # transfer buffer counting
+                transfert_start_time = time()
+                frame_duration = self.frame_length / self.sampling_frequency
+                processing_delay = frame_duration * DB_PROCESSING_DELAY_RATE
                 for chunk in response.iter_content( chunk_size=chunk_size ):
+
+                    # Wait for real time operation
+                    if ( time() - transfert_start_time ) < frame_duration - processing_delay:
+                        sleep( frame_duration-time()+transfert_start_time-processing_delay )
+
+                    # Next transfert start time
+                    transfert_start_time = time()
+
                     # Process binary data by pushing them in the queue 
                     # Thanks to the queue, data are not lost if the reading process is too slow compared to the filling speed.
                     # However, the queue introduces a latency that can become problematic.
                     # If the user accepts the loss of data, it is possible to limit the size of the queue.
                     # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
                     self.signal_q.put( self.__run_process_data( chunk ) )
+                    transfer_index += 1
                     if self.running == False:
                         log.info( " .Running stopped: normal thread termination" )
                         break
@@ -412,6 +430,16 @@ class MemsArrayDB( base.MemsArray ):
         except Exception as e:
             # Uknnown exception:
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
+
+        # Compute elapsed time
+        elapsed_time = time() - initial_time
+        if self.duration == 0:
+            log.info( f" .Elapsed time: {elapsed_time} s")
+        else:
+            log.info( f" .Elapsed time: {elapsed_time}s (expected duration was: {self.duration} s)")
+
+        log.info( f" .Proceeded to {transfer_index} transfers" )
+        log.info( " .Run completed" )
 
 
     def __run_process_data( self, data: bytes ) -> any :

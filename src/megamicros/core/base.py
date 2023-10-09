@@ -33,7 +33,7 @@ import time
 import numpy as np
 import queue
 from enum import Enum
-from threading import Thread, Event
+from threading import Thread, Timer
 
 from megamicros.log import log
 from megamicros.exception import MuException
@@ -871,28 +871,15 @@ class MemsArray:
         if self.h5_recording:
             log.info( f" .Local H5 recording" )
 
-        # If running time is limited: create the time delay thread as dameon thread and run it
-        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
-        if self.duration > 0:            
-            self._async_duration_thread = Thread( target= self._duration_thread, args=( self.duration, ) )
-            self._async_duration_thread.daemon = True
-            self._async_duration_thread.start()
+        # Start the timer if a limited execution time is requested 
+        if self.duration > 0:
+            self._thread_timer = Timer( self.duration, self._run_endding )
+            self._thread_timer_flag = True
+            self._thread_timer.start()
 
         # Start run thread
         self._async_transfer_thread = Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
-
-
-    def _duration_thread( self, duration: int ) -> None : 
-        """ Control the run execution time """
-        
-        log.info( f" .Starting duration timer for {self.duration}s running time..." )
-        time.sleep( duration )
-        log.info( f" .End of timer thread" )
-
-        # Stop running
-        if self.running:
-            self.setRunningFlag( False )
 
 
     def wait( self ) -> None :

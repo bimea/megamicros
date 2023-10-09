@@ -39,7 +39,7 @@ from megamicros.log import log
 from megamicros.exception import MuException
 import megamicros.core.base as base
 
-PROCESSING_DELAY_RATE				= 4/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
+H5_PROCESSING_DELAY_RATE				= 4/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
 
 
 # =============================================================================
@@ -68,30 +68,30 @@ class MemsArrayH5( base.MemsArray ):
     __current_file: h5py.File = None
     __current_filename: str = None
     __start_time: int = 0
-    __initial_time = 0
     __transfer_index: int = 0
     __dataset_index: int = 0
     __dataset_index_ptr: int = 0
 
     # H5 file properties
-    __h5_timestamp: float = None
-    __h5_date: str = None
-    __h5_dataset_number: int = None
-    __h5_dataset_duration: int = None
-    __h5_dataset_length: int = None
-    __h5_file_duration: int = None
-    __h5_comment: str = None
+    __file_timestamp: float = None
+    __file_date: str = None
+    __file_duration: int = None
+    __file_comment: str = None
+    __dataset_number: int = None
+    __dataset_duration: int = None
+    __dataset_length: int = None
+
 
 
     @property
-    def h5_files( self ) -> list:
+    def files( self ) -> list:
         """
         Get the H5 files list to be processed 
         """
         return self.__files
 
     @property
-    def h5_current_filename( self ) -> list:
+    def current_filename( self ) -> list:
         """
         Get the current H5 file being read 
         """
@@ -112,53 +112,53 @@ class MemsArrayH5( base.MemsArray ):
         return self.__loop
 
     @property
-    def h5_timestamp( self ) -> float:
+    def file_timestamp( self ) -> float:
         """
         Get the H5 current file creation timestamp
         """
-        return self.__h5_timestamp
+        return self.__file_timestamp
 
     @property
-    def h5_date( self ) -> str:
+    def file_date( self ) -> str:
         """
         Get the H5 current file creation date
         """
-        return self.__h5_date
+        return self.__file_date
 
     @property
-    def h5_dataset_number( self ) -> str:
+    def dataset_number( self ) -> str:
         """
         Get the H5 current file dataset number
         """
-        return self.__h5_dataset_number
+        return self.__dataset_number
     
     @property
-    def h5_dataset_duration( self ) -> str:
+    def dataset_duration( self ) -> str:
         """
         Get the H5 current file dataset duration in seconds
         """
-        return self.__h5_dataset_duration
+        return self.__dataset_duration
     
     @property
-    def h5_dataset_length( self ) -> str:
+    def dataset_length( self ) -> str:
         """
         Get the H5 current file dataset length
         """
-        return self.__h5_dataset_length
+        return self.__dataset_length
 
     @property
-    def h5_file_duration( self ) -> str:
+    def file_duration( self ) -> str:
         """
         Get the H5 current file duration in seconds
         """
-        return self.__h5_file_duration
+        return self.__file_duration
     
     @property
-    def h5_comment( self ) -> str:
+    def file_comment( self ) -> str:
         """
         Get the H5 current file dataset user comment
         """
-        return self.__h5_comment
+        return self.__file_comment
 
 
     def setStartTime( self, start_time: int ):
@@ -171,7 +171,7 @@ class MemsArrayH5( base.MemsArray ):
         self.__start_time = start_time
 
 
-    def setH5Files( self, filename: str ) -> None:
+    def setFiles( self, filename: str ) -> None:
         """
         Set the list of available H5 files to play
 
@@ -298,7 +298,7 @@ class MemsArrayH5( base.MemsArray ):
         super().__init__( kwargs=kwargs )
 
         # filename is mandatory
-        self.setH5Files( filename )
+        self.setFiles( filename )
 
         # Set H5 settings
         if len( kwargs ) > 0:
@@ -306,11 +306,11 @@ class MemsArrayH5( base.MemsArray ):
 
         # Open the first H5 file in list and set settings from this file
         try:
-            if self.__files == None or len( self.__files ) == 0:
+            if self.files == None or len( self.files ) == 0:
                 raise MuH5Exception( f"No H5 file(s) loaded. Bad object initialization" ) 
             
             # get meta data
-            with h5py.File( self.__files[0], 'r' ) as file:
+            with h5py.File( self.files[0], 'r' ) as file:
                 if 'muh5' in file:
                     group = file['muh5']
                     meta = dict( zip( group.attrs.keys(), group.attrs.values() ) )
@@ -321,19 +321,19 @@ class MemsArrayH5( base.MemsArray ):
                     self.unsetStatus( force=True )
                     self.setAvailableAnalogs( available_analogs_number=len( meta['analogs'] ) )
 
-                    self.__h5_timestamp = meta['timestamp']
-                    self.__h5_date = meta['date']
-                    self.__h5_dataset_number = meta['dataset_number']
-                    self.__h5_dataset_duration = meta['dataset_duration']
-                    self.__h5_dataset_length = meta['dataset_length']
-                    self.__h5_file_duration = meta['duration']
-                    self.__h5_comment = meta['comment']
+                    self.__file_timestamp = meta['timestamp']
+                    self.__file_date = meta['date']
+                    self.__file_duration = meta['duration']
+                    self.__file_comment = meta['comment']
+                    self.__dataset_number = meta['dataset_number']
+                    self.__dataset_duration = meta['dataset_duration']
+                    self.__dataset_length = meta['dataset_length']
  
                 else:
-                    raise MuH5Exception( f"{self.__files[0]} does not appear to be a MuH5 file: cannot find the 'muh5' H5 group" )
+                    raise MuH5Exception( f"{self.files[0]} does not appear to be a MuH5 file: cannot find the 'muh5' H5 group" )
 
         except Exception as e:
-            raise MuH5Exception( f"Failed to get meta info from {self.__files[0]} H5 file ({type(e).__name__}): {e}" )
+            raise MuH5Exception( f"Failed to get meta info from {self.files[0]} H5 file ({type(e).__name__}): {e}" )
 
 
     def _check_settings( self ) -> None :
@@ -396,21 +396,13 @@ class MemsArrayH5( base.MemsArray ):
         else :
             log.info( f" .Perform a {self.duration}s run loop" )
 
-        log.info( f" .Frame length: {self.frame_length} samples (chunk size: {self.frame_length * 5 * 4} Bytes)" )
+        log.info( f" .Frame length: {self.frame_length} samples (chunk size: {self.frame_length * self.channels_number * 4} Bytes)" )
         log.info( f" .Sampling frequency: {self.sampling_frequency} Hz" )
         log.info( f" .Active MEMs: {self.mems}" )
         log.info( f" .Active analogic channels: {self.analogs}" )
         log.info( f" .Whether counter is active: {self.counter}" )
         log.info( f" .Skipping counter: {self.counter_skip}" )
-
-        # If running time is limited: create the time delay thread as dameon thread and run it
-        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
-        # COULD USE threading.TIMER instead...
-        
-        #if self.duration > 0:            
-        #    self._async_duration_thread = threading.Thread( target= self._duration_thread, args=( self.duration, ) )
-        #    self._async_duration_thread.daemon = True
-        #    self._async_duration_thread.start()
+        log.info( f" .Desired playing duration: { str(self.duration) + ' s' if self.duration != 0 else 'not limited'}" )
 
         # Start running
         self.setRunningFlag( True )
@@ -432,21 +424,21 @@ class MemsArrayH5( base.MemsArray ):
         Notice that continuity between files is not managed
         """
 
-        self.__initial_time = time()
+        initial_time: float = time()
+        elapsed_time: float = 0
 
         while self.running:
             # Run over H5 files
-            for index, file in enumerate( self.__files ):
+            for index, file in enumerate( self.files ):
                 self.__current_filename = file
                 log.info( f" .Processing {self.__current_filename} H5 file... " )
 
                 # Reset starting time for next files
                 if index > 0:
-                    self.__start_time = 0
+                    self.setStartTime( 0 )
 
-                # Loop on all available H5 files
+                # Transfer loop
                 try:
-
                     with h5py.File( self.__current_filename, 'r' ) as self.__current_file:
 
                         if 'muh5' in self.__current_file:
@@ -465,22 +457,21 @@ class MemsArrayH5( base.MemsArray ):
                             self.setActiveAnalogs( analogs )
 
                             self.setSamplingFrequency( meta['sampling_frequency'], force=True  )
-                            self.setCounter( force=True ) if meta['counter']==True else self.unsetCounter( force=True )
+                            self.setCounter( force=True ) if meta['counter']==True and meta['counter_skip']==False else self.unsetCounter( force=True )
                             self.unsetStatus( force=True )
 
-                            self.__h5_timestamp = meta['timestamp']
-                            self.__h5_date = meta['date']
-                            self.__h5_dataset_number = meta['dataset_number']
-                            self.__h5_dataset_duration = meta['dataset_duration']
-                            self.__h5_dataset_length = meta['dataset_length']
-                            self.__h5_file_duration = meta['duration']
-                            self.__h5_comment = meta['comment']
+                            self.__file_timestamp = meta['timestamp']
+                            self.__file_date = meta['date']
+                            self.__file_duration = meta['duration']
+                            self.__file_comment = meta['comment']
+                            self.__dataset_number = meta['dataset_number']
+                            self.__dataset_duration = meta['dataset_duration']
+                            self.__dataset_length = meta['dataset_length']
 
                             # Verbose
-                            log.info( f" .{self.h5_file_duration}s ({(self.h5_file_duration/60):.02}min) of data in H5 file" )
+                            log.info( f" .{self.file_duration}s ({(self.file_duration/60):.02}min) of data in H5 file" )
                             log.info( f" .Starting time: {self.start_time}s" )
                             log.info( f" .Whether counter is available: {meta['counter'] and not meta['counter_skip']}" )
-                            log.info( f" .Desired playing duration: { str(self.duration) + ' s' if self.duration != 0 else 'not limited'}" )
                             log.info( f" .{len( self.available_mems )} available mems" )
                             log.info( f" .{self.mems_number} activated microphones" )
                             log.info( f" .Activated microphones: {self.mems}" )
@@ -501,31 +492,28 @@ class MemsArrayH5( base.MemsArray ):
                                 log.info( f" .compression mode: OFF" )
                             log.info( f" .Reading in loop mode: {self.loop}" )
 
-
-                            # __dataset_index: current dataset
-                            # __dataset_index_ptr: current index in current dataset 
-                            # __transfer_index: transfer buffer counting
-
-                            self.__transfer_index = 0
-                            start_time = self.start_time * meta['duration'] / 100
+                            transfer_index = 0                                          # transfer buffer counting
+                            dataset_index: int = 0                                      # current dataset
+                            dataset_index_ptr: int = 0                                  # current index in current dataset 
+                            start_time = self.start_time * meta['duration'] / 100       # starting time in seconds
 
                             if start_time > 0:
                                 # Start from requested starting time
                                 if start_time > meta['duration']:
                                     raise MuException( f"Cannot read file at {start_time}s star time. File duration ({meta['duration']}) is too short" )
 
-                                self.__dataset_index = int( ( start_time * self.sampling_frequency ) // meta['dataset_length'] )
-                                self.__dataset_index_ptr = int( ( start_time * self.sampling_frequency ) % meta['dataset_length'] )
+                                dataset_index = int( ( start_time * self.sampling_frequency ) // meta['dataset_length'] )
+                                dataset_index_ptr = int( ( start_time * self.sampling_frequency ) % meta['dataset_length'] )
 
                             else:
                                 # Start from beginning
-                                self.__dataset_index = 0
-                                self.__dataset_index_ptr = 0
+                                dataset_index = 0
+                                dataset_index_ptr = 0
 
                             # Fill buffer with first dataset
-                            dataset = self.__current_file['muh5/' + str( self.__dataset_index ) + '/sig']
-                            log.info( f" .first dataset: [{self.__dataset_index}]" )
-                            self.__dataset_index += 1
+                            dataset = self.__current_file['muh5/' + str( dataset_index ) + '/sig']
+                            log.info( f" .first dataset: [{dataset_index}]" )
+                            dataset_index += 1
 
                             # Set the mask for mems and analogs selecting
                             # - mask: the binary mask for selecting channels to get
@@ -564,31 +552,31 @@ class MemsArrayH5( base.MemsArray ):
                             else:
                                 transfer_buffer = np.array( dataset[:] )
 
-
-
-                            # Start 
-                            time_start = time()
+                            # Start transfer
+                            transfert_start_time = time()
                             frame_duration = self.frame_length / self.sampling_frequency
-                            processing_delay = frame_duration * PROCESSING_DELAY_RATE
+                            processing_delay = frame_duration * H5_PROCESSING_DELAY_RATE
                             file_endeed: bool = False
                             while not file_endeed and self.running == True:
                                 # There is enough data in current dataset: process to transfert
-                                if self.__dataset_index_ptr + self.frame_length <= meta['dataset_length']:
+                                if dataset_index_ptr + self.frame_length <= self.__dataset_length:
                                     # Wait for real time operation
-                                    if ( time() - time_start ) < frame_duration - processing_delay:
-                                        sleep( frame_duration-time()+time_start-processing_delay )
+                                    if ( time() - transfert_start_time ) < frame_duration - processing_delay:
+                                        sleep( frame_duration-time()+transfert_start_time-processing_delay )
 
-                                    self.signal_q.put( self.__run_process_data( transfer_buffer[:,self.__dataset_index_ptr:self.__dataset_index_ptr+self.frame_length] ) )                            
-                                    self.__dataset_index_ptr += self.frame_length
-                                    self.__transfer_index += 1
-                                
+                                    # Transfer buffer
+                                    transfert_start_time = time()
+                                    self.signal_q.put( self.__run_process_data( transfer_buffer[:,dataset_index_ptr:dataset_index_ptr+self.frame_length] ) )                            
+                                    dataset_index_ptr += self.frame_length
+                                    transfer_index += 1
+
                                 else:
                                     # Not enough data in current dataset: open next dataset
-                                    if self.__dataset_index < meta['dataset_number']:
+                                    if dataset_index < self.__dataset_length:
                                         # Next dataset exists: get last data of current dataset, open next and complete buffer
-                                        current_dataset_last_samples_number = meta['dataset_length'] - self.__dataset_index_ptr
-                                        buffer = transfer_buffer[:,self.__dataset_index_ptr:self.__dataset_index_ptr+meta['dataset_length']]
-                                        dataset = self.__current_file['muh5/' + str( self.__dataset_index ) + '/sig']
+                                        current_dataset_last_samples_number = self.__dataset_length - dataset_index_ptr
+                                        buffer = transfer_buffer[:,dataset_index_ptr:dataset_index_ptr+self.__dataset_length]
+                                        dataset = self.__current_file['muh5/' + str( dataset_index ) + '/sig']
 
                                         # Fill buffer with next dataset
                                         if masking:
@@ -600,31 +588,30 @@ class MemsArrayH5( base.MemsArray ):
                                         buffer = np.append( buffer, transfer_buffer[:,:new_dataset_first_samples_number], axis=1 )
 
                                         # Wait for real time synchro
-                                        if ( time() - time_start ) < frame_duration - processing_delay:
-                                            sleep( frame_duration-time()+time_start - processing_delay )
+                                        if ( time() - transfert_start_time ) < frame_duration - processing_delay:
+                                            sleep( frame_duration-time()+transfert_start_time - processing_delay )
                                         
                                         # Transfer buffer
-                                        time_start = time()
+                                        transfert_start_time = time()
                                         self.signal_q.put( self.__run_process_data( buffer ) )
-                                        self.__transfer_index += 1
+                                        transfer_index += 1
 
-                                        self.__dataset_index_ptr = new_dataset_first_samples_number
-                                        log.info( f" .new dataset: [{self.__dataset_index}]" )
-                                        self.__dataset_index += 1
+                                        dataset_index_ptr = new_dataset_first_samples_number
+                                        dataset_index += 1
 
                                     # No more dataset: save current buffer and stop playing
                                     else:    
-                                        buffer = transfer_buffer[:,self.__dataset_index_ptr:meta['dataset_length']]
-                                        buffer = np.append( buffer, np.zeros( (channels_number, self.frame_length - meta['dataset_length'] + self.__dataset_index_ptr), dtype=np.int32), axis=1 )
+                                        buffer = transfer_buffer[:,dataset_index_ptr:self.__dataset_length]
+                                        buffer = np.append( buffer, np.zeros( (channels_number, self.frame_length - self.__dataset_length + dataset_index_ptr), dtype=np.int32), axis=1 )
                                         
                                         # Wait for real time synchro
-                                        if time() - time_start < frame_duration - processing_delay:
-                                            sleep( frame_duration-time()+time_start - processing_delay )
+                                        if time() - transfert_start_time < frame_duration - processing_delay:
+                                            sleep( frame_duration-time()+transfert_start_time - processing_delay )
 
                                         # Transfer buffer
-                                        time_start = time()
+                                        transfert_start_time = time()
                                         self.signal_q.put( self.__run_process_data( buffer ) )
-                                        self.__transfer_index += 1
+                                        transfer_index += 1
 
                                         file_endeed = True
                                         log.info( f" .No more dataset: stop playing current file {self.__current_filename}" )
@@ -645,14 +632,14 @@ class MemsArrayH5( base.MemsArray ):
 
 
         # Compute elasped time
-        elapsed_time = time() - self.__initial_time
+        elapsed_time = time() - initial_time
 
         if self.duration == 0:
             log.info( f" .Elapsed time: {elapsed_time} s")
         else:
             log.info( f" .Elapsed time: {elapsed_time}s (expected duration was: {self.duration} s)")
 
-        log.info( f" .Proceeded to {self.__transfer_index} transfers" )
+        log.info( f" .Proceeded to {transfer_index} transfers" )
         log.info( " .Run completed" )
 
 
