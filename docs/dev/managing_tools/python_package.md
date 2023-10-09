@@ -123,6 +123,13 @@ Then from within the directory of the python-project you wish to upload, issue t
 ```bash
     > python setup.py sdist upload -r biimea
 ```
+or, using ``twine``:
+
+```bash
+    > pip install twine
+    > twine upload file_name.whl --repository-url https://pypi.biimea.io
+```
+
 See the [Python private repository](python_repos.md) section for building a private repository.
 
 !!! Warning

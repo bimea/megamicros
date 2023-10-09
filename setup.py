@@ -10,6 +10,8 @@ import os.path
 from setuptools import setup, find_packages
 import pathlib
 
+import cmake_build_extension
+
 here = pathlib.Path(__file__).parent.resolve()
 
 # Get the long description from the README file
@@ -202,4 +204,16 @@ setup(
         "Documentation": "https://readthedoc.biimea.io",
         "Source": "https://github.com/bimea/megamicros/",
     },
+
+    # see https://pypi.org/project/cmake-build-extension/
+    #ext_modules=[
+    #    cmake_build_extension.CMakeExtension(
+    #        name="megamicros-mbs",
+    #        source_dir=str(pathlib.Path(".") / "c++" ),
+    #        install_prefix="megamicros_mbs",
+    #        disable_editable=True,
+    #    ),
+    #],
+    #cmdclass=dict(build_ext=cmake_build_extension.BuildExtension),
+
 )
