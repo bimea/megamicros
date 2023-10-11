@@ -1,0 +1,35 @@
+{
+    "config": {
+        "filename": "mbs-server.json"
+    },
+    "logging": {
+        "file": "mbs-server.log",
+        "level": "info"
+    },
+    "messages": [
+        {
+            "request": "selftest"
+        }
+    ],
+    "mqtt": {
+        "broker": "parisparc.biimea.tech",
+        "client_id": "megamicros/mbs-server/client",
+        "logging": {
+            "qos": 1,
+            "topic": "megamicros/mbs-server/client/log"
+        },
+        "persist": "./persist",
+        "subscribe": {
+            "qos": [
+                1
+            ],
+            "topics": [
+                "megamicros/mbs-server/client/command"
+            ]
+        }
+    },
+    "websocket": {
+        "port": 9002,
+        "reuse_addr": false
+    }
+}
