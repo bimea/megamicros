@@ -377,12 +377,12 @@ class MemsArrayWS( base.MemsArray ):
 
                 if self.background_mode:
                     # Play in background mode -> no more communicatiobn with the server
-                    run_command = {'request': 'run', 'settings': settings, 'origin': 'background'}
+                    run_command = {'request': self.job, 'settings': settings, 'origin': 'background'}
                 else:
-                    run_command = {'request': 'run', 'settings': settings}
+                    run_command = {'request': self.job, 'settings': settings}
 
                 # send run command to server:
-                log.info( f" .Send running job command" )        
+                log.info( f" .Send running job command ({self.job})" )        
                 await websocket.send( json.dumps( run_command ) )
                 response = json.loads( await websocket.recv() )
                 error = self.__check_mbs_error( response )

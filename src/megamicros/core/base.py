@@ -167,6 +167,7 @@ class MemsArray:
     __counter: bool|None = None
     __counter_skip: bool|None = None
     __status: bool|None = None
+    __job: str = 'run'
 
     # Antenna properties
     __sampling_frequency: float = DEFAULT_SAMPLING_FREQUENCY
@@ -199,6 +200,11 @@ class MemsArray:
     __h5_compression_algo: str = DEFAULT_H5_COMPRESSION_ALGO
     __h5_gzip_level: int = DEFAULT_H5_GZIP_LEVEL
 
+
+    @property
+    def job( self ) -> str:
+        """ Get the running job """
+        return self.__job
 
     @property
     def running( self ) -> bool:
@@ -419,6 +425,9 @@ class MemsArray:
             if 'sampling_frequency' in kwargs:
                 self.setSamplingFrequency( kwargs['sampling_frequency'] )
 
+            if 'job' in kwargs:
+                self.setJob( kwargs['job'] )
+
             if 'datatype' in kwargs:
                 log.info( f" .Set datatype to {kwargs['datatype']} " )
                 if type( kwargs['datatype'] )is str:
@@ -502,6 +511,11 @@ class MemsArray:
             log.info( f" .Frame length not set -> set to default" )
             self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
+        if self.job == 'run' or self.job == 'master' or self.job == 'slave':
+            log.info( f" .Requested job: {self.job}" )
+        else:
+            raise MuException( f"Unknown requested job '{self.job}'" )
+            
 
     def setRunningFlag( self, status: bool ) -> None:
         self.__running = status
@@ -516,6 +530,14 @@ class MemsArray:
         """
 
         self.__sensibility = sensibility
+
+    def setJob( self, job: str ) -> None :
+        """ Set the running on """
+
+        if job != 'run' and job != 'master' and job != 'slave':
+            raise MuException( f"Unknown requested job '{self.job}'" )
+        else:
+            self.__job = job
 
     def unsetH5Recording( self ) -> None :
         """ Set the H5 recording off """
