@@ -10,7 +10,7 @@ import os.path
 from setuptools import setup, find_packages
 import pathlib
 
-import cmake_build_extension
+#import cmake_build_extension
 
 here = pathlib.Path(__file__).parent.resolve()
 
