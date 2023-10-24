@@ -375,7 +375,10 @@ class MemsArrayDB( base.MemsArray ):
         channels_str = ( ''.join( str( integer ) + ',' for integer in channels ) )[:-1]
         #channels_str = channels_str[:-1]
 
-        url = f"{self.dbhost}sourcefile/{self.file_id}/range/1/10/channels/0/0/?channels={channels_str}"
+        if self.duration == 0:
+            raise MuDBException( "Sorry, 0 duration not yet implemented. Use a non null value of duration instead..." )
+        else:
+            url = f"{self.dbhost}sourcefile/{self.file_id}/range/1/{self.duration}/channels/0/0/?channels={channels_str}"
 
         initial_time: float = time()
         elapsed_time: float = 0
