@@ -546,3 +546,49 @@ class MemsArrayWS( base.MemsArray ):
             data = np.ndarray.tobytes( data )
 
         return data
+    
+    def shutdown( self ) -> None:
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  
+            # There is no current event loop...
+            loop = None
+
+        if loop and loop.is_running():
+            # One cannot add a second asyncio loop in an existant loop (in a Jupyterlab loop for example)
+            # Next lines create a task with a return callback with no more execution after.
+            log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
+            task = loop.create_task( self.__shutdown() )
+            #task.add_done_callback( self.__try_connect_check_error )
+        else:
+            asyncio.run( self.__shutdown() )
+
+    async def __shutdown( self ) -> None :
+        """ A special command for halting the remote server """
+
+        log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
+        try:
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                log.info( " .Connected" )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed: {error}" )        
+
+                # send shutdown command to server
+                command = {'request': 'shutdown' }
+
+                log.info( f" .Send shutdown command to server" )        
+                await websocket.send( json.dumps( command ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Shutdown command failed on remote server: {error}" )
+                else:
+                    log.info( f" .Remote server shutdown success" ) 
+
+        except Exception as e:
+            log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
+            if type(e).__name__=='RuntimeError':
+                log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
