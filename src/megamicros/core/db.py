@@ -375,6 +375,9 @@ class MemsArrayDB( base.MemsArray ):
         channels_str = ( ''.join( str( integer ) + ',' for integer in channels ) )[:-1]
         #channels_str = channels_str[:-1]
 
+
+        ###### THIS SHOULD BE REVIEWED >>>> RANGE IS NOT IMPLEMENTED CORRECTLY >>>>>>>>>>>>>>>>
+        
         if self.duration == 0:
             raise MuDBException( "Sorry, 0 duration not yet implemented. Use a non null value of duration instead..." )
         else:
