@@ -377,7 +377,7 @@ class MemsArrayDB( base.MemsArray ):
 
 
         ###### THIS SHOULD BE REVIEWED >>>> RANGE IS NOT IMPLEMENTED CORRECTLY >>>>>>>>>>>>>>>>
-        
+
         if self.duration == 0:
             raise MuDBException( "Sorry, 0 duration not yet implemented. Use a non null value of duration instead..." )
         else:
@@ -385,6 +385,7 @@ class MemsArrayDB( base.MemsArray ):
 
         initial_time: float = time()
         elapsed_time: float = 0
+        transfer_index = 0                                          
 
         try:
             log.info( f" .Opening DB file on endpoint {url}" )
@@ -406,7 +407,6 @@ class MemsArrayDB( base.MemsArray ):
 
                 # Get chunk of data from remote DB server
                 self.setRunningFlag( True )
-                transfer_index = 0                                          # transfer buffer counting
                 transfert_start_time = time()
                 frame_duration = self.frame_length / self.sampling_frequency
                 processing_delay = frame_duration * DB_PROCESSING_DELAY_RATE
