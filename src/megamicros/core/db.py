@@ -71,7 +71,8 @@ class MemsArrayDB( base.MemsArray ):
     __login: str = None                     # Database user login
     __email: str = None                     # Database user password
     __password: str = None                  # Database user email
-
+    __meta: dict = None                     # Meta data relative to current uploaded file
+    __start: int = None                     # The start time in the upload file
 
     @property
     def dbhost( self ) -> str:
@@ -108,6 +109,20 @@ class MemsArrayDB( base.MemsArray ):
         """ Get the Database sequence identifier in selected file """
         return self.__sequence_id
 
+    @property
+    def meta( self ) -> dict | None:
+        """ Get the meta data from current/last open file """
+        return self.__meta
+    
+    @property
+    def start( self ) -> int:
+        """ Get the start time """
+        return self.__start
+
+    @property
+    def file_duration( self ) -> int:
+        """ Get the file duration of current/last open file """
+        return self.__meta['duration']
 
     def setLabelId( self, label_id: int ) -> None :
         """ Set the Database label identifier 
@@ -128,6 +143,16 @@ class MemsArrayDB( base.MemsArray ):
             The file identifier
         """
         self.__file_id = file_id
+
+    def setStart( self, start_time: int ) -> None:
+        """ Set the start time in seconds 
+        
+        parameters
+        ----------
+        start_time: int
+            The start time in seconds. The value should be such that start and duration are inside the file duration 
+        """
+        self.__start = start_time
 
     def setSequenceId( self, sequence_id: int ) -> None :
         """ Set the Database sequence identifier in current file
@@ -229,12 +254,12 @@ class MemsArrayDB( base.MemsArray ):
         try:
             with AidbSession( dbhost=self.dbhost, login=self.login, email=self.email, password=self.__password ) as session:
                 # get meta data
-                meta = session.get_sourcefile( self.file_id )
-                self.setSamplingFrequency( meta['info']['sampling_frequency'], force=True  )
-                self.setAvailableMems( available_mems_number=len( meta['info']['mems'] ) )
-                self.setCounter( force=True ) if meta['info']['counter']==True else self.unsetCounter( force=True )
+                self.__meta = session.get_sourcefile( self.file_id )
+                self.setSamplingFrequency( self.__meta['info']['sampling_frequency'], force=True  )
+                self.setAvailableMems( available_mems_number=len( self.__meta['info']['mems'] ) )
+                self.setCounter( force=True ) if self.__meta['info']['counter']==True else self.unsetCounter( force=True )
                 self.unsetStatus( force=True )
-                self.setAvailableAnalogs( available_analogs_number=len( meta['info']['analogs'] ) )
+                self.setAvailableAnalogs( available_analogs_number=len( self.__meta['info']['analogs'] ) )
 
         except MuException as e:
             raise MuDBException( f"Connection to database {dbhost} failed ({type(e).__name__}): {e}" )
@@ -258,6 +283,9 @@ class MemsArrayDB( base.MemsArray ):
         try:  
             log.info( f" .Install MemsArrayDB settings" )
 
+            # Set the default value of the start time
+            self.setStart( 0 )
+
             if 'label_id' in kwargs:
                 self.setLabelId( kwargs['label_id'] )
 
@@ -266,6 +294,9 @@ class MemsArrayDB( base.MemsArray ):
 
             if 'sequence_id' in kwargs:
                 self.setSequenceId( kwargs['sequence_id'] )
+
+            if 'start' in kwargs:
+                self.setStart( kwargs['start'] )
 
         except Exception as e:
             raise MuDBException( f"Run failed on settings: {e}")
@@ -293,6 +324,10 @@ class MemsArrayDB( base.MemsArray ):
         if self.frame_length is None:
             log.info( f" .Frame length not set -> set to default" )
             self.setFrameLength( base.DEFAULT_FRAME_LENGTH )
+
+        if self.__start == None:
+            log.info( f" .Start time not set -> set to 0" )
+            self.setStart( 0 )
 
         # Here we are
         log.info( f" .Pre-execution checks for MemsArrayDB.run()" )
@@ -375,18 +410,19 @@ class MemsArrayDB( base.MemsArray ):
         channels_str = ( ''.join( str( integer ) + ',' for integer in channels ) )[:-1]
         #channels_str = channels_str[:-1]
 
-
-        ###### THIS SHOULD BE REVIEWED >>>> RANGE IS NOT IMPLEMENTED CORRECTLY >>>>>>>>>>>>>>>>
-
+        if self.start + self.duration >= self.file_duration:
+            raise MuDBException( "Run failed: the start time ({self.start} s) and duration ({self.duration} s) fall over over the file limits ({self.file_duration} s)" )
+                                
         if self.duration == 0:
-            raise MuDBException( "Sorry, 0 duration not yet implemented. Use a non null value of duration instead..." )
+            url = f"{self.dbhost}sourcefile/{self.file_id}/range/{self.start}/{self.start+self.file_duration}/channels/0/0/?channels={channels_str}"
         else:
-            url = f"{self.dbhost}sourcefile/{self.file_id}/range/1/{self.duration}/channels/0/0/?channels={channels_str}"
+            url = f"{self.dbhost}sourcefile/{self.file_id}/range/{self.start}/{self.start+self.duration}/channels/0/0/?channels={channels_str}"
 
         initial_time: float = time()
         elapsed_time: float = 0
         transfer_index = 0                                          
 
+        log.info( f" .Requesting data in range [{self.start}s, {self.start+self.duration}s]" )
         try:
             log.info( f" .Opening DB file on endpoint {url}" )
             with requests.get(url, stream=True) as response:
