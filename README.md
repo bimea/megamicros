@@ -80,3 +80,9 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
   (venv) > mkdocs serve
   [09:50:16] Serving on http://127.0.0.1:8000/
 ```
+
+# Releases
+
+## 2.0.31
+
+* Change the DB_PROCESSING_DELAY_RATE value needed for realtime simulation from 3/10 to 2/10

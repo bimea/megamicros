@@ -40,7 +40,7 @@ from megamicros.aidb.query import AidbSession
 import megamicros.core.base as base
 
 DEFAULT_DB_PORT                         = 9002
-DB_PROCESSING_DELAY_RATE				= 3/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
+DB_PROCESSING_DELAY_RATE				= 2/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
 
 
 # =============================================================================
