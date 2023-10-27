@@ -449,8 +449,11 @@ class MemsArrayDB( base.MemsArray ):
                 for chunk in response.iter_content( chunk_size=chunk_size ):
 
                     # Wait for real time operation
-                    if ( time() - transfert_start_time ) < frame_duration - processing_delay:
-                        sleep( frame_duration-time()+transfert_start_time-processing_delay )
+                    # BUG:
+                    # [ERROR]: in megamicros.log (db.py:474): Listening loop stopped due to network error exception (ValueError): sleep length must be non-negative
+                    # before correcting this issue, skip the realtime making sleep... 
+                    #if ( time() - transfert_start_time ) < frame_duration - processing_delay:
+                    #    sleep( frame_duration-time()+transfert_start_time-processing_delay )
 
                     # Next transfert start time
                     transfert_start_time = time()
