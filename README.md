@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 # Releases
 
+## 2.0.32
+
+* before correcting DB_PROCESSING_DELAY_RATE issue, skip the realtime process
+
 ## 2.0.31
 
 * Change the DB_PROCESSING_DELAY_RATE value needed for realtime simulation from 3/10 to 2/10
