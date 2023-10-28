@@ -548,12 +548,64 @@ class MemsArrayWS( base.MemsArray ):
         return data
     
 
+    def selftest( self ) -> json:
+
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__selftest() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__selftest() )
+
+
+    async def __selftest( self ) -> json:
+       
+        log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
+        try:
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                log.info( " .Connected" )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed: {error}" )        
+
+                # send selftest command to server
+                command = {'request': 'selftest' }
+
+                log.info( f" .Send selftest command to server" )        
+                await websocket.send( json.dumps( command ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Selftest command failed on remote server: {error}" )
+                else:
+                    # Update local settings according the antenna response
+                    log.info( f" .Remote server selftest command successfull" ) 
+
+                    # TO DO >>>>>
+                    __settings = response
+
+
+
+        except Exception as e:
+            log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
+            if type(e).__name__=='RuntimeError':
+                log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
+
+
+
+
+
+
+
     def settings( self ) -> json:
 
         try:
+            # There is current event loop...
             loop = asyncio.get_running_loop()
             task = loop.create_task( self.__settings() )
-            #task.add_done_callback( self.__settings_get_return )
 
         except RuntimeError:  
             # There is no current event loop...
@@ -571,7 +623,7 @@ class MemsArrayWS( base.MemsArray ):
                 if error:
                     raise MuWSException( f"Connection to server failed: {error}" )        
 
-                # send shutdown command to server
+                # send settings command to server
                 command = {'request': 'settings' }
 
                 log.info( f" .Send settings command to server" )        
@@ -581,8 +633,13 @@ class MemsArrayWS( base.MemsArray ):
                 if error:
                     raise MuWSException( f"Settings command failed on remote server: {error}" )
                 else:
+                    # Update local settings according the antenna response
                     log.info( f" .Remote server settings command successfull" ) 
+
+                    # TO DO >>>>>
                     __settings = response
+
+
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
