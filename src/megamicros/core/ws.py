@@ -357,7 +357,8 @@ class MemsArrayWS( base.MemsArray ):
                     'datatype': 'int32' if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32 else 'float32',
                     'mems_init_wait': DEFAULT_MEMS_INIT_WAIT,
                     'duration': self.duration,
-                    'datatype': 'int32'
+                    'datatype': 'int32',
+                    'frame_length': self.frame_length
                 }
 
                 # Add H5 settings if H5_pass_through mode is on:
