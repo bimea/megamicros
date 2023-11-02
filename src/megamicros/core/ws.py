@@ -311,12 +311,9 @@ class MemsArrayWS( base.MemsArray ):
         else:
             log.info( f" .Background execution mode off" )
 
-        # If running time is limited: create the time delay thread as dameon thread and run it
-        # As soon as the main program exits (for some reasons the running thread is stopped), the duration thread is killed.  
-        #if self.duration > 0:            
-        #    self._async_duration_thread = threading.Thread( target= self._duration_thread, args=( self.duration, ) )
-        #    self._async_duration_thread.daemon = True
-        #    self._async_duration_thread.start()
+        # We have no need to run a timer thread even when execution time is limited.
+        # Indeed, this is the remote server which performs this work.
+        # We have only to wait for the remote server endding the transfer
 
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
