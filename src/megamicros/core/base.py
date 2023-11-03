@@ -511,7 +511,7 @@ class MemsArray:
             log.info( f" .Frame length not set -> set to default" )
             self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
-        if self.job == 'run' or self.job == 'master' or self.job == 'slave':
+        if self.job == 'run' or self.job == 'master' or self.job == 'listen':
             log.info( f" .Requested job: {self.job}" )
         else:
             raise MuException( f"Unknown requested job '{self.job}'" )

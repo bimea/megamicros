@@ -354,9 +354,15 @@ class MemsArrayWS( base.MemsArray ):
         else:
             log.info( f" .Background execution mode off" )
 
-        # There is no need to run a timer thread even if execution time is limited.
+        # For run and master there is no need to run a timer thread even if execution time is limited.
         # Indeed, this is the remote server which performs this work.
         # We have only to wait for the remote server to end the transfer
+
+        # Start the timer if a limited execution time is requested for listeners only
+        if self.job == 'listen' and self.duration > 0 :
+            self._thread_timer = threading.Timer( self.duration, self._run_endding )
+            self._thread_timer_flag = True
+            self._thread_timer.start()
 
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
@@ -460,11 +466,8 @@ class MemsArrayWS( base.MemsArray ):
                 
                 elif self.job == 'listen':
                     log.info( " .Listen run command accepted by server" )
-
-                    # wait 2 seconds before halting 
-                    time.sleep( 2 )
-                    log.info( " .Halt connection with server and exit" )
-                    return
+                    # Start server listening 
+                    await self.__remote_run( websocket )
 
                 else:
                     raise MuWSException( f"Unknown running job `{self.job}`" )
@@ -500,7 +503,7 @@ class MemsArrayWS( base.MemsArray ):
             while True:
                 # If running turns to False, send the stop command to the remote server
                 # and wait until receiving of the completed status message
-                # This is a deprecated part since there is no way to stop the running service from here
+                # Notice that for `listen` run, the halt command stop only the listener job on remote server, not the master run  
                 if self.running == False and halt_registered == False:
                     log.info( " .Send stop command" )
                     await websocket.send( json.dumps( {'request': 'halt'} ) )
