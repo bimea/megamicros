@@ -534,7 +534,7 @@ class MemsArray:
     def setJob( self, job: str ) -> None :
         """ Set the running on """
 
-        if job != 'run' and job != 'master' and job != 'slave':
+        if job != 'run' and job != 'master' and job != 'listen':
             raise MuException( f"Unknown requested job '{self.job}'" )
         else:
             self.__job = job

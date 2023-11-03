@@ -268,6 +268,44 @@ class MemsArrayWS( base.MemsArray ):
         else:
             return False
 
+    def halt( self ) -> None :
+
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__halt() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__halt() )
+
+
+    async def __halt( self ) -> None :
+        """ Send a halt command to stop the remote current running process
+        """
+
+        log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
+        try:
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                log.info( " .Connected" )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed: {error}" )        
+
+                # send halt command to server:
+                log.info( f" .Send halt command..." )  
+                await websocket.send( json.dumps( {'request': 'halt'} ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Halt command failed on remote server: {error}" )
+                else:
+                    log.info( f" .Halt command completed" )  
+
+        except Exception as e:
+            log.error( f"Halt failed: {e}" )
+
 
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
@@ -298,6 +336,7 @@ class MemsArrayWS( base.MemsArray ):
         else :
             log.info( f" .Perform a {self.duration}s run loop" )
 
+        # H5 recording
         if self.h5_recording:
             if self.h5_pass_through:
                 log.info( f" .Remote H5 recording by server on (pass-through mode)" )
@@ -306,14 +345,18 @@ class MemsArrayWS( base.MemsArray ):
         else:
             log.info( f" .H5 recording off" )
 
+        # Job
+        log.info( f" .Start a `{self.job}` running job on remote server" )
+
+        # Backgound mode is deprecated
         if self.background_mode:
             log.info( f" .Background execution mode on" )
         else:
             log.info( f" .Background execution mode off" )
 
-        # We have no need to run a timer thread even when execution time is limited.
+        # There is no need to run a timer thread even if execution time is limited.
         # Indeed, this is the remote server which performs this work.
-        # We have only to wait for the remote server endding the transfer
+        # We have only to wait for the remote server to end the transfer
 
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
@@ -388,7 +431,7 @@ class MemsArrayWS( base.MemsArray ):
                     raise MuWSException( f"Run command failed on remote server: {error}" )
 
                 # Start listening unless background mode is ON
-                if not self.background_mode:
+                if self.job == 'run':
                     log.info( " .Run command accepted by server" )
                     # Start server listening 
                     await self.__remote_run( websocket )
@@ -407,12 +450,24 @@ class MemsArrayWS( base.MemsArray ):
                     else:
                         log.info( f" .No transfers received" )
                     """
-                else:
-                    log.info( " .Run command accepted by server in background mode" )
+                elif self.job == 'master':
+                    log.info( " .Master run command accepted by server" )
 
                     # wait 2 seconds before halting 
                     time.sleep( 2 )
                     log.info( " .Halt connection with server and exit" )
+                    return
+                
+                elif self.job == 'listen':
+                    log.info( " .Listen run command accepted by server" )
+
+                    # wait 2 seconds before halting 
+                    time.sleep( 2 )
+                    log.info( " .Halt connection with server and exit" )
+                    return
+
+                else:
+                    raise MuWSException( f"Unknown running job `{self.job}`" )
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
@@ -443,8 +498,9 @@ class MemsArrayWS( base.MemsArray ):
         try:
             self.setRunningFlag( True )
             while True:
-                # If running turnes to False, send the stop command to the remote server
+                # If running turns to False, send the stop command to the remote server
                 # and wait until receiving of the completed status message
+                # This is a deprecated part since there is no way to stop the running service from here
                 if self.running == False and halt_registered == False:
                     log.info( " .Send stop command" )
                     await websocket.send( json.dumps( {'request': 'halt'} ) )
@@ -594,10 +650,6 @@ class MemsArrayWS( base.MemsArray ):
 
 
 
-
-
-
-
     def settings( self ) -> json:
 
         try:
@@ -636,8 +688,6 @@ class MemsArrayWS( base.MemsArray ):
 
                     # TO DO >>>>>
                     __settings = response
-
-
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
