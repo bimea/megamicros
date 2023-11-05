@@ -359,6 +359,8 @@ class MemsArrayWS( base.MemsArray ):
         # We have only to wait for the remote server to end the transfer
 
         # Start the timer if a limited execution time is requested for listeners only
+        # In this case, the timeout causes a stop command to be sent to the server
+        # We have then to wait for the remote server to end the transfer
         if self.job == 'listen' and self.duration > 0 :
             self._thread_timer = threading.Timer( self.duration, self._run_endding )
             self._thread_timer_flag = True
@@ -549,7 +551,9 @@ class MemsArrayWS( base.MemsArray ):
                         # However, the queue introduces a latency that can become problematic.
                         # If the user accepts the loss of data, it is possible to limit the size of the queue.
                         # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
-                        self.signal_q.put( self.__run_process_data( signal_buffer ) )
+                        self.signal_q.put(
+                            self._run_process_data_bint32( signal_buffer )
+                        )
 
                         # Transfers counting
                         # Note that the loop control is conducted by the remote server.
@@ -569,40 +573,6 @@ class MemsArrayWS( base.MemsArray ):
             # Uknnown exception:
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
 
-
-    def __run_process_data( self, data: bytes ) -> any :
-        """ Process data in the right format before sending it to the queue 
-        
-        Parameter
-        ---------
-        data: bytes
-            input data. Default is int32 binary encoded data as the MBS server works with
-        Return: bytes|np.ndarray
-            output data in the format required by the user
-        """
-
-        # User wants data as binary buffer of int32 -> nothing to do
-        if self.datatype == self.Datatype.bint32:
-            pass
-
-        # User wants data as numpy array of int32 
-        elif self.datatype == self.Datatype.int32:
-            # build np array from binary buffer and eshape MEMs signals column wise
-            data = np.frombuffer( data, dtype=np.int32 )
-            data = np.reshape( data, ( self.channels_number, self.frame_length ) ).T
-
-        # User wants data as numpy array of float32 
-        elif self.datatype == self.Datatype.float32:
-            # build np array from binary buffer and reshape MEMs signals column wise
-            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
-            data = np.reshape( data, ( self.channels_number, self.frame_length ) ).T
-
-        # User wants data as binary buffer of float32
-        else:
-            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
-            data = np.ndarray.tobytes( data )
-
-        return data
     
 
     def selftest( self ) -> json:
@@ -641,16 +611,35 @@ class MemsArrayWS( base.MemsArray ):
                     # Update local settings according the antenna response
                     log.info( f" .Remote server selftest command successfull" ) 
 
-                    # TO DO >>>>>
-                    __settings = response
-
-
+                    settings = {
+                        'available_analogs': response['response']['available_analogs'],
+                        'available_mems': response['response']['available_mems'],
+                        'datatype': response['response']['datatype'],
+                        'frame_length': response['response']['frame_length'],
+                        'mems_sensibility': response['response']['mems_sensibility'],
+                        'sampling_frequency': response['response']['sampling_frequency'],
+                        'system_type': response['response']['system_type'],
+                    }                    
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
             if type(e).__name__=='RuntimeError':
                 log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
 
+        try:
+            super()._set_settings( args=[], kwargs=settings )
+
+            log.info( f" .New settings:" )
+            log.info( f"  > available_mems: {self.available_mems}" )
+            log.info( f"  > available_analogs: {self.available_analogs}" )
+            log.info( f"  > datatype: {str( self.datatype )}" )
+            log.info( f"  > frame_length: {self.frame_length}" )
+            log.info( f"  > mems_sensibility: {self.sensibility}" )
+            log.info( f"  > sampling_frequency: {self.sampling_frequency} Hz" )
+            log.info( f"  > system_type: {response['response']['system_type']}" )
+
+        except Exception as e:
+            log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
     def settings( self ) -> json:
@@ -689,14 +678,35 @@ class MemsArrayWS( base.MemsArray ):
                     # Update local settings according the antenna response
                     log.info( f" .Remote server settings command successfull" ) 
 
-                    # TO DO >>>>>
-                    __settings = response
+                    settings = {
+                        'available_analogs': response['response']['available_analogs'],
+                        'available_mems': response['response']['available_mems'],
+                        'datatype': response['response']['datatype'],
+                        'frame_length': response['response']['frame_length'],
+                        'mems_sensibility': response['response']['mems_sensibility'],
+                        'sampling_frequency': response['response']['sampling_frequency'],
+                        'system_type': response['response']['system_type'],
+                    }                    
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
             if type(e).__name__=='RuntimeError':
                 log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
 
+        try:
+            super()._set_settings( args=[], kwargs=settings )
+
+            log.info( f" .New settings:" )
+            log.info( f"  > available_mems: {self.available_mems}" )
+            log.info( f"  > available_analogs: {self.available_analogs}" )
+            log.info( f"  > datatype: {str( self.datatype )}" )
+            log.info( f"  > frame_length: {self.frame_length}" )
+            log.info( f"  > mems_sensibility: {self.sensibility}" )
+            log.info( f"  > sampling_frequency: {self.sampling_frequency} Hz" )
+            log.info( f"  > system_type: {response['response']['system_type']}" )
+
+        except Exception as e:
+            log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
     def shutdown( self ) -> None:

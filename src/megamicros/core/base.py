@@ -32,6 +32,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import time
 import numpy as np
 import queue
+import h5py
 from enum import Enum
 from threading import Thread, Timer
 
@@ -199,6 +200,22 @@ class MemsArray:
     __h5_compressing: bool = DEFAULT_H5_COMPRESSING
     __h5_compression_algo: str = DEFAULT_H5_COMPRESSION_ALGO
     __h5_gzip_level: int = DEFAULT_H5_GZIP_LEVEL
+
+    # H5 recording properties
+    __h5_current_file: h5py.File = None
+    __h5_dataset_length: int = int( DEFAULT_H5_SEQUENCE_DURATION * __sampling_frequency )
+    __h5_dataset_index: int = 0
+    __h5_dataset_number:int = int( DEFAULT_H5_FILE_DURATION // DEFAULT_H5_SEQUENCE_DURATION )
+    __h5_buffer = None
+    __h5_buffer_length: int = __h5_dataset_length
+    __h5_buffer_index: int = 0
+    __h5_timestamp = 0
+    __h5_date = ''
+    __h5_started: bool = False
+    __h5_stopped: bool = False
+    __h5_system = 0
+    __h5_comment = ''
+
 
 
     @property
@@ -390,7 +407,7 @@ class MemsArray:
         ----------
         args: array
             direct arguments of the run function
-        args: array
+        kwargs: array
             named arguments of the run function
         """
         
@@ -515,7 +532,7 @@ class MemsArray:
             log.info( f" .Requested job: {self.job}" )
         else:
             raise MuException( f"Unknown requested job '{self.job}'" )
-            
+
 
     def setRunningFlag( self, status: bool ) -> None:
         self.__running = status
@@ -958,11 +975,14 @@ class MemsArray:
                     counter = np.array( [[i for i in range(self.frame_length)]] ).T + self.__it * self.frame_length
                     data = np.concatenate( ( counter, ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
                 if self.status is not None and self.status == True:
+                    # add status values
                     status =np.zeros( ( self.frame_length, 1 ) )
                     data = np.concatenate(( data, status ), axis=1 )
 
-                # post them in the internal queue
-                self.signal_q.put( data )
+                # post them in the internal queue as float32 array
+                self.signal_q.put(
+                    self._run_process_data_float32( data )
+                )
 
             log.info( " .Running stopped: normal thread termination" )
 
@@ -1001,8 +1021,289 @@ class MemsArray:
             raise StopIteration
 
 
+    def _run_process_data_float32( self, data: bytes ) -> any :
+        """ Process data in the right format before sending it to the internal queue.
+        Data are also saved in H5 file if requested.
+        
+        Parameter
+        ---------
+        data: np.ndarray
+            input data. Format is two dimensional int32 np.ndarray (frame_length, channels_number) 
+        Return: bytes|np.ndarray
+            output data in the format required by the user
+        """
+
+        # convert to int32 if requested
+        if self.datatype == self.Datatype.bint32 or self.datatype == self.Datatype.int32:
+            data = ( data / self.sensibility ).astype(np.int32)
+
+        # Save in H5 format if requested
+        if self.__h5_recording and self.__h5_started and not self.__h5_pass_through:
+            try:
+                # Reshape incoming data 
+                input_data = data.T
+
+                # If the counter is ON but skipping is ON, it means that incoming data include counter state.
+                # Remove the counter state from data  
+                if self.counter and self.counter_skip:
+                    input_data = input_data[1:,:]
+
+                # convert to int32 if not already done
+                if self.datatype != self.Datatype.bint32 and self.datatype != self.Datatype.int32:
+                    input_data = ( input_data / self.sensibility ).astype(np.int32)
+
+                # save at the time it was at the transfer starting
+                self.__h5_write_mems( input_data, time.time() - self.frame_duration )
+
+            except Exception as e:
+                raise MuException( f"H5 writing process failed: {e}. Stop running." )
 
 
+        # User wants data as binary buffer of int32 -> converts
+        if self.datatype == self.Datatype.bint32:
+            data = np.ndarray.tobytes( data )
+
+        # User wants data as numpy array of int32 -> nothing to do
+        elif self.datatype == self.Datatype.int32:
+            pass
+
+        # User wants data as numpy array of float32 -> nothing to do
+        elif self.datatype == self.Datatype.float32:
+            pass
+
+        # User wants data as binary buffer of float32
+        else:
+            data = np.ndarray.tobytes( data )
+
+
+    def _run_process_data_bint32( self, data: bytes ) -> any :
+        """ Process data in the right format before sending it to the internal queue.
+        Data are also saved in H5 file if requested.
+        
+        Parameter
+        ---------
+        data: bytes
+            input data. Format is int32 binary encoded data as bytes
+        Return: bytes|np.ndarray
+            output data in the format required by the user
+        """
+
+        # Save in H5 format if requested
+        if self.__h5_recording and self.__h5_started and not self.__h5_pass_through:
+            try:
+                # Reshape incoming data                            
+                input_data = np.reshape( 
+                    np.frombuffer( data, dtype=np.int32 ), 
+                    ( self.frame_length, self.channels_number ) 
+                ).T
+
+                # If the counter is ON but skipping is ON, it means that incoming data include counter state.
+                # Remove the counter state from data  
+                if self.counter and self.counter_skip:
+                    input_data = input_data[1:,:]
+
+                # save at the time it was at the transfer starting
+                self.__h5_write_mems( input_data, time.time() - self.frame_duration )
+
+            except Exception as e:
+                raise MuException( f"H5 writing process failed: {e}. Stop running." )
+                
+
+        # User wants data as binary buffer of int32 -> nothing to do
+        if self.datatype == self.Datatype.bint32:
+            pass
+
+        # User wants data as numpy array of int32 
+        elif self.datatype == self.Datatype.int32:
+            # build np array from binary buffer and eshape MEMs signals column wise
+            data = np.reshape( 
+                np.frombuffer( data, dtype=np.int32 ), 
+                ( self.frame_length, self.channels_number ) 
+            )
+
+        # User wants data as numpy array of float32 
+        elif self.datatype == self.Datatype.float32:
+            # build np array from binary buffer and reshape MEMs signals column wise
+            data = np.reshape( 
+                np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility, 
+                ( self.frame_length, self.channels_number ) 
+            )
+
+        # User wants data as binary buffer of float32
+        else:
+            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
+            data = np.ndarray.tobytes( data )
+
+        return data
+
+
+    def h5_start( self ):
+        """ Start H5 recording (init the H5 recording file) """
+
+        if not self.__h5_recording:
+            raise MuException( "Cannot start H5 recording: H5 recording mode is OFF" )
+
+        if self.__h5_started:
+            log.warning( "Cannot start h5 recording: recording is already started. Please stop recording and restart" )
+        else:
+            # Create H5 file and set the started floag ON 
+            self.__h5_init()
+            self.__h5_started = True
+            log.info( " .H5 recording started..." )
+
+
+    def h5_stop( self ):
+        """ Stop H5 recording (close the H5 file) """
+
+        if not self.__h5_recording:
+            raise MuException( "Cannot stop H5 recording: H5 recording mode is OFF" )        
+
+        if not self.__h5_started:
+            log.warning( "Cannot stop h5 recording: recording is not running. Please restart before" )
+        else:
+            self.__h5_close()
+            self.__h5_started = False
+            log.info( " .H5 recording stopped" )
+
+
+    def __h5_init( self ):
+        """
+        Init H5 file system.
+        Organization of H5 file is as follows (fs of 50000Hz with 32 MEMs are values taken as reference):
+
+        * incoming transfer buffers are saved into dataset of ``_h5_dataset_duration`` duration
+        * datasets are stored into h5 files of '_h5_file_duration' duration
+        * counter and status are saved as additional channels if they are set ON in settings 
+
+        These h5 parameters are MegaMicro parameters that have default values (1 second datasets, 15 minutes files,
+        see ``core_base.DEFAULT_H5_SEQUENCE_DURATION`` and ``core_base.DEFAULT_H5_FILE_DURATION`` parameters).
+        With buffers of 512 samples each, it means that a complete file stores about one minute data (22Go at 50000Hz).
+        Files can be fractionned into subfiles to ensure safe network transfer. 
+        Internal organization is performed so as to rebuild bigger file from those subfiles.
+        H5 files are stored in the H5 root directory which default value is the current working directory
+
+        H5 recording is performed at the Megamicros base class level, provided _h5_recording is set to true.
+        When starting, the recording process set the flag '_h5_started' to true, meaning that a H5 file has been created and that it is currently opened.  
+        """
+
+        # Create the H5 buffer and init first H5 file 
+        # Beware that the counter is never saved in the H5 file
+        log.info( ' .H5 init recording process...' )
+        try:
+            self.__h5_dataset_number = int( self.__h5_file_duration // self.__h5_dataset_duration )
+            self.__h5_dataset_length = int( self.__h5_dataset_duration * self.__sampling_frequency )
+            self.__h5_buffer = np.zeros( shape=( self.channels_number -int( self._counter and self._counter_skip ), self.__h5_dataset_length), dtype=np.int32 )
+            self.__h5_buffer_index = 0
+            self.__h5_init_file()
+        except Exception as e:
+            log.fatal( f"H5 init process failed: {e}" )
+            raise
+
+
+    def __h5_close( self ):
+        """
+        Nothing to do but closing the current opened H5 file
+        """
+        self.__h5_current_file.close()
+
+
+    def __h5_init_file( self ):
+        """
+        Define the H5 file name (form is muh5-YYYYMMDD-hhmmss.h5), and open it in create/write mode
+        Set the H5 file internal structure by setting the 'muh5' root group attributes 
+        """
+
+        # get current datetime and process file name creation
+        date = datetime.now()
+        timestamp0 = date.timestamp()
+        date0str = datetime.strftime(date, '%Y-%m-%d %H:%M:%S.%f')
+        abs_path = ospath.abspath( self.__h5_rootdir )
+        filename = ospath.join( abs_path, 'mu5h-' + f"{date.year}{date.month:02}{date.day:02}-{date.hour:02}{date.minute:02}{date.second:02}" + '.h5' )
+
+        # open file in write mode
+        self.__h5_current_file = h5py.File( filename, "w" )
+        
+        # Create the root group muh5 and set its attributes
+        self.__h5_current_group = self.__h5_current_file.create_group( 'muh5' )
+        
+        self.__h5_current_group.attrs['system'] = int( self.__system )
+        self.__h5_current_group.attrs['date'] = self.__h5_date = date0str
+        self.__h5_current_group.attrs['timestamp'] = self.__h5_timestamp = timestamp0
+        self.__h5_current_group.attrs['dataset_number'] = 0
+        self.__h5_current_group.attrs['dataset_duration'] = self.__h5_dataset_duration
+        self.__h5_current_group.attrs['dataset_length'] = self.__h5_dataset_length
+        self.__h5_current_group.attrs['channels_number'] = self.channels_number -int( self.__counter and self.__counter_skip )
+        self.__h5_current_group.attrs['sampling_frequency'] = self.__sampling_frequency
+        self.__h5_current_group.attrs['duration'] = 0
+        self.__h5_current_group.attrs['datatype'] = self.__datatype
+        self.__h5_current_group.attrs['mems'] = np.array( self.__mems )
+        self.__h5_current_group.attrs['mems_number'] = self.mems_number
+        self.__h5_current_group.attrs['analogs'] = np.array( self.__analogs )
+        self.__h5_current_group.attrs['analogs_number'] = self.analogs_number
+        self.__h5_current_group.attrs['counter'] = self.__counter
+        self.__h5_current_group.attrs['counter_skip'] = self.__counter_skip
+        self.__h5_current_group.attrs['comment'] = self.__h5_comment
+        if self.__h5_compressing:
+            self.__h5_current_group.attrs['compression'] = self.__h5_compression_algo
+            if self.__h5_compression_algo == 'gzip':
+                self.__h5_current_group.attrs['compression_gzip_level'] = self.__h5_gzip_level
+        else:
+            self.__h5_current_group.attrs['compression'] = False
+
+        self.__h5_dataset_index = 0
+        log.info( f" .Created new H5 file [{filename}]" )
+
+
+    def __h5_write_mems( self, signal, timestamp ):
+        """
+        Write transfer buffer in local cache and tranfer local to H5 file 
+        ! Beware that this function is not thread safe !
+        ! it should be re-writen or writen outside the acquisition thread ! 
+        """
+
+        if self.__h5_buffer_index + self.__frame_length < self.__h5_dataset_length:
+            """
+            Buffer is not yet completed -> transfer whole signal in buffer
+            """
+            if self.__h5_buffer_index == 0:
+                self.__h5_timestamp = timestamp
+            self.__h5_buffer[:,self.__h5_buffer_index:self.__h5_buffer_index+self.__frame_length] = signal
+            self.__h5_buffer_index += self.__frame_length
+            
+        else:
+            """
+            Not enough remainning place in buffer -> transfer first part of signal and save
+            """
+            transf_samples_number = self.__h5_dataset_length - self.__h5_buffer_index
+            self.__h5_buffer[:, self.__h5_buffer_index:self.__h5_buffer_index+self.__h5_dataset_length] = signal[:,:transf_samples_number]
+
+            """
+            Save dataset. Create new file if dataset max number is reached
+            """
+            if self.__h5_dataset_index >= self.__h5_dataset_number:
+                self.__h5_close()
+                self.__h5_init_file()
+
+            seq_group = self.__h5_current_group.create_group( str( self.__h5_dataset_index ) )
+            seq_group.attrs['ts'] = self.__h5_timestamp
+            if self.__h5_compressing:
+                if self.__h5_compression_algo == 'gzip':
+                    seq_group.create_dataset( 'sig', data=self.__h5_buffer, compression=self.__h5_compression_algo, compression_opts=self.__h5_gzip_level )
+                else:
+                    seq_group.create_dataset( 'sig', data=self.__h5_buffer, compression=self.__h5_compression_algo )
+            else:
+                seq_group.create_dataset( 'sig', data=self.__h5_buffer )
+            self.__h5_dataset_index += 1
+            self.__h5_current_group.attrs['dataset_number'] = self.__h5_dataset_index
+            self.__h5_current_group.attrs['duration'] = self.__h5_dataset_index * self.__h5_dataset_duration
+
+            """ 
+            Transfer remaining part of signal in buffer, reset index and set the new dataset timestamp
+            Marie Elise Mercuis
+            """
+            self.__h5_buffer[:, :self.__frame_length-transf_samples_number] = signal[:,transf_samples_number:self.__frame_length]
+            self.__h5_buffer_index = self.__frame_length-transf_samples_number
+            self.__h5_timestamp = timestamp + transf_samples_number / self.__sampling_frequency
 
 
 
