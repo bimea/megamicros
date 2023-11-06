@@ -568,7 +568,7 @@ class MemsArrayWS( base.MemsArray ):
 
         except MuWSException as e:
             # Known exception:
-            log.info( f" .Listening loop was stopped: {e}" )
+            log.error( f" .Listening loop was stopped: {e}" )
         except Exception as e:
             # Uknnown exception:
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
@@ -695,6 +695,7 @@ class MemsArrayWS( base.MemsArray ):
 
         try:
             super()._set_settings( args=[], kwargs=settings )
+            self._set_settings( [], kwargs=settings )
 
             log.info( f" .New settings:" )
             log.info( f"  > available_mems: {self.available_mems}" )
