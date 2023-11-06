@@ -642,20 +642,21 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
-    def settings( self ) -> json:
+    async def settings( self ) -> json:
+        await self.__settings()
 
-        try:
+#        try:
             # There is current event loop...
-            loop = asyncio.get_running_loop()
-            task = loop.create_task( self.__settings() )
+#            loop = asyncio.get_running_loop()
+#            task = loop.create_task( self.__settings() )
             
             # loop.run_until_complete
             # task.add_done_callback( self.coucou )
             # await asyncio.wait(tasks)
 
-        except RuntimeError:  
+#        except RuntimeError:  
             # There is no current event loop...
-            asyncio.run( self.__settings() )
+#            asyncio.run( self.__settings() )
 
 
     async def __settings( self ) -> json:
