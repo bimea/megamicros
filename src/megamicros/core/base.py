@@ -45,7 +45,7 @@ from megamicros.data import MuAudio
 DEFAULT_FRAME_LENGTH                = 256
 DEFAULT_SAMPLING_FREQUENCY          = 50000
 DEFAULT_QUEUE_SIZE                  = 2			            # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
-DEFAULT_QUEUE_TIMEOUT               = 5                     # The block delay until the queue is considered as empty  
+DEFAULT_QUEUE_TIMEOUT               = 2                     # The block delay until the queue is considered as empty  
 DEFAULT_DATATYPE			        = "int32"	            # Default receiver incoming data type ("int32" or "float32") 
 DEFAULT_SYNC_MODE                   = False                 # Default run mode is asynchronous
 DEFAULT_MEMS_SENSIBILITY		    = 1/((2**(24-1))*10**(-26/20)/3.17)	    # Default MEMs sensibility factor (-26dBFS for 104 dB that is 3.17 Pa)
@@ -665,21 +665,34 @@ class MemsArray:
 
         self.__datatype = datatype
 
-    def setAvailableMems( self, available_mems_number: int ) -> None :
+    def setAvailableMems( self, available_mems: int|tuple|list|np.ndarray ) -> None :
         """Init antenna available MEMs.
         
         This funtion deactivates MEMs if some are already activated 
 
         Parameters
         ----------
-        available_mems_number: int
-            Antenna available MEMs number which will be numbered from 0 to `available_mems_number-1`
+        available_mems: int | list | tuple | np.ndarray
+            Antenna available MEMs number which will be numbered from 0 to `available_mems-1`
+            Or list/tuple of available MEMs
         """
 
-        if available_mems_number == 0:
-            self.__available_mems = []
+        # check available_mems_number parameter type and complete
+        if type( available_mems ) is int:
+            if available_mems == 0:
+                self.__available_mems = []
+            else:
+                self.__available_mems = [i for i in range( available_mems )]
+        elif type( available_mems ) is list:
+            self.__available_mems = available_mems
+        elif type( available_mems ) is tuple:
+            self.__available_mems = list( available_mems )
+        elif type( available_mems ) is np.ndarray:
+            self.__available_mems = list( available_mems )
         else:
-            self.__available_mems = [i for i in range( available_mems_number )]
+            raise MuException( f"Unknown type of parameter `available_mems`: should be list, tuple or np.ndarray" )
+
+        available_mems_number = len( self.__available_mems )
 
         # Deactivate MEMs
         if len( self.__mems ) > 0 and max( self.__mems ) >= available_mems_number:
@@ -781,21 +794,34 @@ class MemsArray:
         log.info( f" .{len(mems)} MEMs were activated among 0 to {len(self.__available_mems)-1} available MEMs" )
 
 
-    def setAvailableAnalogs( self, available_analogs_number: int ) -> None :
+    def setAvailableAnalogs( self, available_analogs: int|list|tuple|np.ndarray ) -> None :
         """Init antenna available analogic channels.
         
         This funtion deactivates channels if some are already activated 
 
         Parameters
         ----------
-        available_analogs_number: int
-            Antenna available analogs number which will be numbered from 0 to `available_analogs_number-1`
+        available_analogs: int | list | tuple | np.ndarray
+            Antenna available analogs number which will be numbered from 0 to `available_analogs-1`
+            Or list/tuple of available analogs
         """
 
-        if available_analogs_number == 0:
-            self.__available_analogs = []
+        # check available_analogs parameter type and complete
+        if type( available_analogs ) is int:
+            if available_analogs == 0:
+                self.__available_analogs = []
+            else:
+                self.__available_analogs = [i for i in range( available_analogs )]
+        elif type( available_analogs ) is list:
+            self.__available_analogs = available_analogs
+        elif type( available_analogs ) is tuple:
+            self.__available_analogs = list( available_analogs )
+        elif type( available_analogs ) is np.ndarray:
+            self.__available_analogs = list( available_analogs )
         else:
-            self.__available_analogs = [i for i in range( available_analogs_number )]
+            raise MuException( f"Unknown type of parameter `available_analogs`: should be list, tuple or np.ndarray" )
+
+        available_analogs_number = len( self.__available_analogs )
 
         # Deactivate analogs
         if len( self.__analogs ) > 0 and max(self.__analogs) >= available_analogs_number:

@@ -90,14 +90,6 @@ def main():
         print( f"Failed: {e}" )
 
 
-    # Perform an antenna settings
-    antenna.settings()
-
-    # Print some results
-    print( f"Available mems: {antenna.available_mems}" )
-    print( f"Available analogs: {antenna.available_analogs}" )
-    print( f"Default sampling freequency: {antenna.sampling_frequency} Hz" )
-
     # Perform an antenna selftest
     antenna.selftest()
 
@@ -115,6 +107,15 @@ def main():
         sampling_frequency=10000,
         job='master', 
     )
+
+    # Perform an antenna settings
+    antenna.settings()
+
+    # Print some results
+    print( f"Available mems: {antenna.available_mems}" )
+    print( f"Available analogs: {antenna.available_analogs}" )
+    print( f"Default sampling freequency: {antenna.sampling_frequency} Hz" )
+
 
     antenna.wait()
 

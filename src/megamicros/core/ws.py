@@ -138,17 +138,12 @@ class MemsArrayWS( base.MemsArray ):
         # check connection to the server
         try:
             loop = asyncio.get_running_loop()
-        except RuntimeError:  
-            # There is no current event loop...
-            loop = None
-
-        if loop and loop.is_running():
-            # One cannot add a second asyncio loop in an existant loop (in a Jupyterlab loop for example)
-            # Next lines create a task with a return callback with no more execution after.
             log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
             task = loop.create_task( self.__try_connect() )
             task.add_done_callback( self.__try_connect_check_error )
-        else:
+
+        except RuntimeError:  
+            # There is no current event loop...
             asyncio.run( self.__try_connect() )
 
             if self.__flag_success == False:
@@ -157,8 +152,6 @@ class MemsArrayWS( base.MemsArray ):
             else:
                 log.info( ' .Starting MegamicrosWS device [ready]' ) 
                 return
-
-        # Next lines are never seen...
 
 
     def _set_settings( self, args, kwargs ) -> None :
@@ -234,8 +227,8 @@ class MemsArrayWS( base.MemsArray ):
 
                 # init object with server response
                 settings = response["response"]
-                self.setAvailableMems( available_mems_number=len( settings['available_mems'] ) )
-                self.setAvailableAnalogs( available_analogs_number=len( settings['available_analogs'] ) )
+                self.setAvailableMems( available_mems=settings['available_mems'] )
+                self.setAvailableAnalogs( available_analogs=settings['available_analogs'] )
                 
         except websockets.exceptions.WebSocketException as e:
             log.error( f"Server connection failed due to websocket failure: {e}" )
@@ -574,17 +567,10 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
 
     
+    async def selftest( self ) -> json:
+        """ Send a selftest request to the remote server """
 
-    def selftest( self ) -> json:
-
-        try:
-            # There is current event loop...
-            loop = asyncio.get_running_loop()
-            task = loop.create_task( self.__selftest() )
-
-        except RuntimeError:  
-            # There is no current event loop...
-            asyncio.run( self.__selftest() )
+        await self.__selftest()
 
 
     async def __selftest( self ) -> json:
@@ -643,20 +629,9 @@ class MemsArrayWS( base.MemsArray ):
 
 
     async def settings( self ) -> json:
+        """ Send a settings request to the remote server """
+
         await self.__settings()
-
-#        try:
-            # There is current event loop...
-#            loop = asyncio.get_running_loop()
-#            task = loop.create_task( self.__settings() )
-            
-            # loop.run_until_complete
-            # task.add_done_callback( self.coucou )
-            # await asyncio.wait(tasks)
-
-#        except RuntimeError:  
-            # There is no current event loop...
-#            asyncio.run( self.__settings() )
 
 
     async def __settings( self ) -> json:
@@ -692,7 +667,6 @@ class MemsArrayWS( base.MemsArray ):
                         'sampling_frequency': response['response']['sampling_frequency'],
                         'system_type': response['response']['system_type'],
                     }
-                    print( f"available_mems={response['response']['available_mems']}")                    
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
@@ -716,22 +690,11 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
-    def shutdown( self ) -> None:
+    async def shutdown( self ) -> None:
+        """ Send a shutdown request to the remote server """
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  
-            # There is no current event loop...
-            loop = None
+        await self.__shutdown()
 
-        if loop and loop.is_running():
-            # One cannot add a second asyncio loop in an existant loop (in a Jupyterlab loop for example)
-            # Next lines create a task with a return callback with no more execution after.
-            log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
-            task = loop.create_task( self.__shutdown() )
-            #task.add_done_callback( self.__try_connect_check_error )
-        else:
-            asyncio.run( self.__shutdown() )
 
     async def __shutdown( self ) -> None :
         """ A special command for halting the remote server """
