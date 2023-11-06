@@ -648,6 +648,10 @@ class MemsArrayWS( base.MemsArray ):
             # There is current event loop...
             loop = asyncio.get_running_loop()
             task = loop.create_task( self.__settings() )
+            
+            # loop.run_until_complete
+            # task.add_done_callback( self.coucou )
+            # await asyncio.wait(tasks)
 
         except RuntimeError:  
             # There is no current event loop...
@@ -686,7 +690,8 @@ class MemsArrayWS( base.MemsArray ):
                         'mems_sensibility': response['response']['mems_sensibility'],
                         'sampling_frequency': response['response']['sampling_frequency'],
                         'system_type': response['response']['system_type'],
-                    }                    
+                    }
+                    print( f"available_mems={response['response']['available_mems']}")                    
 
         except Exception as e:
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
