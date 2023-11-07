@@ -882,7 +882,7 @@ class MemsArray:
 
         # update frame_duration
         if self.sampling_frequency != 0:
-            self.__frame_duration = frame_length / self.sampling_frequency
+            self.__frame_duration = self.__frame_length / self.sampling_frequency
 
 
     def setSamplingFrequency( self, sampling_frequency: float ) -> None :
@@ -900,7 +900,7 @@ class MemsArray:
         self.__sampling_frequency = sampling_frequency
         
         # update frame_duration
-        self.__frame_duration = frame_length / self.sampling_frequency
+        self.__frame_duration = self.frame_length / self.__sampling_frequency
 
 
     def setDuration( self, duration ) -> None :

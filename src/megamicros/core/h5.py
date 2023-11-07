@@ -316,10 +316,10 @@ class MemsArrayH5( base.MemsArray ):
                     meta = dict( zip( group.attrs.keys(), group.attrs.values() ) )
                     print( 'meta = ', meta )
                     self.setSamplingFrequency( meta['sampling_frequency'], force=True  )
-                    self.setAvailableMems( available_mems_number=len( list( meta['mems'] ) ) )
+                    self.setAvailableMems( available_mems=list( meta['mems'] ) )
                     self.setCounter( force=True ) if meta['counter']==True else self.unsetCounter( force=True )
                     self.unsetStatus( force=True )
-                    self.setAvailableAnalogs( available_analogs_number=len( meta['analogs'] ) )
+                    self.setAvailableAnalogs( available_analogs=list( meta['analogs'] ) )
 
                     self.__file_timestamp = meta['timestamp']
                     self.__file_date = meta['date']
@@ -448,12 +448,12 @@ class MemsArrayH5( base.MemsArray ):
                             # Set settings according H5 file meta parameters                            
                             mems = self.mems
                             self.setActiveMems( [] )
-                            self.setAvailableMems( available_mems_number=len( list( meta['mems'] ) ) )
+                            self.setAvailableMems( available_mems = list( meta['mems'] ) )
                             self.setActiveMems( mems )
 
                             analogs = self.analogs
                             self.setActiveAnalogs( [] )
-                            self.setAvailableAnalogs( available_analogs_number=len( meta['analogs'] ) )
+                            self.setAvailableAnalogs( available_analogs = list( meta['analogs'] ) )
                             self.setActiveAnalogs( analogs )
 
                             self.setSamplingFrequency( meta['sampling_frequency'], force=True  )
