@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 # Releases
 
+## 2.0.33
+
+* Corrections in MemsArrayWS for using methods `settings()` and `selftest()` as *async* methods
+
 ## 2.0.32
 
 * before correcting DB_PROCESSING_DELAY_RATE issue, skip the realtime process
