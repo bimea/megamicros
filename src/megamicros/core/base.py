@@ -30,6 +30,8 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
 import time
+from datetime import datetime
+from os import path as ospath
 import numpy as np
 import queue
 import h5py
@@ -176,6 +178,7 @@ class MemsArray:
 
     # Output buffering
     __frame_length: int = DEFAULT_FRAME_LENGTH
+    __frame_duration: float = DEFAULT_FRAME_LENGTH / DEFAULT_SAMPLING_FREQUENCY
     __it: int = 0
     __max_it: int = 0
     __datatype: Datatype = getattr( Datatype, DEFAULT_DATATYPE ) 
@@ -356,7 +359,11 @@ class MemsArray:
     def frame_length( self ) -> int:
         """ Get the output frames length """
         return self.__frame_length
-    
+
+    @property
+    def frame_duration( self ) -> int:
+        return self.__frame_duration
+
     @property
     def sampling_frequency( self ) -> float:
         """ Get the antenna current sampling frequency """
@@ -873,6 +880,10 @@ class MemsArray:
 
         self.__frame_length = frame_length
 
+        # update frame_duration
+        if self.sampling_frequency != 0:
+            self.__frame_duration = frame_length / self.sampling_frequency
+
 
     def setSamplingFrequency( self, sampling_frequency: float ) -> None :
         """ Set the antenna sampling frequency
@@ -883,7 +894,13 @@ class MemsArray:
             The sampling frequency (default is given by DEFAULT_SAMPLING_FREQUENCY)
         """
 
+        if sampling_frequency==0:
+            raise Exception( f"Cannot set sampling frequency to 0" )
+
         self.__sampling_frequency = sampling_frequency
+        
+        # update frame_duration
+        self.__frame_duration = frame_length / self.sampling_frequency
 
 
     def setDuration( self, duration ) -> None :
@@ -1007,7 +1024,10 @@ class MemsArray:
 
                 # post them in the internal queue as float32 array
                 self.signal_q.put(
-                    self._run_process_data_float32( data )
+                    self._run_process_data_float32( 
+                        data, 
+                        h5_recording = self.h5_recording
+                    )
                 )
 
             log.info( " .Running stopped: normal thread termination" )
@@ -1047,7 +1067,7 @@ class MemsArray:
             raise StopIteration
 
 
-    def _run_process_data_float32( self, data: bytes ) -> any :
+    def _run_process_data_float32( self, data: bytes, h5_recording: bool=False ) -> any :
         """ Process data in the right format before sending it to the internal queue.
         Data are also saved in H5 file if requested.
         
@@ -1064,7 +1084,7 @@ class MemsArray:
             data = ( data / self.sensibility ).astype(np.int32)
 
         # Save in H5 format if requested
-        if self.__h5_recording and self.__h5_started and not self.__h5_pass_through:
+        if h5_recording and self.__h5_started :
             try:
                 # Reshape incoming data 
                 input_data = data.T
@@ -1102,7 +1122,7 @@ class MemsArray:
             data = np.ndarray.tobytes( data )
 
 
-    def _run_process_data_bint32( self, data: bytes ) -> any :
+    def _run_process_data_bint32( self, data: bytes, h5_recording: bool=False ) -> any :
         """ Process data in the right format before sending it to the internal queue.
         Data are also saved in H5 file if requested.
         
@@ -1115,7 +1135,7 @@ class MemsArray:
         """
 
         # Save in H5 format if requested
-        if self.__h5_recording and self.__h5_started and not self.__h5_pass_through:
+        if h5_recording and self.__h5_started :
             try:
                 # Reshape incoming data                            
                 input_data = np.reshape( 
@@ -1166,7 +1186,7 @@ class MemsArray:
     def h5_start( self ):
         """ Start H5 recording (init the H5 recording file) """
 
-        if not self.__h5_recording:
+        if not self.h5_recording:
             raise MuException( "Cannot start H5 recording: H5 recording mode is OFF" )
 
         if self.__h5_started:
@@ -1181,7 +1201,7 @@ class MemsArray:
     def h5_stop( self ):
         """ Stop H5 recording (close the H5 file) """
 
-        if not self.__h5_recording:
+        if not self.h5_recording:
             raise MuException( "Cannot stop H5 recording: H5 recording mode is OFF" )        
 
         if not self.__h5_started:
@@ -1216,9 +1236,9 @@ class MemsArray:
         # Beware that the counter is never saved in the H5 file
         log.info( ' .H5 init recording process...' )
         try:
-            self.__h5_dataset_number = int( self.__h5_file_duration // self.__h5_dataset_duration )
-            self.__h5_dataset_length = int( self.__h5_dataset_duration * self.__sampling_frequency )
-            self.__h5_buffer = np.zeros( shape=( self.channels_number -int( self._counter and self._counter_skip ), self.__h5_dataset_length), dtype=np.int32 )
+            self.__h5_dataset_number = int( self.h5_file_duration // self.h5_dataset_duration )
+            self.__h5_dataset_length = int( self.h5_dataset_duration * self.sampling_frequency )
+            self.__h5_buffer = np.zeros( shape=( self.channels_number -int( self.counter and self.counter_skip ), self.__h5_dataset_length), dtype=np.int32 )
             self.__h5_buffer_index = 0
             self.__h5_init_file()
         except Exception as e:
@@ -1243,7 +1263,7 @@ class MemsArray:
         date = datetime.now()
         timestamp0 = date.timestamp()
         date0str = datetime.strftime(date, '%Y-%m-%d %H:%M:%S.%f')
-        abs_path = ospath.abspath( self.__h5_rootdir )
+        abs_path = ospath.abspath( self.h5_rootdir )
         filename = ospath.join( abs_path, 'mu5h-' + f"{date.year}{date.month:02}{date.day:02}-{date.hour:02}{date.minute:02}{date.second:02}" + '.h5' )
 
         # open file in write mode
@@ -1252,27 +1272,28 @@ class MemsArray:
         # Create the root group muh5 and set its attributes
         self.__h5_current_group = self.__h5_current_file.create_group( 'muh5' )
         
-        self.__h5_current_group.attrs['system'] = int( self.__system )
+        #self.__h5_current_group.attrs['system'] = int( self.__system )
+        self.__h5_current_group.attrs['system'] = 0
         self.__h5_current_group.attrs['date'] = self.__h5_date = date0str
         self.__h5_current_group.attrs['timestamp'] = self.__h5_timestamp = timestamp0
         self.__h5_current_group.attrs['dataset_number'] = 0
-        self.__h5_current_group.attrs['dataset_duration'] = self.__h5_dataset_duration
+        self.__h5_current_group.attrs['dataset_duration'] = self.h5_dataset_duration
         self.__h5_current_group.attrs['dataset_length'] = self.__h5_dataset_length
-        self.__h5_current_group.attrs['channels_number'] = self.channels_number -int( self.__counter and self.__counter_skip )
-        self.__h5_current_group.attrs['sampling_frequency'] = self.__sampling_frequency
+        self.__h5_current_group.attrs['channels_number'] = self.channels_number - int( self.counter and self.counter_skip )
+        self.__h5_current_group.attrs['sampling_frequency'] = self.sampling_frequency
         self.__h5_current_group.attrs['duration'] = 0
-        self.__h5_current_group.attrs['datatype'] = self.__datatype
-        self.__h5_current_group.attrs['mems'] = np.array( self.__mems )
+        self.__h5_current_group.attrs['datatype'] = str( self.datatype )
+        self.__h5_current_group.attrs['mems'] = np.array( self.mems )
         self.__h5_current_group.attrs['mems_number'] = self.mems_number
-        self.__h5_current_group.attrs['analogs'] = np.array( self.__analogs )
+        self.__h5_current_group.attrs['analogs'] = np.array( self.analogs )
         self.__h5_current_group.attrs['analogs_number'] = self.analogs_number
-        self.__h5_current_group.attrs['counter'] = self.__counter
-        self.__h5_current_group.attrs['counter_skip'] = self.__counter_skip
+        self.__h5_current_group.attrs['counter'] = self.counter
+        self.__h5_current_group.attrs['counter_skip'] = self.counter_skip
         self.__h5_current_group.attrs['comment'] = self.__h5_comment
-        if self.__h5_compressing:
-            self.__h5_current_group.attrs['compression'] = self.__h5_compression_algo
-            if self.__h5_compression_algo == 'gzip':
-                self.__h5_current_group.attrs['compression_gzip_level'] = self.__h5_gzip_level
+        if self.h5_compressing:
+            self.__h5_current_group.attrs['compression'] = self.h5_compression_algo
+            if self.h5_compression_algo == 'gzip':
+                self.__h5_current_group.attrs['compression_gzip_level'] = self.h5_gzip_level
         else:
             self.__h5_current_group.attrs['compression'] = False
 
@@ -1287,7 +1308,7 @@ class MemsArray:
         ! it should be re-writen or writen outside the acquisition thread ! 
         """
 
-        if self.__h5_buffer_index + self.__frame_length < self.__h5_dataset_length:
+        if self.__h5_buffer_index + self.frame_length < self.__h5_dataset_length:
             """
             Buffer is not yet completed -> transfer whole signal in buffer
             """

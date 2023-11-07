@@ -545,7 +545,10 @@ class MemsArrayWS( base.MemsArray ):
                         # If the user accepts the loss of data, it is possible to limit the size of the queue.
                         # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
                         self.signal_q.put(
-                            self._run_process_data_bint32( signal_buffer )
+                            self._run_process_data_bint32( 
+                                signal_buffer,
+                                h5_recording = self.h5_recording and not self.__h5_pass_through
+                            )
                         )
 
                         # Transfers counting
