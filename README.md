@@ -83,9 +83,11 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 # Releases
 
-## 2.0.33
+## 2.0.34
 
 * Corrections in MemsArrayWS for using methods `settings()` and `selftest()` as *async* methods
+
+## 2.0.33
 
 ## 2.0.32
 
