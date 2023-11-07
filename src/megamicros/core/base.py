@@ -1086,7 +1086,7 @@ class MemsArray:
         # Save in H5 format if requested
         if h5_recording and self.__h5_started :
             try:
-                # Reshape incoming data 
+                # Transpose to shape (channels_number, samples_number)
                 input_data = data.T
 
                 # If the counter is ON but skipping is ON, it means that incoming data include counter state.
@@ -1137,7 +1137,10 @@ class MemsArray:
         # Save in H5 format if requested
         if h5_recording and self.__h5_started :
             try:
-                # Reshape incoming data                            
+                # Reshape incoming data using C-like index order
+                # Read/write the elements with the last axis index changing fastest (microphones),
+                # back to the first axis index changing slowest (samples) 
+                                    
                 input_data = np.reshape( 
                     np.frombuffer( data, dtype=np.int32 ), 
                     ( self.frame_length, self.channels_number ) 
@@ -1256,7 +1259,8 @@ class MemsArray:
     def __h5_init_file( self ):
         """
         Define the H5 file name (form is muh5-YYYYMMDD-hhmmss.h5), and open it in create/write mode
-        Set the H5 file internal structure by setting the 'muh5' root group attributes 
+        Set the H5 file internal structure by setting the 'muh5' root group attributes
+        Dataset are stored as 2-dimensional np.ndarray with shape (mems_number, samples_number)
         """
 
         # get current datetime and process file name creation
@@ -1306,6 +1310,13 @@ class MemsArray:
         Write transfer buffer in local cache and tranfer local to H5 file 
         ! Beware that this function is not thread safe !
         ! it should be re-writen or writen outside the acquisition thread ! 
+
+        Parameters
+        ----------
+        signal: np.ndarray
+            2 dimensional array with microphones as line (0 axis) and samples as columns (1 axis) 
+        timestamp: 
+            Signal first sample timestamp
         """
 
         if self.__h5_buffer_index + self.frame_length < self.__h5_dataset_length:
