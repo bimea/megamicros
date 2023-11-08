@@ -28,6 +28,7 @@ Documentation
 -------------
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
+# comment
 
 import os
 from time import sleep, time
