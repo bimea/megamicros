@@ -300,6 +300,46 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f"Halt failed: {e}" )
 
 
+    def halt_master( self ) -> None :
+
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__halt_master() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__halt_master() )
+
+
+    async def __halt_master( self ) -> None :
+        """ Send a halt command to stop the remote current master running process
+        """
+
+        log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
+        try:
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                log.info( " .Connected" )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed: {error}" )        
+
+                # send halt command to server:
+                log.info( f" .Send halt master command..." )  
+                await websocket.send( json.dumps( {'request': 'halt_master'} ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Halt_master command failed on remote server: {error}" )
+                else:
+                    log.info( f" .Halt_master command completed" )  
+
+        except Exception as e:
+            log.error( f"Halt_master failed: {e}" )
+
+
+
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
 
@@ -311,6 +351,24 @@ class MemsArrayWS( base.MemsArray ):
         # Set all settings
         # Run does not call the super().run() method so that we have to handle all settings here      
         try:
+            # listen job cannot set some settings
+            if 'job' in kwargs and kwargs['job'] == 'listen':
+                if 'available_mems_number' in kwargs:
+                    log.warning( f" .'available_mems_number' cannot be set for listen job. Removing it" )
+                    kwargs.pop( 'available_mems_number')
+                if 'available_analogs_number' in kwargs:
+                    log.warning( f" .'available_analogs_number' cannot be set for listen job. Removing it" )
+                    kwargs.pop( 'available_analogs_number')
+                if 'sampling_frequency' in kwargs:
+                    log.warning( f" .'sampling_frequency' cannot be set for listen job. Removing it" )
+                    kwargs.pop( 'sampling_frequency')
+                if 'datatype' in kwargs:
+                    log.warning( f" .'datatype' cannot be set for listen job. Removing it" )
+                    kwargs.pop( 'datatype')
+                if 'frame_length' in kwargs:
+                    log.warning( f" .'frame_length' cannot be set for listen job. Removing it" )
+                    kwargs.pop( 'frame_length')
+
             super()._set_settings( [], kwargs=kwargs )
             self._set_settings( [], kwargs=kwargs )
 
