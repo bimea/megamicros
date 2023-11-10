@@ -421,7 +421,7 @@ class MemsArray:
         if len( args ) > 0:
             print( f"args={args}" )
             raise MuException( "Direct arguments are not accepted for MemsArray objects" )
-        
+
         try:
             log.info( f" .Install MemsArray settings" )
 

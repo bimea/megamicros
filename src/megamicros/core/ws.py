@@ -523,8 +523,12 @@ class MemsArrayWS( base.MemsArray ):
                     #set settings comming freom mserver aster if any
                     if "message" in response and "settings" in response["message"]:
                         log.info( " .Update settings comming from server master..." )
-                        super()._set_settings( args=[], kwargs=response["message"]["settings"] )
-                        self._set_settings( [], kwargs=response["message"]["settings"] )
+                        return_settings = response["message"]["settings"]
+                        super()._set_settings( args=[], kwargs=return_settings )
+                        self._set_settings( [], kwargs=return_settings )
+                        log.info( " .Settings updated [ok]" )
+                        log.info( f"  > sampling fequency: {self.sampling_frequency}" )
+                        log.info( f"  > frame length: {self.frame_length}" )
 
                     # Start server listening 
                     await self.__remote_run( websocket )
