@@ -519,6 +519,13 @@ class MemsArrayWS( base.MemsArray ):
                 
                 elif self.job == 'listen':
                     log.info( " .Listen run command accepted by server" )
+                    
+                    #set settings comming freom mserver aster if any
+                    if "message" in response and "settings" in response["message"]:
+                        log.info( " .Update settings comming from server master..." )
+                        super()._set_settings( args=[], kwargs=response["message"]["settings"] )
+                        self._set_settings( [], kwargs=response["message"]["settings"] )
+
                     # Start server listening 
                     await self.__remote_run( websocket )
 
