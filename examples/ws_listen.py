@@ -94,7 +94,7 @@ def main():
             duration=2,
             buffer_length=512,
             signal_q_size = 0,
-            job='slave'
+            job='listen'
         )
 
         # Init a np.ndarray

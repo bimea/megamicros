@@ -25,7 +25,7 @@
 """
 apps/version.py
 
-Lauc-nch the Aiboard application
+Launch the Aiboard application
 
 @author: bruno.gas@sorbonne-universite.fr
 

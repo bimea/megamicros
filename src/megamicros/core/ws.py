@@ -373,7 +373,7 @@ class MemsArrayWS( base.MemsArray ):
             self._set_settings( [], kwargs=kwargs )
 
         except Exception as e:
-            raise MuWSException( f"Cannot run: settings laoding failed ({type(e).__name__}): {e}" )
+            raise MuWSException( f"Cannot run: settings loading failed ({type(e).__name__}): {e}" )
             
         # Check settings values
         try:
@@ -420,6 +420,15 @@ class MemsArrayWS( base.MemsArray ):
         # Start run thread
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
+
+        #try:
+        #    # There is current event loop...
+        #    loop = asyncio.get_running_loop()
+        #    task = loop.create_task( self.__run() )
+        #
+        #except RuntimeError:  
+        #    # There is no current event loop...
+        #    asyncio.run( self.__run() )
 
 
     def __run_thread( self ) -> None :
@@ -639,10 +648,17 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
 
     
-    async def selftest( self ) -> json:
+    def selftest( self ) -> json:
         """ Send a selftest request to the remote server """
 
-        await self.__selftest()
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__selftest() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__selftest() )
 
 
     async def __selftest( self ) -> json:
@@ -700,14 +716,41 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
-    async def settings( self ) -> json:
+    def settings( self ) -> json:
         """ Send a settings request to the remote server """
 
-        await self.__settings()
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__settings() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__settings() )
 
 
-    async def __settings( self ) -> json:
-       
+    async def async_settings( self, future: asyncio.Future ):
+        """ Ensure public access to the async private method __settings() 
+        
+        Provided for users who want to get settings from their own asyncio loop  
+        
+        Parameters
+        ----------
+        future: asyncio.Future
+            Future coroutine provided by client for getting results of the asynchronous call
+        """ 
+        await self.__settings( future )
+
+
+    async def __settings( self, future = None ) -> json:    
+        """ Connect to the server for getting settings 
+        
+        Parameters
+        ----------
+        future: asyncio.Future
+            Result of the asynchronous operation
+        """   
+
         log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
         try:
             async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
@@ -758,14 +801,24 @@ class MemsArrayWS( base.MemsArray ):
             log.info( f"  > sampling_frequency: {self.sampling_frequency} Hz" )
             log.info( f"  > system_type: {response['response']['system_type']}" )
 
+            if future is not None:
+                future.set_result( settings )
+
         except Exception as e:
             log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
-    async def shutdown( self ) -> None:
+    def shutdown( self ) -> None:
         """ Send a shutdown request to the remote server """
 
-        await self.__shutdown()
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__shutdown() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__shutdown() )
 
 
     async def __shutdown( self ) -> None :

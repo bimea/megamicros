@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 # Releases
 
+## 2.0.35
+
+* Fix bug in H5 files reading
+
 ## 2.0.34
 
 * Corrections in MemsArrayWS for using methods `settings()` and `selftest()` as *async* methods
@@ -91,7 +95,7 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## 2.0.32
 
-* before correcting DB_PROCESSING_DELAY_RATE issue, skip the realtime process
+* Before correcting DB_PROCESSING_DELAY_RATE issue, skip the realtime process
 
 ## 2.0.31
 

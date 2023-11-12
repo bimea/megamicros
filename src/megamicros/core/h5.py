@@ -315,7 +315,6 @@ class MemsArrayH5( base.MemsArray ):
                 if 'muh5' in file:
                     group = file['muh5']
                     meta = dict( zip( group.attrs.keys(), group.attrs.values() ) )
-                    print( 'meta = ', meta )
                     self.setSamplingFrequency( meta['sampling_frequency'], force=True  )
                     self.setAvailableMems( available_mems=list( meta['mems'] ) )
                     self.setCounter( force=True ) if meta['counter']==True else self.unsetCounter( force=True )
@@ -573,10 +572,12 @@ class MemsArrayH5( base.MemsArray ):
 
                                 else:
                                     # Not enough data in current dataset: open next dataset
-                                    if dataset_index < self.__dataset_length:
+                                    if dataset_index < self.__dataset_number:
+
                                         # Next dataset exists: get last data of current dataset, open next and complete buffer
                                         current_dataset_last_samples_number = self.__dataset_length - dataset_index_ptr
                                         buffer = transfer_buffer[:,dataset_index_ptr:dataset_index_ptr+self.__dataset_length]
+                                        log.info( f"  > Dataset [{'muh5/' + str( dataset_index ) + '/sig'}]" )
                                         dataset = self.__current_file['muh5/' + str( dataset_index ) + '/sig']
 
                                         # Fill buffer with next dataset

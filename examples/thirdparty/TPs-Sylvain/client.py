@@ -1,23 +1,21 @@
 # Jupyter Notebook interface for the mu32 acquisition system
 # Allows to read data from a remote mu32 system, or to play recorded h5 files
 #
-# Juillet 2022, S. Argentieri
+# Juillet 2022, S. Argentieri, initial version
+# Novembre 2023, S. Argentieri, update for new server version
 
+import asyncio
 import ipywidgets as widgets                 # For gui widgets in the notebook
 import matplotlib.pyplot as plt              # For plotting data
 from ipyfilechooser import FileChooser       # gui for selecting h5 files
-#from config_loader import load_config       # yaml configuration file
-#from mu32.core import logging, Mu32ws, log  # mu32 interface
-#from mu32.core_h5 import MuH5               # specific mu32 interface for h5 file
-from megamicros.log import log
 from megamicros.core.ws import MemsArrayWS   # mu32 interface
 from megamicros.core.h5 import MemsArrayH5   # specific mu32 interface for h5 file
 import queue                                 # needed for handling exceptions
-#import paramiko as paramiko
+import paramiko as paramiko
 import time
 import numpy as np
 
-import asyncio
+from megamicros.log import log
 
 log.setLevel( "INFO" )
 
@@ -134,14 +132,6 @@ class gui_server:
             description='Status:',
         )
 
-        # Button widget for stopping the server
-        # self.button_stop_srv = widgets.Button(
-        #     description='Stop server',
-        #     disabled=False
-        # )
-        # self.button_stop_srv.on_click(sos_fct)
-
-
         # Button widget for starting the server
         self.button_start_srv = widgets.Button(
             description='ADMIN: Start server',
@@ -150,20 +140,12 @@ class gui_server:
         self.button_start_srv.on_click(sos_fct)
 
 
-        # Button widget for stopping the controller
-        # self.button_stop_ctrl = widgets.Button(
-        #     description='Stop ctrl',
-        #     disabled=False
-        # )
-        # self.button_stop_ctrl.on_click(sos_fct)
-
-
-        # Button widget for starting the controller
-        self.button_start_ctrl = widgets.Button(
-            description='ADMIN: Start ctrl',
+        # Button widget for stopping the server
+        self.button_stop_srv = widgets.Button(
+            description='ADMIN: Stop server',
             disabled=False
         )
-        self.button_start_ctrl.on_click(sos_fct)
+        self.button_stop_srv.on_click(sos_fct)
 
         self.passwd = widgets.Password(
             value='',
@@ -176,7 +158,7 @@ class gui_server:
         self.ligne2 = widgets.HBox([self.button_startacq, self.button_stopacq,
                                     self.button_startrec, self.button_stoprec,self.button_connect, self.button_sos])
         self.ligne3 = widgets.HBox([self.fs, self.blocksize, self.status])
-        self.ligne4 = widgets.HBox([self.button_start_srv, self.button_start_ctrl, self.passwd, self.status_sos])
+        self.ligne4 = widgets.HBox([self.button_start_srv, self.button_stop_srv, self.passwd, self.status_sos])
         # self.ligne4 = widgets.HBox([self.button_stop_srv, self.button_start_srv, self.button_stop_ctrl, 
         #                             self.button_start_ctrl, self.passwd])
         self.ligne4.layout.visibility = 'hidden'
@@ -207,7 +189,7 @@ class gui_server:
         self.status.value = 'Ready to start acquisition.'
 
     # def display_parameters(self, fs, blocksize):
-    #     """Update the gui when when reading acquisition parameters
+    #     """Update the gui when reading acquisition parameters
     #     """
     #     self.fs.value = str(fs)
     #     self.blocksize.value = str(blocksize)
@@ -232,11 +214,9 @@ class gui_server:
         self.button_stoprec.disabled = True
         self.status.value = 'Acquisition stopped.'
 
-    def start_rec(self, fs, blocksize):
+    def start_rec(self):
         """Update the gui when starting the recording
         """
-        self.fs.value = str(fs)
-        self.blocksize.value = str(blocksize)
         self.button_startacq.disabled = True
         self.button_stopacq.disabled = True
         self.button_startrec.disabled = True
@@ -262,29 +242,28 @@ class gui_server:
         #self.button_stopacq.disabled = True
         self.button_startrec.disabled = True
         #self.button_stoprec.disabled = True
+        self.button_start_srv.disabled = True
+        self.button_stop_srv.disabled = True
         self.status.value = 'SOS mode. For admin only.'
         self.ligne4.layout.visibility = 'visible'
 
         # Get server/controller status
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.ip.value, username='sylar', password='toto@12!', timeout=5)
-        stdin_serv, stdout_serv, stderr_serv = client.exec_command('sudo systemctl is-active mu32-server.service')
-        stdin_ctrl, stdout_ctrl, stderr_ctrl = client.exec_command('sudo systemctl is-active mu32-controller.service')
+        client.connect(self.ip.value, username='root', password='toto@12!', timeout=5)
+        stdin_serv, stdout_serv, stderr_serv = client.exec_command('systemctl is-active megamicros_server.service')
         
         srv = stdout_serv.readlines()
-        if srv==['activating\n']:
+        if srv==['active\n']:
             srv_state = 'OK'
+            self.button_start_srv.disabled = True
+            self.button_stop_srv.disabled = False
         else:
-            serv_state = 'ERROR'
+            srv_state = 'ERROR'
+            self.button_start_srv.disabled = False
+            self.button_stop_srv.disabled = True
 
-        ctrl = stdout_ctrl.readlines()
-        if ctrl==['activating\n']:
-            ctrl_state = 'OK'
-        else:
-            ctrl_state = 'ERROR'            
-
-        self.status_sos.value = 'Server = ' + srv_state + ' / Controller = ' + ctrl_state
+        self.status_sos.value = 'Server = ' + srv_state #+ ' / Controller = ' + ctrl_state
         client.close()
 
 class gui_play:
@@ -395,6 +374,9 @@ class array():
     """ array class, interfacing a Jupyter Notebook with a Mu32 array
     """
 
+    fs = 0
+    blocksize = 0
+
     def __init__(self, type):
         """Constructor of the array class.
 
@@ -421,7 +403,28 @@ class array():
         # Actually display the corresponding gui in the Jupyter Notebook
         display(self.gui.content)
 
-    async def validateAcq_fct(self, button):
+
+    async def validateAcq_fct_settings( self ):
+        """ Get settings from server and display the corresponding options in the gui """
+
+        # Create Future for getting asynchronous results  
+        settings_future = asyncio.Future()
+
+        # Get settings using the async mu32 entry and providing the future coroutine
+        task = asyncio.create_task( self.mu32.async_settings( settings_future ) )
+        settings = await settings_future
+        
+        # set local attributes
+        self.fs = settings["sampling_frequency"]
+        self.blocksize = settings["frame_length"]
+        self.mems_nb=len(self.mems_list)
+        self.interspace = 0.06
+
+        # Activate/Deactivate the corresponding widgets in the gui
+        self.gui.ready_to_start(self.fs, self.blocksize)
+
+
+    def validateAcq_fct(self, button):
         """Initialize the object allowing to connect to the remote server, and display the 
            corresponding options in the gui.
 
@@ -430,7 +433,6 @@ class array():
         """
 
         # Create the mu32 object from the IP/PORT of the remote server
-        #self.mu32 = Mu32ws(remote_ip=self.gui.ip.value, remote_port=self.gui.port.value)
         self.mu32 = MemsArrayWS(self.gui.ip.value, port=self.gui.port.value )
 
         if self.gui.array_nb.value == 'F0':
@@ -446,26 +448,24 @@ class array():
             return
 
         # Get remote settings
-        #loop = asyncio.get_running_loop()
-        #log.info( ' .Async event loop already running. Adding coroutine to the event loop...' )
-        #task = loop.create_task( self.mu32.settings() )
-        #asyncio.run( self.mu32.settings() )
-        await self.mu32.settings()
+        #self.mu32.settings()
 
+        #### mu32.setting is an async task whose result is not available in jupyer main exec loop
+        #### so, for now, hardecode the sampling freq and blocksize as set by the master
+        #### on the server.
+        #### Parameters are set in /root/megamicros-server/build/src/mbs-server.json on the
+        #### server. The same values must be used here.
 
         # Populate attributes with the acquisition parameters
-        self.fs=self.mu32.sampling_frequency
         #self.fs = 20000
-        self.blocksize=self.mu32.frame_length
         #self.blocksize=1024
-        self.mems_nb=len(self.mems_list)
-        self.interspace = 0.06
 
-        # Display acquisition settings
-        # self.gui.display_parameters(self.mu32.sampling_frequency, self.mu32.frame_length)
+        # Start async task to get settings from the server
+        # All local attribute settings should be done in that task otherwise results would not be available before the end of the current cell execution
+        task = asyncio.create_task( self.validateAcq_fct_settings() )
 
-        # Activate/Deactivate the corresponding widgets in the gui
-        self.gui.ready_to_start(self.fs, self.blocksize)
+        # !! Nothing more to do after this point !!
+
 
     def startacq_fct(self, button):
         """Launch the acquisition on the remote server, and display the corresponding gui options.
@@ -479,22 +479,13 @@ class array():
                 mems = self.mems_list,
                 duration=0,
                 signal_q_size = 1,
-                frame_length=self.blocksize,
                 job='listen')
-
-            # self.mu32.listen(
-            #     mems=self.mems_list,
-            #     duration=0,
-            #     counter=False,
-            #     queue_size=1,
-            #     counter_skip=False,
-            #     h5_recording=False)
 
             # Activate/Deactivate the corresponding widgets in the gui
             self.gui.start_acq()
 
         except Exception as e:
-            self.gui.update_status('Aborting: ' + e)
+            self.gui.update_status('Aborting: ' + str( e ))
 
     def stopacq_fct(self, button):
         """Stop the acquisition on the remote server and display the corresponding gui options.
@@ -514,35 +505,23 @@ class array():
             button (ipywidgets button object): button used in the gui to launch this function.
         """
         try:
-            # Launch the acquisition from the remote server
             
-            antenna.run(
+            # Activate/Deactivate the corresponding widgets in the gui
+            self.gui.start_rec()
+
+            # Launch the acquisition from the remote server
+            self.mu32.run(
                 mems = self.mems_list,
                 duration=0,
                 h5_recording=True,          # H5 recording ON
                 h5_pass_through=False,      # perform F5 recording locally
                 h5_rootdir='./',            # directory where to save file
                 h5_compressing=False,       # Use compression or not
-                background_mode=True,
                 signal_q_size = 0,
+                job='listen'
             )
-
-            # self.mu32.listen(
-            #     mems=self.mems_list,
-            #     duration=0,
-            #     counter=False,
-            #     counter_skip=False,
-            #     h5_recording=True,
-            #     h5_pass_through=False)
-            # We need to sleep to recover the correct parameters after a wile ...
-            # time.sleep(1)
-            # # Activate/Deactivate the corresponding widgets in the gui
-            # self.gui.start_rec(self.mu32.sampling_frequency, self.mu32.buffer_length)
-            # # Populate attributes with the acquisition parameters
-            # self.fs=self.mu32.sampling_frequency
-            # self.blocksize=self.mu32.buffer_length
-            # self.mems_nb=len(self.mems_list)
-            # self.interspace = 0.06            
+            self.mu32.h5_start()
+            # self.mu32.wait()
 
         except Exception as e:
             self.gui.update_status('Aborting: ' + e)
@@ -554,7 +533,8 @@ class array():
             button (ipywidgets button object): button used in the gui to launch this function.
         """
         # Stop recording
-        self.mu32.halt() # ??????????
+        self.mu32.h5_stop()
+        self.mu32.halt()
         # Activate/Deactivate the corresponding widgets in the gui
         self.gui.stop_rec()
 
@@ -585,16 +565,13 @@ class array():
         # Update parameters attributes in the object from the values in the file gui object
         self.filename = file.selected
         # Intialize the mu32 object with the data in the file
-        #self.mu32 = MuH5(file.selected)
         self.mu32 = MemsArrayH5(filename=file.selected)
         # Update others parameters
-        # print(self.mu32.parameters[file.selected])
         self.fs = self.mu32.sampling_frequency
-        self.file_duration = self.mu32.duration
+        self.file_duration = self.mu32.file_duration
         self.interspace = 0.06
         # Update the gui with the parameters readed in the file
-        self.gui.update_data_info(
-            str(self.fs), str(self.file_duration))
+        self.gui.update_data_info(str(self.fs), str(self.file_duration))
 
     def play_fct(self, button):
         """Play the H5 file, sets the corresponding attributes and change the
@@ -606,23 +583,17 @@ class array():
 
         self.blocksize=int(self.gui.blocksize.value)
         self.mems_nb=len(self.mu32.mems)
-        self.gui.start_read()
         # Run antenna
-        antenna.run(
-            mems = self.mu32.mems,
+        self.mu32.run(
+            mems = self.mu32.available_mems,
             duration=self.file_duration,
             frame_length=self.blocksize,
-            #counter_skip = True,
+            counter_skip = True,
+            signal_q_size = 0,
             datatype='int32'
         )
-        # self.mu32.run(  # Ne lit qu'une fois ;(
-        #     mems=self.mu32.parameters[self.filename]['mems'],
-        #     duration=self.file_duration,
-        #     sampling_frequency=self.fs,
-        #     buffer_length=self.blocksize,
-        #     queue_size=1,
-        #     h5_loop=True
-        # )
+
+        self.gui.start_read()
 
     def stopplay_fct(self, button):
         """NOT NEEDED ANYMORE ????
@@ -645,15 +616,15 @@ class array():
         client = paramiko.SSHClient()
         #client.load_system_host_keys() 
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.gui.ip.value, username='sylar', password=self.gui.passwd.value, timeout=5)
-        if button.description=='Stop server':
-            command = 'sudo systemctl stop mu32-server'
-        elif button.description=='Start server':
-            command = 'sudo systemctl start mu32-server'
-        elif button.description=='Stop ctrl':
-            command = 'sudo systemctl stop mu32-controller'
-        elif button.description=='Start ctrl':
-            command = 'sudo systemctl start mu32-controller'
+        client.connect(self.gui.ip.value, username='root', password=self.gui.passwd.value, timeout=5)
+        if button.description=='ADMIN: Stop server':
+            command = 'systemctl stop megamicros_server'
+            self.gui.button_start_srv.disabled = False
+            self.gui.button_stop_srv.disabled = True
+        elif button.description=='ADMIN: Start server':
+            command = 'systemctl start megamicros_server'
+            self.gui.button_start_srv.disabled = True
+            self.gui.button_stop_srv.disabled = False
         else:
             command = 'ls'
             print('Unkown button...')
