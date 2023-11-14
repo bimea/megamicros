@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 # Releases
 
+## 2.0.36
+
+* Some updates
+
 ## 2.0.35
 
 * Fix bug in H5 files reading

@@ -187,8 +187,8 @@ class MemsArrayWS( base.MemsArray ):
 
         super()._check_settings()
 
-        if self.h5_recording and self.h5_pass_through and not self.background_mode:
-            raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
+        #if self.h5_recording and self.h5_pass_through and not self.background_mode:
+        #    raise MuWSException( f"Remote H5 recording is only available on background execution mode. Please set the background mode on" )
 
 
 
