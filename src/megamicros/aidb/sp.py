@@ -487,6 +487,107 @@ def extract_range_from_muh5file( filename: str, start: float, stop: float, chann
         except Exception as e:
             raise Exception( f"Error while extracting signal from MuH5 file: {e}" )
 
+######
+######
+# TO DO >>>>>>>>>>>>>>>>>>>>>
+def extract_samples_from_muh5file( filename: str, start: int, stop: int, channels: list=(0,), dtype=None ):
+    """
+    Extract part of the MuH5 signal according to start and stop (in samples number) parameters
+    
+    Parameters
+    ----------
+    * filename (str): the muh5 file name with absolute path
+    * start: initial sample (from 0 to max_number-1)
+    * stop: final sample
+    * channels: list of requested channels
+    * dtype: optionnal, whether data should be return as float32 (default) or int32 (np.int32)
+    * return: range signal in np.float32 array format
+    """
+
+    log.info( f" .Opening file '{filename}'" )
+    with h5py.File( filename, 'r' ) as f:
+
+        """
+        Control whether H5 file is a MuH5 file
+        """
+        if not f['muh5']:
+            raise Exception( f"{filename} seems not to be a MuH5 file: unrecognized format" )
+
+        """
+        get parameters values on H5 file
+        """
+        group = f['muh5']
+        info = dict( zip( group.attrs.keys(), group.attrs.values() ) )
+        sampling_frequency = info['sampling_frequency']
+        available_mems = list( info['mems'] )
+        mems_number = len( available_mems )
+        available_analogs = list( info['analogs'] )
+        analogs_number = len( available_analogs )
+        duration = info['duration']
+        counter = info['counter'] and not info['counter_skip']
+        status = True if 'status' in info and info['status'] else False
+        available_channels_number = mems_number + analogs_number + ( 1 if counter else 0 ) + ( 1 if status else 0 )
+        dataset_length = info['dataset_length']
+        dataset_number = info['dataset_number']
+        samples_number = dataset_number * dataset_length
+
+        """
+        Set mask for channel extracting
+        """
+        available_channels = [i for i in range( available_channels_number )]
+        mask = list( np.isin( available_channels, channels ) )
+        if sum(mask) == 0:            
+            raise Exception( f"Requested channels not found in {filename}" )
+
+        channels_number = sum( mask )
+
+        """
+        Control range values
+        """
+        sample_t0 = int( start * sampling_frequency )
+        sample_tf = int( stop * sampling_frequency )
+        requested_samples_number = sample_tf - sample_t0 + 1 
+        if sample_t0 >= samples_number:
+            raise Exception( f"Uncoherent starting position: start time <{start}s> exceed signal duration ({samples_number*sampling_frequency}s)")
+        if sample_tf >= samples_number:
+            raise Exception( f"Uncoherent end position: stop time <{stop}s> exceed signal duration ({samples_number*sampling_frequency}s)")
+        if requested_samples_number <= 0:
+            raise Exception( f"Uncoherent time range: start time <{start}s> exceed stop time <{stop}s>")
+
+        """
+        Set index
+        """
+        dataset_index_t0 = int( sample_t0/dataset_length )
+        dataset_index_tf = int( sample_tf/dataset_length )
+        dataset_range = dataset_index_tf - dataset_index_t0 + 1
+
+        """
+        Extract signal
+        """
+        sound = np.zeros( (channels_number, requested_samples_number), dtype=np.int32 )
+        dest_offset = 0
+        dataset_offset = sample_t0%dataset_length
+
+        try: 
+            for dataset_index in range( dataset_index_t0, dataset_index_tf+1 ):
+                dataset = f['muh5/' + str( dataset_index ) + '/sig']
+                dataset_last = dataset_length if sample_tf - dataset_index * dataset_length > dataset_length else sample_tf - dataset_index * dataset_length
+                dest_last = dest_offset + dataset_last - dataset_offset #+ 1
+                sound[:, dest_offset:dest_last] = np.array( dataset[:] )[mask,dataset_offset:dataset_last]
+                dest_offset = dest_last
+                dataset_offset = 0
+
+            sound = np.reshape( sound.T, (1, channels_number*requested_samples_number) )
+            log.info( f" .Extracted {requested_samples_number} samples of {channels_number} channel(s) signal. Shape is {np.shape(sound)}")
+
+            if dtype == np.int32:
+                return sound
+            else:
+                return sound.astype( np.float32 ) * MEMS_SENSIBILITY
+
+        except Exception as e:
+            raise Exception( f"Error while extracting signal from MuH5 file: {e}" )
+
 
 def compute_q50_from_file( filename:str, filetype:int, channel_id:int|None=1, frame_duration:int|None=None, norm: bool|None = False ) -> np.ndarray:
     """
