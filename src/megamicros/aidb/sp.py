@@ -389,6 +389,47 @@ def extract_range_from_wavfile( wavfilename: str, start: float, stop: float ):
         return sound/np.amax( sound )
 
 
+def extract_samples_from_wavfile( wavfilename: str, start: int, stop: int ):
+    """
+    Extract part of the wav signal according to start and stop samples parameters
+    
+    Parameters
+    ----------
+    * wavfilename (str): the wav file name with absolute path
+    * start: initial sample
+    * stop: final sample
+    * return: range signal in np.float32 array format
+    """
+    with wave.open( wavfilename, 'rb' ) as f:
+        sampling_frequency = f.getframerate()
+        sample_width = f.getsampwidth()
+        channels_number = f.getnchannels()
+        samples_number = f.getnframes()
+        if sample_width == 1:
+            dtype = np.int8
+        elif sample_width == 2:
+            dtype = np.int16            
+        elif sample_width == 4:
+            dtype = np.int32
+        else:
+            raise Exception( f"Unable to process with {sample_width}B data samplewidth" )
+        sample_t0 = start
+        sample_tf = stop
+        requested_samples_number = sample_tf - sample_t0
+        if sample_t0 >= samples_number:
+            raise Exception( f"Uncoherent starting position: start sample <{start}s> exceed signal samples number ({samples_number})")
+        if sample_tf >= samples_number:
+            raise Exception( f"Uncoherent end position: stop sample <{stop}s> exceed signal samples number ({samples_number})")
+        if requested_samples_number <= 0:
+            raise Exception( f"Uncoherent samples range: start sample <{start}> exceed stop sample <{stop}>")
+
+        f.setpos( sample_t0 )
+        sound = np.frombuffer( f.readframes( requested_samples_number ),  dtype=dtype )
+        sound = sound.astype( np.float32 )
+
+        return sound/np.amax( sound )
+
+
 def extract_range_from_muh5file( filename: str, start: float, stop: float, channels: list=(0,), dtype=None ):
     """
     Extract part of the MuH5 signal according to start and stop (in time) parameters
@@ -487,9 +528,7 @@ def extract_range_from_muh5file( filename: str, start: float, stop: float, chann
         except Exception as e:
             raise Exception( f"Error while extracting signal from MuH5 file: {e}" )
 
-######
-######
-# TO DO >>>>>>>>>>>>>>>>>>>>>
+
 def extract_samples_from_muh5file( filename: str, start: int, stop: int, channels: list=(0,), dtype=None ):
     """
     Extract part of the MuH5 signal according to start and stop (in samples number) parameters
@@ -544,15 +583,15 @@ def extract_samples_from_muh5file( filename: str, start: int, stop: int, channel
         """
         Control range values
         """
-        sample_t0 = int( start * sampling_frequency )
-        sample_tf = int( stop * sampling_frequency )
+        sample_t0 = start
+        sample_tf = stop
         requested_samples_number = sample_tf - sample_t0 + 1 
         if sample_t0 >= samples_number:
-            raise Exception( f"Uncoherent starting position: start time <{start}s> exceed signal duration ({samples_number*sampling_frequency}s)")
+            raise Exception( f"Uncoherent starting position: start sample <{start}> exceed signal samples number ({samples_number})")
         if sample_tf >= samples_number:
-            raise Exception( f"Uncoherent end position: stop time <{stop}s> exceed signal duration ({samples_number*sampling_frequency}s)")
+            raise Exception( f"Uncoherent end position: stop sample <{stop}s exceed signal samples number ({samples_number})")
         if requested_samples_number <= 0:
-            raise Exception( f"Uncoherent time range: start time <{start}s> exceed stop time <{stop}s>")
+            raise Exception( f"Uncoherent samples range: start sample <{start}> exceed stop sample number <{stop}>")
 
         """
         Set index

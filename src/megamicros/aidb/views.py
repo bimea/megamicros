@@ -42,7 +42,7 @@ from rest_framework.pagination import PageNumberPagination
 from .models import Config, Domain, Campaign, Device, Directory, Tagcat, Tag, SourceFile, Context, Label, FileContexting, FileLabeling, Dataset
 from .serializers import ConfigSerializer, DomainSerializer, CampaignSerializer, DeviceSerializer, DirectorySerializer
 from .serializers import DirectoryFileSerializer, SourceDirectoryCheckSerializer, SourceDirectoryReviseSerializer, TagcatSerializer, TagSerializer
-from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadAudioSerializer
+from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadSamplesSerializer, SourceFileUploadAudioSerializer
 from .serializers import ContextSerializer, LabelSerializer, FileLabelingSerializer
 from .serializers import DatasetSerializer, DatasetUploadSerializer, SourceFileSegmentationSerializer
 from .tools import StandardResultsSetPagination, LargeResultsSetPagination
@@ -268,6 +268,36 @@ class SourceFileViewSet( viewsets.ModelViewSet ):
         except Exception as e:
             return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
         return serializer.data
+    
+    @action( detail=True, methods=['get'], url_path=r'range/(?P<first>\d+(.\d+)?)/(?P<last>\d+(.\d+)?)/channels/(?P<l>\d+)/(?P<r>\d+)' )
+    def samples(self, request, first, last, l, r, *args, **kwargs):
+        """
+        Get samples range signals for MEMs given as query parameter
+        
+        channels query parameter overwrites the channels/left/right endpoint 
+                
+        Endpoint parameters
+        -------------------
+        /sourcefile/samples/<first>/<last>/channels/<left>/<right>/<?channels=1,2,3,4,...>
+        first: int
+            the first sample of the range
+        last: int
+            the last sample of the range
+        left: int
+            left microphone number
+        right: int
+            right microphone number
+        ?channels: list
+            liste of MEMs from which to get signal
+        """
+
+        file = self.get_object()
+        try:
+            serializer = SourceFileUploadSamplesSerializer( file=file, start=int( first ), stop=int( last ), left=int(l), right=int(r), request=request )
+        except Exception as e:
+            return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
+        return serializer.data
+
 
     @action( detail=True, methods=['get'], url_path=r'audio/(?P<first>\d+(.\d+)?)/(?P<last>\d+(.\d+)?)/channels/(?P<l>\d+)/(?P<r>\d+)' )
     def audio(self, request, first, last, l, r, *args, **kwargs):

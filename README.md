@@ -83,9 +83,13 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.38
+
+  Fix bug `TypeError: MemsArray.setAvailableAnalogs() got an unexpected keyword argument 'available_analogs_number'` in db.py
+
 ### 2.0.37
 
-  Fix bug `TypeError: MemsArray.setAvailableMems() got an unexpected keyword argument 'available_mems_number'` in dp.py
+  Fix bug `TypeError: MemsArray.setAvailableMems() got an unexpected keyword argument 'available_mems_number'` in db.py
 
 ### 2.0.36
 

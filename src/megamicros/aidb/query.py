@@ -900,6 +900,69 @@ class AidbSession( RestDBSession ):
 
         log.info( f" .Successfully updated sourcefile [{id}] on database")
         return response
+    
+    def get_samples_range( self, start: int, stop:int, channels: np.ndarray, id:int|None=None, url:str|None=None, filename:str|None=None, timeout:int=DEFAULT_TIMEOUT ):
+        """ Get range samples (stop - start) from DB signal 
+        
+        Parameters
+        ----------
+        start: int
+            starting sample number in signal
+        stop: int
+            last sample number in signal
+        channels: no.ndarray
+            array of channels to get 
+        id: int|None
+            file identifier in database
+        url: str|None
+            file url
+        filename: str|None
+            file name
+        timeout: int
+            timeout after what the request failed
+        """
+        
+        # Get metadata from file
+        field = None if filename is None else {'label': 'filename', 'value': filename}
+        try:
+            meta = self.get_meta( object='sourcefile', id=id, url=url, field=field, timeout=timeout )
+        except Exception as e:
+            raise MuDbException( f"Unable to get metadata from file: {str( e )}" )
+        
+        print( f"Got mete: {meta}" )
+
+        """
+        import request 
+
+        # Format the request
+        channels_str = ( ''.join( str( integer ) + ',' for integer in channels ) )[:-1]
+        url = f"{self.dbhost}sourcefile/{self.file_id}/range/{self.start}/{self.start+self.duration}/channels/0/0/?channels={channels_str}"
+
+        log.info( f" .Requesting data in range [{self.start}, {self.stop}] samples" )
+        try:
+            log.info( f" .Opening DB file on endpoint {url}" )
+            with requests.get(url, stream=True) as response:
+
+                # Get the content type and length from the response headers
+                content_type = response.headers.get('content-type')
+                content_length = int( response.headers.get('content-length') )
+
+                log.info( f" .Got positive response from server with for {content_type} data of {content_length} bytes length" )
+                log.info( f" .Start receiving {content_length//chunk_size} paquets of size {self.frame_length} x {channels_number}" )
+                if (content_length%chunk_size) % (channels_number*4) != 0:
+                    raise MuDBException( f"Inconsistency between data received ({content_length}) bytes and query ({self.frame_length} x {channels_number})" )
+                
+                log.info( f" .Last chunk will carry {int( (content_length%chunk_size)/channels_number/4 )} remaining samples" )
+
+                # Check if the request was successful
+                response.raise_for_status()
+
+        except Exception as e:
+            pass 
+        """
+
+
+
 
 # =============================================================================
 # Labelings

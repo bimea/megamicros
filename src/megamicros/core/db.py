@@ -73,6 +73,9 @@ class MemsArrayDB( base.MemsArray ):
     __password: str = None                  # Database user email
     __meta: dict = None                     # Meta data relative to current uploaded file
     __start: int = None                     # The start time in the upload file
+    __start_sample: int = None              # Start sample for get() method
+    __stop_sample: int = None               # Stop sample for get() method
+
 
     @property
     def dbhost( self ) -> str:
@@ -120,6 +123,16 @@ class MemsArrayDB( base.MemsArray ):
         return self.__start
 
     @property
+    def start_sample( self ) -> int:
+        """ Get the start sample """
+        return self.__start_sample
+    
+    @property
+    def stop_sample( self ) -> int:
+        """ Get the stop sample """
+        return self.__stop_sample
+
+    @property
     def file_duration( self ) -> int:
         """ Get the file duration of current/last open file """
         return self.__meta['duration']
@@ -153,6 +166,26 @@ class MemsArrayDB( base.MemsArray ):
             The start time in seconds. The value should be such that start and duration are inside the file duration 
         """
         self.__start = start_time
+
+    def setStartSample( self, start_sample: int ) -> None:
+        """ Set the start sample for get() method 
+        
+        parameters
+        ----------
+        start_sample: int
+            The start sample number. The value should be such that start and stop samples are inside the file range samples 
+        """
+        self.__start_sample = start_sample
+
+    def setStopSample( self, stop_sample: int ) -> None:
+        """ Set the stop sample for get() method 
+        
+        parameters
+        ----------
+        stop_sample: int
+            The stop sample number. The value should be such that start and stop samples are inside the file range samples 
+        """
+        self.__stop_sample = stop_sample
 
     def setSequenceId( self, sequence_id: int ) -> None :
         """ Set the Database sequence identifier in current file
@@ -259,7 +292,7 @@ class MemsArrayDB( base.MemsArray ):
                 self.setAvailableMems( available_mems=len( self.__meta['info']['mems'] ) )
                 self.setCounter( force=True ) if self.__meta['info']['counter']==True else self.unsetCounter( force=True )
                 self.unsetStatus( force=True )
-                self.setAvailableAnalogs( available_analogs_number=len( self.__meta['info']['analogs'] ) )
+                self.setAvailableAnalogs( available_analogs=len( self.__meta['info']['analogs'] ) )
 
         except MuException as e:
             raise MuDBException( f"Connection to database {dbhost} failed ({type(e).__name__}): {e}" )
@@ -297,6 +330,12 @@ class MemsArrayDB( base.MemsArray ):
 
             if 'start' in kwargs:
                 self.setStart( kwargs['start'] )
+
+            if 'start_sample' in kwargs:
+                self.setStartSample( kwargs['start_sample'] )
+
+            if 'stop_sample' in kwargs:
+                self.setStopSample( kwargs['stop_sample'] )
 
         except Exception as e:
             raise MuDBException( f"Run failed on settings: {e}")
@@ -340,6 +379,62 @@ class MemsArrayDB( base.MemsArray ):
         
         if self.counter_skip and not self.counter:
             log.warning( f"`counter_skip` is set to True while `counter` is not available" )
+
+
+    def get( self, *args, **kwargs  ):
+        """ Get samples range from DB MuH5 file """
+
+        if len( args ) > 0:
+            raise MuDBException( f"Run() method does not accept direct arguments" )
+
+        # Set all settings
+        # Run does not call the super().run() method so that we have to handle all settings here      
+        try:
+            super()._set_settings( [], kwargs=kwargs )
+            self._set_settings( [], kwargs=kwargs )        
+        except Exception as e:
+            raise MuDBException( f"Cannot get range samples: settings loading failed ({type(e).__name__}): {e}" )
+        
+        # Check settings
+        log.info( f" .Pre-execution checks for MemsArray.get()" )
+        if self.mems is None or len( self.mems )==0:
+            raise MuException( f"No activated MEMs" )
+                
+        if self.counter_skip is None:
+            log.info( f" .Counter skipping not set -> set to False" )
+            self.unsetCounterSkip()       
+        
+        if self.datatype is base.MemsArray.Datatype.unknown:
+            raise MuException( f"No datatype set" )
+        
+        if self.start_sample is None:
+            raise MuException( f"No sample start set. Please add the `start_sample` option " )
+
+        if self.stop_sample is None:
+            raise MuException( f"No sample stop set. Please add the `stop_sample` option " )
+        
+        # Ready to request database
+        try:
+            with AidbSession( dbhost=self.dbhost, login=self.login, email=self.email, password=self.__password ) as session:
+                # get meta data
+                self.__meta = session.get_sourcefile( self.file_id )
+                self.setSamplingFrequency( self.__meta['info']['sampling_frequency'], force=True  )
+                self.setAvailableMems( available_mems=len( self.__meta['info']['mems'] ) )
+                self.setCounter( force=True ) if self.__meta['info']['counter']==True else self.unsetCounter( force=True )
+                self.unsetStatus( force=True )
+                self.setAvailableAnalogs( available_analogs=len( self.__meta['info']['analogs'] ) )
+
+                response = session.get_samples_range( start=self.start_sample, stop=self.stop_sample, channels=self.mems, id=self.file_id )
+
+        except MuException as e:
+            raise MuDBException( f"Connection to database {self.dbhost} failed ({type(e).__name__}): {e}" )
+
+
+        # Make response according the datatype
+        return response
+
+
+
 
 
     def run( self, *args, **kwargs ) :

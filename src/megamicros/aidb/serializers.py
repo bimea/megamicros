@@ -49,7 +49,8 @@ from django.db import models
 from rest_framework import serializers
 from rest_framework.response import Response
 from .models import Config, Domain, Campaign, Device, Directory, Tagcat, Tag, SourceFile, Context, FileContexting, Label, FileLabeling, Dataset
-from .sp import compute_q50_from_file, compute_energy_from_file, compute_energy_from_wavfile, extract_range_from_wavfile, compute_energy_from_muh5file, extract_range_from_muh5file, genwav_from_range_wavfile, genwav_from_range_muh5file
+from .sp import compute_q50_from_file, compute_energy_from_file, compute_energy_from_wavfile, extract_range_from_wavfile, compute_energy_from_muh5file, genwav_from_range_wavfile, genwav_from_range_muh5file
+from .sp import extract_range_from_muh5file, extract_samples_from_muh5file, extract_samples_from_wavfile
 from .sp import save_context_on_muh5_file, update_context_on_muh5_file, save_label_on_muh5_file, update_label_on_muh5_file, save_dataset_on_muh5_file, remove_dataset_muh5_file
 from megamicros.log import log
 
@@ -792,6 +793,50 @@ class SourceFileUploadRangeSerializer:
                         mems = ast.literal_eval( f"({mems})" )
 
                 signal = extract_range_from_muh5file( filename, start, stop, channels=mems )
+                self.data = HttpResponse( signal.tobytes(), headers={
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
+                })                
+            else:
+                raise Exception( f"Energy computing on format/type: {file.type} not implemented" )            
+        except Exception as e:
+            raise e
+
+class SourceFileUploadSamplesSerializer:
+    """ Get range of saples from MuH5 files """
+
+    ERROR_UNCHECKED = 1
+    ERROR_SYSTEM = 2
+
+    def __init__( self, file: SourceFile, start: int, stop: int, left: int, right: int, context=None, request=None ):
+        if file.integrity == None or file.integrity == False :
+            """
+            This should never occure...
+            """
+            self.data = { 'status': 'error', 'code': self.ERROR_UNCHECKED,  'message': 'Uncheked file or file integrity problem' }
+
+        try:
+            filename = Directory.objects.get( pk=file.directory.id ).path + '/' + file.filename
+            if file.type == file.WAV:
+                signal = extract_samples_from_wavfile( filename, start, stop )
+                self.data = HttpResponse( signal.tobytes(), headers={
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
+                })
+            elif file.type == file.MUH5:
+                if request is None:
+                    # use the mems given as url parameters, left and right 
+                    mems = (left, right)
+                else:
+                    # when passed as query parameters, channels overwrites the usual url parameters  
+                    mems = request.query_params.get('channels')
+                    if mems is None:
+                        mems = (left, right)
+                    else:
+                        # the form of query param should be: ?channels=1,2,3,4
+                        mems = ast.literal_eval( f"({mems})" )
+
+                signal = extract_samples_from_muh5file( filename, start, stop, channels=mems )
                 self.data = HttpResponse( signal.tobytes(), headers={
                     'Content-Type': 'application/octet-stream',
                     'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
