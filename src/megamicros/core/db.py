@@ -381,6 +381,10 @@ class MemsArrayDB( base.MemsArray ):
             log.warning( f"`counter_skip` is set to True while `counter` is not available" )
 
 
+    # TO DO
+    # counter and status sould be revwied !!!
+    # Also there is one sample more than requested !!!
+    # >>>>>>
     def get( self, *args, **kwargs  ):
         """ Get samples range from DB MuH5 file """
 
@@ -424,16 +428,43 @@ class MemsArrayDB( base.MemsArray ):
                 self.unsetStatus( force=True )
                 self.setAvailableAnalogs( available_analogs=len( self.__meta['info']['analogs'] ) )
 
-                response = session.get_samples_range( start=self.start_sample, stop=self.stop_sample, channels=self.mems, id=self.file_id )
+                data = session.get_samples_range( start=self.start_sample, stop=self.stop_sample, channels=self.mems, id=self.file_id )
 
         except MuException as e:
             raise MuDBException( f"Connection to database {self.dbhost} failed ({type(e).__name__}): {e}" )
 
 
-        # Make response according the datatype
-        return response
+        log.info( f" .Got {len(data)} bytes signal" )
+        log.info( f" .Convert to {(self.datatype)} datatype" )
 
+        # Reshape data according user datatype request
+        # Original data registred in MuH5 file are supposed float32
 
+        # User wants data as binary buffer of int32 
+        if self.datatype == self.Datatype.bint32:
+            data = ( np.frombuffer( data, dtype=np.float32 )/self.sensibility ).astype(np.int32)
+            data = np.ndarray.tobytes( data )
+        
+        # User wants data as numpy array of int32 
+        elif self.datatype == self.Datatype.int32:
+            # build np array from binary buffer and reshape MEMs signals column wise
+            data = ( np.frombuffer( data, dtype=np.float32 )/self.sensibility ).astype(np.int32)
+            frame_length = len( data ) // self.channels_number
+            log.info( f"Frame length: {frame_length} samples X {self.channels_number} channels" )
+            data =  np.reshape( data, ( frame_length, self.channels_number ) )
+
+        # User wants data as numpy array of float32 
+        elif self.datatype == self.Datatype.float32:
+            # build np array from binary buffer and reshape MEMs signals column wise
+            data = np.frombuffer( data, dtype=np.float32 )
+            frame_length = len( data ) // self.channels_number 
+            data =  np.reshape( data, ( frame_length, self.channels_number ) )
+
+        # User wants data as binary buffer of float32 -> nothing to do
+        else:
+            pass
+
+        return data
 
 
 
