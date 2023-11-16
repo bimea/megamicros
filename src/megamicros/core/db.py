@@ -256,7 +256,7 @@ class MemsArrayDB( base.MemsArray ):
                 # get meta data
                 self.__meta = session.get_sourcefile( self.file_id )
                 self.setSamplingFrequency( self.__meta['info']['sampling_frequency'], force=True  )
-                self.setAvailableMems( available_mems_number=len( self.__meta['info']['mems'] ) )
+                self.setAvailableMems( available_mems=len( self.__meta['info']['mems'] ) )
                 self.setCounter( force=True ) if self.__meta['info']['counter']==True else self.unsetCounter( force=True )
                 self.unsetStatus( force=True )
                 self.setAvailableAnalogs( available_analogs_number=len( self.__meta['info']['analogs'] ) )
