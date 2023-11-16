@@ -929,16 +929,34 @@ class AidbSession( RestDBSession ):
         except Exception as e:
             raise MuDbException( f"Unable to get metadata from file: {str( e )}" )
         
-        print( f"Got mete: {meta}" )
+        if id is None:
+            id = int(meta['id'])
+        if filename is None:
+            filename = meta['filename']
+        if url is None:
+            url = meta['url']
 
-        """
-        import request 
+        log.info( f" .Getting signals from file `{filename} (id={id})` at endpoint {url}" )
 
         # Format the request
         channels_str = ( ''.join( str( integer ) + ',' for integer in channels ) )[:-1]
-        url = f"{self.dbhost}sourcefile/{self.file_id}/range/{self.start}/{self.start+self.duration}/channels/0/0/?channels={channels_str}"
+        request_url = f"sourcefile/{id}/samples/{start}/{stop}/channels/0/0/?channels={channels_str}"
 
-        log.info( f" .Requesting data in range [{self.start}, {self.stop}] samples" )
+        log.info( f" .Requesting data in range [{start}, {stop}] samples (length={stop-start} samples)" )
+
+        try:
+            response = self.get( request_url ).content
+        except MuDbException as e:
+            log.info( f" .{e}" )
+            return {}
+        
+
+        print( "response type=", type(response) )
+        #print( "shape=", np.shape(response) )
+
+        return response
+
+        """
         try:
             log.info( f" .Opening DB file on endpoint {url}" )
             with requests.get(url, stream=True) as response:

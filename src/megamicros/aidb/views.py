@@ -269,7 +269,7 @@ class SourceFileViewSet( viewsets.ModelViewSet ):
             return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
         return serializer.data
     
-    @action( detail=True, methods=['get'], url_path=r'range/(?P<first>\d+(.\d+)?)/(?P<last>\d+(.\d+)?)/channels/(?P<l>\d+)/(?P<r>\d+)' )
+    @action( detail=True, methods=['get'], url_path=r'samples/(?P<first>\d+(.\d+)?)/(?P<last>\d+(.\d+)?)/channels/(?P<l>\d+)/(?P<r>\d+)' )
     def samples(self, request, first, last, l, r, *args, **kwargs):
         """
         Get samples range signals for MEMs given as query parameter
