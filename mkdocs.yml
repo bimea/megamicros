@@ -34,6 +34,7 @@ nav:
       - Getting started: tutorials/megamicros/get_started.md
       - H5 antenna: tutorials/megamicros/h5.md
       - Remote antenna: tutorials/megamicros/remote.md
+      - AI databse: tutorials/megamicros/aidb.md
     - Megamicros server:
       - tutorials/mu-server/index.md
       - Installing: 
