@@ -81,26 +81,30 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
   [09:50:16] Serving on http://127.0.0.1:8000/
 ```
 
-# Releases
+## Releases
 
-## 2.0.36
+### 2.0.37
+
+  Fix bug `TypeError: MemsArray.setAvailableMems() got an unexpected keyword argument 'available_mems_number'` in dp.py
+
+### 2.0.36
 
 * Some updates
 
-## 2.0.35
+### 2.0.35
 
 * Fix bug in H5 files reading
 
-## 2.0.34
+### 2.0.34
 
 * Corrections in MemsArrayWS for using methods `settings()` and `selftest()` as *async* methods
 
-## 2.0.33
+### 2.0.33
 
-## 2.0.32
+### 2.0.32
 
 * Before correcting DB_PROCESSING_DELAY_RATE issue, skip the realtime process
 
-## 2.0.31
+### 2.0.31
 
 * Change the DB_PROCESSING_DELAY_RATE value needed for realtime simulation from 3/10 to 2/10
