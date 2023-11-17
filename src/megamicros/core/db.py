@@ -381,10 +381,6 @@ class MemsArrayDB( base.MemsArray ):
             log.warning( f"`counter_skip` is set to True while `counter` is not available" )
 
 
-    # TO DO
-    # counter and status sould be revwied !!!
-    # Also there is one sample more than requested !!!
-    # >>>>>>
     def get( self, *args, **kwargs  ):
         """ Get samples range from DB MuH5 file """
 
@@ -420,27 +416,67 @@ class MemsArrayDB( base.MemsArray ):
         # Ready to request database
         try:
             with AidbSession( dbhost=self.dbhost, login=self.login, email=self.email, password=self.__password ) as session:
-                # get meta data
+                # get meta data and set antenna settings accordingly
                 self.__meta = session.get_sourcefile( self.file_id )
                 self.setSamplingFrequency( self.__meta['info']['sampling_frequency'], force=True  )
                 self.setAvailableMems( available_mems=len( self.__meta['info']['mems'] ) )
                 self.setCounter( force=True ) if self.__meta['info']['counter']==True else self.unsetCounter( force=True )
-                self.unsetStatus( force=True )
+                self.setStatus( force=True ) if self.status==True and self.__meta['info']['status']==True else self.unsetStatus( force=True )
                 self.setAvailableAnalogs( available_analogs=len( self.__meta['info']['analogs'] ) )
 
-                data = session.get_samples_range( start=self.start_sample, stop=self.stop_sample, channels=self.mems, id=self.file_id )
+                # Set the requested channels: counter, MEMs, analogs and status
+                if self.__meta['info']['counter']:
+                    if self.counter and not self.counter_skip:
+                        channels = [0] + list( np.array( self.mems ) + 1 )
+                    else:
+                        channels = list( np.array( self.mems ) + 1 )
+                else:
+                    channels = self.mems
+
+                if len( self.analogs ) > 0:
+                    channels = channels + list( np.array( self.analogs ) + self.available_mems + ( 1 if self.__meta['info']['counter']==True else 0 ) )
+                if self.status==True:
+                    channels = channels + [self.channels_number]
+
+                # Get data in their original type (np.int32)
+                data = session.get_samples_range( start=self.start_sample, stop=self.stop_sample, channels=channels, id=self.file_id )
 
         except MuException as e:
             raise MuDBException( f"Connection to database {self.dbhost} failed ({type(e).__name__}): {e}" )
-
 
         log.info( f" .Got {len(data)} bytes signal" )
         log.info( f" .Convert to {(self.datatype)} datatype" )
 
         # Reshape data according user datatype request
-        # Original data registred in MuH5 file are supposed float32
+        # Original data registred in MuH5 file are assumed nt32
 
-        # User wants data as binary buffer of int32 
+        # User wants data as binary buffer of int32 -> nothing to do
+        if self.datatype == self.Datatype.bint32:
+            return data
+        
+        # User wants data as numpy array of int32 
+        # Build np array from binary buffer and reshape MEMs signals column wise
+        elif self.datatype == self.Datatype.int32:
+            data = np.frombuffer( data, dtype=np.int32 )
+            frame_length = len( data ) // self.channels_number
+            data =  np.reshape( data, ( frame_length, self.channels_number ) )
+
+        # User wants data as numpy array of float32 
+        # Convert to float32, then build np array from binary buffer and reshape MEMs signals column wise
+        elif self.datatype == self.Datatype.float32:
+            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
+            frame_length = len( data ) // self.channels_number 
+            data =  np.reshape( data, ( frame_length, self.channels_number ) )
+
+        # User wants data as binary buffer of float32
+        # Convert to float32, then reformat to byte data type
+        else:
+            data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
+            data = np.ndarray.tobytes( data )
+ 
+        return data
+    
+        """
         if self.datatype == self.Datatype.bint32:
             data = ( np.frombuffer( data, dtype=np.float32 )/self.sensibility ).astype(np.int32)
             data = np.ndarray.tobytes( data )
@@ -463,8 +499,7 @@ class MemsArrayDB( base.MemsArray ):
         # User wants data as binary buffer of float32 -> nothing to do
         else:
             pass
-
-        return data
+        """
 
 
 

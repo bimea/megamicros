@@ -787,6 +787,9 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
             if type(e).__name__=='RuntimeError':
                 log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
+            
+            # Nothing to do else
+            return
 
         try:
             super()._set_settings( args=[], kwargs=settings )

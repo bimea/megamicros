@@ -836,7 +836,8 @@ class SourceFileUploadSamplesSerializer:
                         # the form of query param should be: ?channels=1,2,3,4
                         mems = ast.literal_eval( f"({mems})" )
 
-                signal = extract_samples_from_muh5file( filename, start, stop, channels=mems )
+                # Get data in their original type (np.int32)
+                signal = extract_samples_from_muh5file( filename, start, stop, channels=mems, dtype=np.int32 )
                 self.data = HttpResponse( signal.tobytes(), headers={
                     'Content-Type': 'application/octet-stream',
                     'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
