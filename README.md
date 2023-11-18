@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.40
+
+* Add database endpoint for extracting samples (sourcefile/samples) and the library tools that comes with 
+
 ### 2.0.39
 
 * Add direct signal samples extraction from AI database 

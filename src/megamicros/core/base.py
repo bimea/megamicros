@@ -449,6 +449,9 @@ class MemsArray:
             if 'sampling_frequency' in kwargs:
                 self.setSamplingFrequency( kwargs['sampling_frequency'] )
 
+            if 'mems_sensibility' in kwargs:
+                self.setSensibility( kwargs['mems_sensibility'] )
+
             if 'job' in kwargs:
                 self.setJob( kwargs['job'] )
 
@@ -534,6 +537,10 @@ class MemsArray:
         if self.frame_length is None:
             log.info( f" .Frame length not set -> set to default" )
             self.setFrameLength( DEFAULT_FRAME_LENGTH )
+
+        if self.sensibility is None:
+            log.info( f" .MEMs sensibility not set -> set to default" )
+            self.setSensibility( DEFAULT_MEMS_SENSIBILITY )
 
         if self.job == 'run' or self.job == 'master' or self.job == 'listen':
             log.info( f" .Requested job: {self.job}" )
