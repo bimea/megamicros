@@ -798,12 +798,12 @@ class SourceFileUploadRangeSerializer:
                     'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
                 })                
             else:
-                raise Exception( f"Energy computing on format/type: {file.type} not implemented" )            
+                raise Exception( f"Range extraction on format/type: {file.type} not implemented" )            
         except Exception as e:
             raise e
 
 class SourceFileUploadSamplesSerializer:
-    """ Get range of saples from MuH5 files """
+    """ Get range of samples from MuH5 files """
 
     ERROR_UNCHECKED = 1
     ERROR_SYSTEM = 2
@@ -821,7 +821,7 @@ class SourceFileUploadSamplesSerializer:
                 signal = extract_samples_from_wavfile( filename, start, stop )
                 self.data = HttpResponse( signal.tobytes(), headers={
                     'Content-Type': 'application/octet-stream',
-                    'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
+                    'Content-Disposition': f"attachment; filename=samples-{Path( file.filename).stem}.data",
                 })
             elif file.type == file.MUH5:
                 if request is None:
@@ -840,10 +840,10 @@ class SourceFileUploadSamplesSerializer:
                 signal = extract_samples_from_muh5file( filename, start, stop, channels=mems, dtype=np.int32 )
                 self.data = HttpResponse( signal.tobytes(), headers={
                     'Content-Type': 'application/octet-stream',
-                    'Content-Disposition': f"attachment; filename=range-{Path( file.filename).stem}.data",
+                    'Content-Disposition': f"attachment; filename=samples-{Path( file.filename).stem}.data",
                 })                
             else:
-                raise Exception( f"Energy computing on format/type: {file.type} not implemented" )            
+                raise Exception( f"Samples exctraction on format/type: {file.type} not implemented" )            
         except Exception as e:
             raise e
 

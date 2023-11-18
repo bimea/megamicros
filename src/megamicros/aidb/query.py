@@ -949,11 +949,8 @@ class AidbSession( RestDBSession ):
         except MuDbException as e:
             log.info( f" .{e}" )
             return {}
-        
 
-        print( "response type=", type(response) )
-        #print( "shape=", np.shape(response) )
-
+        # Return bytes content response
         return response
 
         """

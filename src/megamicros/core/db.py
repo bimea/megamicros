@@ -452,18 +452,23 @@ class MemsArrayDB( base.MemsArray ):
 
         # User wants data as binary buffer of int32 -> nothing to do
         if self.datatype == self.Datatype.bint32:
-            return data
+            log.info( "User wants data as binary buffer of int32 " )
+            pass
         
         # User wants data as numpy array of int32 
         # Build np array from binary buffer and reshape MEMs signals column wise
         elif self.datatype == self.Datatype.int32:
+            log.info( "User wants data as numpy array of int32 " )
             data = np.frombuffer( data, dtype=np.int32 )
             frame_length = len( data ) // self.channels_number
+            log.info( f"Frame length: {frame_length} samples X {self.channels_number} channels" )
             data =  np.reshape( data, ( frame_length, self.channels_number ) )
 
         # User wants data as numpy array of float32 
         # Convert to float32, then build np array from binary buffer and reshape MEMs signals column wise
         elif self.datatype == self.Datatype.float32:
+            log.info( "User wants data as numpy array of float32" )
+
             data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
             frame_length = len( data ) // self.channels_number 
             data =  np.reshape( data, ( frame_length, self.channels_number ) )
@@ -471,6 +476,7 @@ class MemsArrayDB( base.MemsArray ):
         # User wants data as binary buffer of float32
         # Convert to float32, then reformat to byte data type
         else:
+            log.info( "User wants data as binary buffer of float32" )
             data = np.frombuffer( data, dtype=np.int32 ).astype(np.float32) * self.sensibility
             data = np.ndarray.tobytes( data )
  
