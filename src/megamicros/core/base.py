@@ -46,7 +46,7 @@ from megamicros.data import MuAudio
 
 DEFAULT_FRAME_LENGTH                = 256
 DEFAULT_SAMPLING_FREQUENCY          = 50000
-DEFAULT_QUEUE_SIZE                  = 2			            # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_QUEUE_SIZE                  = 0			            # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
 DEFAULT_QUEUE_TIMEOUT               = 2                     # The block delay until the queue is considered as empty  
 DEFAULT_DATATYPE			        = "int32"	            # Default receiver incoming data type ("int32" or "float32") 
 DEFAULT_SYNC_MODE                   = False                 # Default run mode is asynchronous

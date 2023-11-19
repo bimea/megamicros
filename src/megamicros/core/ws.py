@@ -716,6 +716,89 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f"Failed to set new settings ({type(e).__name__}): {e}" )
 
 
+    def info( self ):
+        """ Get informations about running jobs on remote serever """
+        try:
+            # There is current event loop...
+            loop = asyncio.get_running_loop()
+            task = loop.create_task( self.__info() )
+
+        except RuntimeError:  
+            # There is no current event loop...
+            asyncio.run( self.__info() )
+
+
+    async def async_info( self, future: asyncio.Future ):
+        """ Ensure public access to the async private method __info() 
+        
+        Provided for users who want to get informations from their own asyncio loop  
+        
+        Parameters
+        ----------
+        future: asyncio.Future
+            Future coroutine provided by client for getting results of the asynchronous call
+        """ 
+        await self.__info( future )
+
+
+    async def __info( self, future = None ):
+        """ Connect to the server for getting informations 
+        
+        Parameters
+        ----------
+        future: asyncio.Future
+            Result of the asynchronous operation
+        """   
+
+        log.info( f" .Connecting to remote host {self.__server_host}:{str(self.__server_port)}..." )
+        try:
+            async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                log.info( " .Connected" )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"Connection to server failed: {error}" )        
+
+                # send ps command to server
+                command = {'request': 'ps' }
+
+                log.info( f" .Send `ps` command to server" )        
+                await websocket.send( json.dumps( command ) )
+                response = json.loads( await websocket.recv() )
+                error = self.__check_mbs_error( response )
+                if error:
+                    raise MuWSException( f"`ps` command failed on remote server: {error}" )
+                else:
+                    # Update local settings according the antenna response
+                    log.info( f" .Remote server `ps` command successfull" ) 
+                    
+        except Exception as e:
+            log.error( f"Failed to connect to remote server ({type(e).__name__}): {e}" )
+            if type(e).__name__=='RuntimeError':
+                log.warning( f"Asynchronous mode must wait for the end of the execution thread. Did you forget to use `MemsArrayWS.wait()` in your code ?" )
+            
+            # Nothing to do else
+            return
+
+        try:
+            response = response['response']
+            log.info( f" .Info from server:" )
+            log.info( f"  > antenna is active: {response['antenna']['is_created']}" )
+            log.info( f"  > antenna is running: {response['antenna']['is_running']}" )
+            log.info( f"  > master is created: {response['master']['is_created']}" )
+            log.info( f"  > master is running: {response['master']['is_active']}" )
+            log.info( f"  > sampling_frequency: {response['master']['sampling_frequency']} Hz" )
+            log.info( f"  > frame_length: {response['master']['frame_length']} samples" )
+            log.info( f"  > listen jobs running: {response['listen']['jobs_number']}" )
+
+            if future is not None:
+                future.set_result( response )
+
+        except Exception as e:
+            log.error( f"Failed to decode informations from server ({type(e).__name__}): {e}" )
+
+
+
     def settings( self ) -> json:
         """ Send a settings request to the remote server """
 
