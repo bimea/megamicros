@@ -628,12 +628,24 @@ class MemsArrayWS( base.MemsArray ):
                         # However, the queue introduces a latency that can become problematic.
                         # If the user accepts the loss of data, it is possible to limit the size of the queue.
                         # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
-                        self.signal_q.put(
-                            self._run_process_data_bint32( 
-                                signal_buffer,
-                                h5_recording = self.h5_recording and not self.__h5_pass_through
+
+                        # For fft data (complex64 bytes type)
+                        if self.datatype == base.MemsArray.Datatype.fft:
+                            self.signal_q.put(
+                                self._run_process_data_complex64( 
+                                    signal_buffer,
+                                    h5_recording = self.h5_recording and not self.__h5_pass_through
+                                )
                             )
-                        )
+
+                        # For all others data supposing they are bytes int32 type              
+                        else:
+                            self.signal_q.put(
+                                self._run_process_data_bint32( 
+                                    signal_buffer,
+                                    h5_recording = self.h5_recording and not self.__h5_pass_through
+                                )
+                            )
 
                         # Transfers counting
                         # Note that the loop control is conducted by the remote server.
@@ -651,7 +663,7 @@ class MemsArrayWS( base.MemsArray ):
             log.error( f" .Listening loop was stopped: {e}" )
         except Exception as e:
             # Uknnown exception:
-            log.error( f" Listening loop stopped due to network error exception ({type(e).__name__}): {e}" )
+            log.error( f" Listening loop stopped due to unknown error exception ({type(e).__name__}): {e}" )
 
     
     def selftest( self ) -> json:

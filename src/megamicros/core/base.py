@@ -1081,21 +1081,51 @@ class MemsArray:
             raise StopIteration
 
 
+
+    def _run_process_data_complex64( self, data: bytes, h5_recording: bool=False ) -> any :
+        """ process data in the right format before sending it to the internal queue.
+        Data cannot be saved in H5 file for now.
+
+        Parameter
+        ---------
+        data: bytes
+            input data. Format is float32(re) + i.float32(im) binary encoded data as bytes
+        Return: np.ndarray
+            output data in complex (float32 ptecision) ndarray
+        """
+
+        print(data)
+        data0 = np.frombuffer( data, dtype=np.float32 )
+        
+        
+        #data0 = np.empty( (len(data0)/4/2), dtype=np.complex64 )
+
+        data = np.frombuffer( data, dtype=np.complex64 )
+        data = np.reshape( data, ( int( self.frame_length/2 ), self.channels_number ) )
+        
+        #c = np.empty(data_shape, dtype=np.complex128)
+        #c.real = a
+        #c.imag = b
+
+        return data
+
+
     def _run_process_data_float32( self, data: bytes, h5_recording: bool=False ) -> any :
         """ Process data in the right format before sending it to the internal queue.
         Data are also saved in H5 file if requested.
         
         Parameter
         ---------
-        data: np.ndarray
-            input data. Format is two dimensional int32 np.ndarray (frame_length, channels_number) 
+        data: bytes
+            input data. Format is float32 binary encoded data as bytes
         Return: bytes|np.ndarray
             output data in the format required by the user
         """
 
         # convert to int32 if requested
         if self.datatype == self.Datatype.bint32 or self.datatype == self.Datatype.int32:
-            data = ( data / self.sensibility ).astype(np.int32)
+            data = np.frombuffer( data, dtype=np.float32 )
+            data = ( data / self.sensibility ).astype( np.int32 )
 
         # Save in H5 format if requested
         if h5_recording and self.__h5_started :
@@ -1123,18 +1153,21 @@ class MemsArray:
         if self.datatype == self.Datatype.bint32:
             data = np.ndarray.tobytes( data )
 
-        # User wants data as numpy array of int32 -> nothing to do
+        # User wants data as numpy array of int32
+        # -> build np array from binary buffer and reshape MEMs signals column wise
         elif self.datatype == self.Datatype.int32:
-            pass
+            data = np.reshape( data, ( self.frame_length, self.channels_number ) )
 
-        # User wants data as numpy array of float32 -> nothing to do
+        # User wants data as numpy array of float32 
         elif self.datatype == self.Datatype.float32:
+            data = np.reshape( np.frombuffer( data, dtype=np.float32 ), ( self.frame_length, self.channels_number ) )
+
+        # User wants data as binary buffer of float32 -> nothing to do
+        else:
             pass
 
-        # User wants data as binary buffer of float32
-        else:
-            data = np.ndarray.tobytes( data )
-
+        return data
+    
 
     def _run_process_data_bint32( self, data: bytes, h5_recording: bool=False ) -> any :
         """ Process data in the right format before sending it to the internal queue.
