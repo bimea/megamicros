@@ -456,7 +456,14 @@ class MemsArrayWS( base.MemsArray ):
 
                 # send settings to server
                 # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
-                # Also notice that the 'int32' datatype is the only avaible datatype on MBS server 
+                # Also notice that the 'int32/float32/fft' datatypes are the only avaible datatypes on MBS server 
+                if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32:
+                    server_datatype = 'int32'
+                elif self.datatype==base.MemsArray.Datatype.fft:
+                    server_datatype = 'fft'
+                else:
+                    server_datatype = 'float32'
+
                 settings = {
                     'mems': self.mems,
                     'analogs': self.analogs,
@@ -465,10 +472,9 @@ class MemsArrayWS( base.MemsArray ):
                     'status': self.status,
                     'clockdiv': int( 500000 // self.sampling_frequency ) - 1,
                     'sampling_frequency': self.sampling_frequency,
-                    'datatype': 'int32' if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32 else 'float32',
+                    'datatype': server_datatype,
                     'mems_init_wait': DEFAULT_MEMS_INIT_WAIT,
                     'duration': self.duration,
-                    'datatype': 'int32',
                     'frame_length': self.frame_length
                 }
 

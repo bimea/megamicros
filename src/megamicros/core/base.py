@@ -107,6 +107,7 @@ class MemsArray:
         float32 = 2
         bint32 = 3
         bfloat32 = 4
+        fft = 5
 
         def __str__( self ):
             """ Convert a datatype integer code into its string enumeration """
@@ -120,6 +121,8 @@ class MemsArray:
                 return "bint32"
             elif self == self.bfloat32:
                 return "bfloat32"
+            elif self == self.fft:
+                return "fft"
             else:
                 return "Unknown datatype"  
 
@@ -135,6 +138,8 @@ class MemsArray:
                 return 3
             elif self == self.bfloat32:
                 return 4
+            elif self == self.fft:
+                return 5
             else:
                 return -1
             
@@ -1055,6 +1060,8 @@ class MemsArray:
             log.info( f" .Starting iterations: will produce data as binary buffer of float32" )
         elif self.datatype == self.Datatype.float32:
             log.info( f" .Starting iterations: will produce data as numpy array of float32 ({self.frame_length} x {self.channels_number} size)" )
+        elif self.datatype == self.Datatype.fft:
+            log.info( f" .Starting iterations: will produce data as numpy array of complex32 ({self.frame_length} x {self.channels_number} size)" )
         else:
             raise MuException( f"Bad or unknown datatype. May be a bug" )
 
