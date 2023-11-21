@@ -1094,20 +1094,10 @@ class MemsArray:
             output data in complex (float32 ptecision) ndarray
         """
 
-        print(data)
-        data0 = np.frombuffer( data, dtype=np.float32 )
-        
-        
-        #data0 = np.empty( (len(data0)/4/2), dtype=np.complex64 )
-
         data = np.frombuffer( data, dtype=np.complex64 )
-        data = np.reshape( data, ( int( self.frame_length/2 ), self.channels_number ) )
+        data = np.reshape( data, ( self.channels_number, int( self.frame_length/2 ) ) )
         
-        #c = np.empty(data_shape, dtype=np.complex128)
-        #c.real = a
-        #c.imag = b
-
-        return data
+        return data.T
 
 
     def _run_process_data_float32( self, data: bytes, h5_recording: bool=False ) -> any :
