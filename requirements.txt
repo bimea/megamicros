@@ -14,3 +14,5 @@ paho_mqtt
 ffmpeg
 opencv-python
 jupyterlab
+pyqt6 
+pyqtgraph
