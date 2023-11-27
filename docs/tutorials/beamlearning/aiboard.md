@@ -9,7 +9,7 @@
     *megamicros* and *dash-websocket* packages are private packages.
     Please see [downloading from private repository section](../megamicros/get_started.md) for downloading them.
 
-For *AiBoard* to work, you need to have installed the following libraries: *megamicros*, *dash* and some of its components, *plotly* for signal tracing and various other libraries:
+For *AiBoard* to work, you need to install the following libraries: *megamicros*, *dash* and *dash bootstrap components and various other libraries:
 
 ```bash
     $ > cd your_project_path
