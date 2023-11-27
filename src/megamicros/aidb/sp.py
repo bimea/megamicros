@@ -773,7 +773,8 @@ def compute_energy_from_file( filename:str, filetype:int, channel_id:int|None=1,
     energy = np.sum( sound*sound, 1 )
     if power:
         """ compute mean energy, that is power """
-        energy = energy / frame_width
+        energy = 10*np.log10(energy / frame_width)
+
     if norm:
         """ normalize to one: max value is 1 """
         energy = energy / np.amax( energy )
@@ -868,7 +869,8 @@ def compute_energy_from_muh5file( filename, length=DEFAULT_ENERGY_SAMPLES, chann
             energy = np.sum( sound*sound, 1 )
             if power:
                 """ compute mean energy, that is power """
-                energy = energy / frame_width
+                energy =  10*np.log10( energy / frame_width )
+
             if norm:
                 """ normalize to one: max value is 1 """
                 energy = energy / np.amax( energy )
@@ -936,7 +938,8 @@ def compute_energy_from_wavfile( wavfilename, channel_id=None, length=DEFAULT_EN
         energy = np.sum( sound*sound, 1 )
         if power:
             """ compute mean energy, that is power """
-            energy = energy / frame_width
+            energy =  10*np.log10( energy / frame_width )
+
         if norm:
             """ normalize to one: max value is 1 """
             energy = energy / np.amax( energy )
