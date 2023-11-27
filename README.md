@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.42
+
+* Compute power in decibels  on database signals
+
 ### 2.0.41
 
 * Add the `fft` datatype for getting fft signals from the Megamicros broadcast server using the `run` method

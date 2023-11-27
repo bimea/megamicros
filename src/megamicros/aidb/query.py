@@ -1095,7 +1095,7 @@ class AidbSession( RestDBSession ):
         """
 
         log.info( f" .Sending DELETE request for labeling deleting..." )
-        response = self.delete( request=f"/labeling/{id}/" ).json()
+        response = self.delete( request=f"/filelabeling/{id}/" ).json()
         log.info( f" .Successfully deleted labeling <{id}> on database")
 
         return response

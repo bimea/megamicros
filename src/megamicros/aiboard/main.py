@@ -231,7 +231,7 @@ Main page callback
     Input( 'url', 'pathname' )
 )
 def on_page_view( pathname ):
-    print( 'pathname=', pathname )
+    #print( 'pathname=', pathname )
 
     return "cool !"
 
