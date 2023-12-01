@@ -37,5 +37,65 @@ from megamicros.exception import MuException
 from megamicros.aidb.query import AidbSession
 from torch.utils.data import TensorDataset
 
+DATASET_DEFAULT_LOGIN       = 'ailab'
+DATASET_DEFAULT_EMAIL       = 'bruno.gas@biimea.com'
+DATASET_DEFAULT_PASSWD      = '#T;uZnQ5UJ_JC~&'
+
+
+# =============================================================================
+# Exception dedicaced to Megamicros Ailab tools
+# =============================================================================
+
+class MuAilabException( MuException ):
+    """Exception base class for Megamicros Aidb systems """
+
+
 class AidbDataset( TensorDataset ):
-    pass
+    """ Aidb dataset 
+    __init__() get meta informations from the remote database
+    __getitem__() is overloaded to support the dataset indexing
+    """
+
+    __dbhost: str
+    __labels: list
+    __login: str
+    __email: str
+    __passwd: str
+
+    def __init__( self, dbhost: str, login: str=DATASET_DEFAULT_LOGIN, email:str=DATASET_DEFAULT_EMAIL, password: str=DATASET_DEFAULT_PASSWD, labels: list=[] ):
+        """
+        Get meta informations from the remote database
+
+        Parameters
+        ----------
+        dbhost: str
+            hostname or IP address
+        login: str, optionnal
+            database acces login
+        email: str, optionnal
+            database user email
+        passwd: str, optionnal
+            database password
+        labels: list, optionnal
+            labels identifier or name of data
+        """
+
+        self.__dbhost = dbhost
+        self.__labels = labels
+        self.__login = login
+        self.__email = email
+        self.__password = password
+        self.__meta = None
+
+
+        # Open database
+        try:
+            with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+                # get meta data
+                self.__meta = session.get_sourcefile( 1 )
+
+            print( f'meta={self.__meta}')
+
+
+        except MuException as e:
+            raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
