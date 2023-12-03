@@ -281,10 +281,10 @@ class AidbSession( RestDBSession ):
             return response 
 
         elif field is not None:
-            assert 'field' in field and 'value' in field, "field argument should be of the form {'label':'field_name', 'value':value}"
-            field = f"{field['label']}={field['value']}"
+            assert 'label' in field and 'value' in field, "field argument should be of the form {'label':'field_name', 'value':value}"
+            field_query = f"{field['label']}={field['value']}"
             log.info( f" .Downloading metadata for object '{object}' from field '{field['label']}'..." )
-            response = self.get( f"/{object}/?{field}", timeout=timeout ).json()
+            response = self.get( f"/{object}/?{field_query}", timeout=timeout ).json()
         else:
             log.warning( f"No field was given nor identifier or url: cannot find object {object} metadata" )
             return {}           
