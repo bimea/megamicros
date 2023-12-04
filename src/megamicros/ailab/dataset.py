@@ -244,6 +244,12 @@ class AidbDataset( TensorDataset ):
                         if not is_same:
                             # re-write the local basis
                             DATASET_NEW = True
+                            self.__meta = {
+                                'labels_meta': self.__labels_meta,
+                                'samples_meta': self.__samples_meta,
+                                'crdate': existing_meta['crdate'],
+                                'uddate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                            }
                             with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
                                 json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )  
 
@@ -261,6 +267,8 @@ class AidbDataset( TensorDataset ):
                         log.info( f" .Create wav directory" )
                         os.makedirs( os.path.join( DATASET_CONFIG_PATH, 'wav' ), exist_ok=True )
 
+                    samples_number = len( self.__samples_meta )
+                    print( f"Downloading {samples_number} samples from database..." )
                     for sample_idx, sample in enumerate( self.__samples_meta ):
                         data = np.frombuffer(
                             session.get_samples_range( 
@@ -272,8 +280,10 @@ class AidbDataset( TensorDataset ):
                             dtype=np.int32 
                         )
 
+                        if ( sample_idx*100/samples_number )%10 == 0:
+                            print( f"{int(sample_idx*100/samples_number)}%" )
                         SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
-                        print( f"[{sample_idx}-{sample['label_class']}.wav]" )
+                        
                         with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
                             wavfile.setnchannels( len(self.__channels) )
                             wavfile.setsampwidth( 2 )
@@ -282,7 +292,7 @@ class AidbDataset( TensorDataset ):
                             data = data >> 8
                             wavfile.writeframesraw( np.int16( np.reshape( data, np.size( data ) ) ) )
 
-
+                    print( f"100%" )
 
         except MuException as e:
             raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
@@ -311,24 +321,43 @@ class AidbDataset( TensorDataset ):
             idx = idx.tolist()
 
         try:
-            with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
-                idx = int(idx)
-                data = np.frombuffer(
-                    session.get_samples_range( 
-                        start = self.__samples_meta[idx]['start'],
-                        stop =  self.__samples_meta[idx]['end'],
-                        channels = self.__channels,
-                        id = self.__samples_meta[idx]['file_id']
-                    ), 
-                    dtype=np.int32 
-                ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
+            if self.__download:
+                # Get data from local file
+                SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{idx}-{self.__samples_meta[idx]['label_class']}.wav" )
+                with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:
+                    channels_number = wavefile.getnchannels()
+                    samples_number = wavefile.getnframes()
+                    data = np.frombuffer(
+                        wavefile.readframes( samples_number ),
+                        dtype=np.int16
+                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
 
-            # transform binary data to torch tensor and get properties and label
-            channels_number = len( self.__channels )
-            frame_fength =  len( data ) // channels_number
-            data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
-            sr = int( self.__samples_meta[idx]['sr'] )
-            label = self.__samples_meta[idx]['label_id']
+                # transform binary data to torch tensor and get properties and label
+                frame_fength =  len( data ) // channels_number
+                data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
+                sr = int( self.__samples_meta[idx]['sr'] )
+                label = self.__samples_meta[idx]['label_class']
+
+            else:
+                # Get data from remote database
+                with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+                    idx = int(idx)
+                    data = np.frombuffer(
+                        session.get_samples_range( 
+                            start = self.__samples_meta[idx]['start'],
+                            stop =  self.__samples_meta[idx]['end'],
+                            channels = self.__channels,
+                            id = self.__samples_meta[idx]['file_id']
+                        ), 
+                        dtype=np.int32 
+                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
+
+                # transform binary data to torch tensor and get properties and label
+                channels_number = len( self.__channels )
+                frame_fength =  len( data ) // channels_number
+                data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
+                sr = int( self.__samples_meta[idx]['sr'] )
+                label = self.__samples_meta[idx]['label_class']
 
             # Exec processing callback if any 
             if self.__transform:
