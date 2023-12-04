@@ -83,6 +83,14 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.44
+
+* Create torch dataset for AiDB signals
+
+### 2.0.43
+
+* Add dbchantier database to megamicros-aiboard program configuration
+
 ### 2.0.42
 
 * Compute power in decibels  on database signals

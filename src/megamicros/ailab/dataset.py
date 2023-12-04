@@ -37,7 +37,6 @@ import numpy as np
 import json
 import wave
 
-
 import torch
 from torch.utils.data import TensorDataset
 
@@ -130,6 +129,7 @@ class AidbDataset( TensorDataset ):
         self.__password = password
         self.__channels = channels if type( channels ) is list else [channels] if type( channels ) is int else None
         self.__transform = transform
+        self.__download = False
 
         if self.__channels is None:
             log.warning( f" .No channel specified in arguments list. Set to channel 0" )
@@ -216,6 +216,8 @@ class AidbDataset( TensorDataset ):
                         with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
                             json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )
 
+                        self.__download = True
+                        
                     else:
                         # no dowload means that data are nt saved -> nothing to do
                         pass
@@ -243,7 +245,9 @@ class AidbDataset( TensorDataset ):
                             # re-write the local basis
                             DATASET_NEW = True
                             with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
-                                json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )                        
+                                json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )  
+
+                        self.__download = True                      
 
                     else:
                         # User dont want to dowload data -> we do not use the existing meta file

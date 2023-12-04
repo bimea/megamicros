@@ -185,6 +185,7 @@ def on_page_view( pathname ):
     """
     database_hosts = [
         {"label": 'http://dbwelfare.biimea.io', "value": 'http://dbwelfare.biimea.io'},
+        {"label": 'http://dbchantier.biimea.io', "value": 'http://dbchantier.biimea.io'},
         {"label": 'http://127.0.0.1:8000', "value": 'http://127.0.0.1:8000'}
     ]
 
