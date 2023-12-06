@@ -72,17 +72,20 @@ class AidbDataset( TensorDataset ):
     __email: str
     __passwd: str
     __transform = None
+    __target_transform = None
     __download: bool
     __channels: list|None                      
 
     __meta: dict                                # Dataset meta informations
     __labels_meta: list                         # Meta info about labels
-    __samples_meta: list                        # Meta about samples
+    __samples_meta: list                        # Meta info about samples
 
 
-    def __init__( self, root: str|Path, url: str, login: str=DATASET_DEFAULT_LOGIN, email:str=DATASET_DEFAULT_EMAIL, password: str=DATASET_DEFAULT_PASSWD, labels: str|int|list=None, channels: int|list=None, transform=None, download=False ):
+    def __init__( self, root: str|Path, url: str, login: str=DATASET_DEFAULT_LOGIN, email:str=DATASET_DEFAULT_EMAIL, password: str=DATASET_DEFAULT_PASSWD, labels: str|int|list=None, channels: int|list=None, transform=None, target_transform=None, download=False ):
         """
-        Get meta informations from the remote database
+        Get meta informations from the remote database. 
+        If download is True, download all sammples from the database and save them in a local directory as wav files.
+        Either samples and labels can be transformed by giving a `transform` and/or `target_transform` callback as argument.
 
         Parameters
         ----------
@@ -129,6 +132,7 @@ class AidbDataset( TensorDataset ):
         self.__password = password
         self.__channels = channels if type( channels ) is list else [channels] if type( channels ) is int else None
         self.__transform = transform
+        self.__target_transform = target_transform
         self.__download = False
 
         if self.__channels is None:
@@ -363,8 +367,11 @@ class AidbDataset( TensorDataset ):
             if self.__transform:
                 data = self.__transform( data )
 
+            if self.__target_transform:
+                label = self.__target_transform( label )
+            
 
         except MuException as e:
             raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
 
-        return data, sr, label
+        return data, label, sr
