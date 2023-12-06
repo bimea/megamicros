@@ -277,7 +277,7 @@ def onLabelCard( label_idx, create_btn, update_btn, delete_btn, delete_cancel_bt
         dbhost =  json.loads( config_store )['host']
 
         """ Init page -> load labels from database """
-        labels = session.load_labels()
+        labels = session.load_labels( limit=100 )
         if len( labels ) == 0:
             raise Exception( f"Aucun label enregistré dans la base" )
 
@@ -454,7 +454,7 @@ def onLabelCard( label_idx, create_btn, update_btn, delete_btn, delete_cancel_bt
             session.delete_label( labels[label_idx]['id'] )
 
             """ reloads tags and populates selector with """
-            labels = session.load_labels()
+            labels = session.load_labels( limit=100 )
             labels_options = []
             for index, label in enumerate( labels ):
                 labels_options.append( {"label": label['name'], "value": index} )
@@ -506,7 +506,7 @@ def onLabelCard( label_idx, create_btn, update_btn, delete_btn, delete_cancel_bt
                 response = session.create_label( name, code, domains[domain_idx]['id'], tags_id, parent_id, comment )
 
                 """ reloads labels and populates selector with """
-                labels = session.load_labels()
+                labels = session.load_labels( limit=100 )
                 labels_options = []
                 for index, label in enumerate( labels ):
                     labels_options.append( {"label": label['name'], "value": index} )
@@ -561,7 +561,7 @@ def onLabelCard( label_idx, create_btn, update_btn, delete_btn, delete_cancel_bt
                 response = session.update_label( labels[label_idx]['id'], name, code, domains[domain_idx]['id'], tags_id, parent_id, comment )
 
                 """ reloads categories, populates selector with and display updated category """
-                labels = session.load_labels()
+                labels = session.load_labels( limit=100 )
                 labels_options = []
                 for index, label in enumerate( labels ):
                     labels_options.append( {"label": label['name'], "value": index} )

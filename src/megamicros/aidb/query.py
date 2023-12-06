@@ -30,7 +30,7 @@ from megamicros.aidb.exception import MuDbException
 from megamicros.aidb.session import RestDBSession, DEFAULT_TIMEOUT
 
 
-DEFAULT_LIMIT = 20
+DEFAULT_LIMIT = 50
 DATABASE_TABLES = ['config', 'domain', 'campaign', 'device', 'directory', 'sourcefile', 'tagcat', 'tag', 'context', 'label', 'filelabeling', 'dataset']
 
 FILETYPE_H5 = 1

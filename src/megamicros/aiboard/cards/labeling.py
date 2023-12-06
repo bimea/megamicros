@@ -525,7 +525,7 @@ def onBFLabelingCard( domain_idx, campaign_idx, device_idx, datetime_value, file
             labeling = store['labeling']            
             
             """ set label selector """
-            labels = session.load_labels()
+            labels = session.load_labels( limit=100 )
             store['labels'] = labels
             labels_form_options = populate_selector( labels )
             label_form_idx = next( i for i, label in enumerate( labels ) if label['url']==labeling['label'] )
@@ -895,7 +895,7 @@ def onLabelingCard( label_idx, file_idx, refresh_btn, update_btn, delete_btn, le
         if clicked is None:
             """ Populates selector """
 
-            labels = session.load_labels()
+            labels = session.load_labels( limit=100 )
             store['labels'] = labels
             labels_options = []
             for index, label in enumerate( labels ):
@@ -913,7 +913,7 @@ def onLabelingCard( label_idx, file_idx, refresh_btn, update_btn, delete_btn, le
         elif clicked == 'p3-labeling-card-refresh-btn-old':
             """ Reinit and re-populate selector """
 
-            labels = session.load_labels()
+            labels = session.load_labels( limit=100 )
             store['labels'] = labels
             labels_options = []
             for index, label in enumerate( labels ):
@@ -1274,7 +1274,7 @@ def onLabelingCard( label_idx, file_idx, refresh_btn, update_btn, delete_btn, le
             session.delete_labeling( store['labeling']['id'] )
 
             """ reloads labels """
-            labels = session.load_labels()
+            labels = session.load_labels( limit=100 )
             store['labels'] = labels
             labels_options = []
             for index, label in enumerate( labels ):

@@ -409,7 +409,7 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
         domains_options = cpn.populate_selector( domains )
 
         """ loads labels and contexts for further use """
-        labels = session.load_labels()
+        labels = session.load_labels( limit=100 )
         store['labels'] = labels
 
         contexts = session.load_contexts()

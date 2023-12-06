@@ -1258,7 +1258,7 @@ def onSourceFileSelect( domain_idx, campaign_idx, device_idx, datetime_value, fi
             """ Open the labeling formular for current scene """
 
             """ populate selectors """
-            labels = session.load_labels()
+            labels = session.load_labels( limit=100 )
             store['labels'] = labels
             label_options = cpn.populate_selector( labels )
 
