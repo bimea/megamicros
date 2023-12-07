@@ -27,6 +27,10 @@
 Documentation
 -------------
 MegaMicros documentation is available on https://readthedoc.biimea.io
+
+See
+---
+https://www.assemblyai.com/blog/end-to-end-speech-recognition-pytorch/
 """
 
 import os
@@ -84,8 +88,9 @@ class AidbDataset( TensorDataset ):
     def __init__( self, root: str|Path, url: str, login: str=DATASET_DEFAULT_LOGIN, email:str=DATASET_DEFAULT_EMAIL, password: str=DATASET_DEFAULT_PASSWD, labels: str|int|list=None, channels: int|list=None, transform=None, target_transform=None, download=False ):
         """
         Get meta informations from the remote database. 
-        If download is True, download all sammples from the database and save them in a local directory as wav files.
+        If download is True, all sammples are downloaded from the database and saved in a local directory as wav files.
         Either samples and labels can be transformed by giving a `transform` and/or `target_transform` callback as argument.
+        A json index file is created which name is given by the `DATASET_CONFIG_NAME` constant
 
         Parameters
         ----------
@@ -203,7 +208,7 @@ class AidbDataset( TensorDataset ):
                             'sr': sampling_frequency
                         } )
 
-                    # Add the samples number
+                    # Add the samples count
                     self.__labels_meta[label_idx]['count'] = len( labellings )
 
                 if DATASET_NEW:
@@ -223,7 +228,7 @@ class AidbDataset( TensorDataset ):
                         self.__download = True
                         
                     else:
-                        # no dowload means that data are nt saved -> nothing to do
+                        # no dowload means that data are not saved -> nothing to do
                         pass
 
                 else:
@@ -272,6 +277,8 @@ class AidbDataset( TensorDataset ):
                         os.makedirs( os.path.join( DATASET_CONFIG_PATH, 'wav' ), exist_ok=True )
 
                     samples_number = len( self.__samples_meta )
+                    percent = 0
+                    percent_before = 0
                     print( f"Downloading {samples_number} samples from database..." )
                     for sample_idx, sample in enumerate( self.__samples_meta ):
                         data = np.frombuffer(
@@ -284,8 +291,13 @@ class AidbDataset( TensorDataset ):
                             dtype=np.int32 
                         )
 
-                        if ( sample_idx*100/samples_number )%10 == 0:
-                            print( f"{int(sample_idx*100/samples_number)}%" )
+                        # Print counter
+                        percent_before = percent
+                        percent = sample_idx*100//samples_number
+                        if percent%20 == 0 or percent%20 < percent_before%20 :
+                            print( f"{percent}%" )
+
+                        # Save data
                         SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
                         
                         with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
