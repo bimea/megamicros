@@ -31,6 +31,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 See
 ---
 https://www.assemblyai.com/blog/end-to-end-speech-recognition-pytorch/
+https://pytorch.org/audio/stable/tutorials/audio_io_tutorial.html
 """
 
 import os
@@ -42,6 +43,7 @@ import json
 import wave
 
 import torch
+import torchaudio
 from torch.utils.data import TensorDataset
 
 from megamicros.log import log
@@ -299,14 +301,20 @@ class AidbDataset( TensorDataset ):
 
                         # Save data
                         SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
-                        
-                        with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
-                            wavfile.setnchannels( len(self.__channels) )
-                            wavfile.setsampwidth( 2 )
-                            wavfile.setframerate( sample['sr'] )
+                        data = data >> 8
 
-                            data = data >> 8
-                            wavfile.writeframesraw( np.int16( np.reshape( data, np.size( data ) ) ) )
+                        # New way ( see https://pytorch.org/audio/stable/tutorials/audio_io_tutorial.html) ->
+                        torchaudio.save( SAMPLE_FILENAME, np.int16( np.reshape( data, np.size( data ) ) ), sample['sr'], bits_per_sample=16, num_channels=len(self.__channels) )
+                        #inspect_file( SAMPLE_FILENAME )
+
+                        # Old way ->
+                        #with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                        #    wavfile.setnchannels( len(self.__channels) )
+                        #    wavfile.setsampwidth( 2 )
+                        #    wavfile.setframerate( sample['sr'] )
+
+                        #    data = data >> 8
+                        #    wavfile.writeframesraw( np.int16( np.reshape( data, np.size( data ) ) ) )
 
                     print( f"100%" )
 
