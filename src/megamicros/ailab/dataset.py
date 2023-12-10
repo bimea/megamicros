@@ -87,11 +87,25 @@ class AidbDataset( TensorDataset ):
     __samples_meta: list                        # Meta info about samples
 
 
-    def __init__( self, root: str|Path, url: str, login: str=DATASET_DEFAULT_LOGIN, email:str=DATASET_DEFAULT_EMAIL, password: str=DATASET_DEFAULT_PASSWD, labels: str|int|list=None, channels: int|list=None, transform=None, target_transform=None, download=False ):
+    def __init__( self, 
+        root: str|Path, 
+        url: str, 
+        login: str=DATASET_DEFAULT_LOGIN, 
+        email:str=DATASET_DEFAULT_EMAIL, 
+        password: str=DATASET_DEFAULT_PASSWD, 
+        labels: str|int|list=None, 
+        channels: int|list=None, 
+        transform=None, 
+        target_transform=None, 
+        download=False,
+        samples_duration: None|float=None,
+        time_stretching: None|float=None ):
         """
         Get meta informations from the remote database. 
         If download is True, all sammples are downloaded from the database and saved in a local directory as wav files.
         Either samples and labels can be transformed by giving a `transform` and/or `target_transform` callback as argument.
+        If `sample_duration` is given, samples are cut (and/or stretched wether the `time_stretching` argument is provided or not) to fit the given duration.
+        In that case, samples that are more than several times longer than the requested duration are split.  
         A json index file is created which name is given by the `DATASET_CONFIG_NAME` constant
 
         Parameters
@@ -114,6 +128,11 @@ class AidbDataset( TensorDataset ):
             Optional transform to be applied on a sample.
         download: bool
             Whether to download the dataset if it is not found at root path. (default: False).
+        samples_duration: float, optionnal
+            gives the duration of samples to set in seconds. If None, all samples are left unchanged (default: None).
+            samples that are more than several times longer than the requested duration are split.  
+        time_stretching: int, optionnal
+            gives time stretching factor to apply on samples when sample duration is given. If None, no time stretching is applied. (default: None)
         """
 
         # We do not work with pathlib. Path type is just for torch dataset compatibility
@@ -270,6 +289,14 @@ class AidbDataset( TensorDataset ):
                         # User dont want to dowload data -> we do not use the existing meta file
                         pass
                 
+                # resize data if requested by user
+                if samples_duration is not None:
+                    ## TO DO...
+                    # But notice that samples_duration should be done in the database query
+                    pass
+
+
+
                 # Get data if requested by user
                 if DATASET_NEW and download:
                     log.info(  f" .Collecting data ..." )
@@ -282,6 +309,9 @@ class AidbDataset( TensorDataset ):
                     percent = 0
                     percent_before = 0
                     print( f"Downloading {samples_number} samples from database..." )
+
+                    # Get data as int32 and transform them as float32 the torch tensor will be created from
+                    channels_number = len( self.__channels )
                     for sample_idx, sample in enumerate( self.__samples_meta ):
                         data = np.frombuffer(
                             session.get_samples_range( 
@@ -299,22 +329,24 @@ class AidbDataset( TensorDataset ):
                         if percent%20 == 0 or percent%20 < percent_before%20 :
                             print( f"{percent}%" )
 
-                        # Save data
+                        # Save data as wav file in 16 bits integer format
                         SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
-                        data = data >> 8
+                        
+                        data = np.int16( data >> 8 )
+                        with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                            wavfile.setnchannels( channels_number )
+                            wavfile.setsampwidth( 2 )
+                            wavfile.setframerate( int( sample['sr'] ) )
+                            wavfile.writeframesraw( data )
 
-                        # New way ( see https://pytorch.org/audio/stable/tutorials/audio_io_tutorial.html) ->
-                        torchaudio.save( SAMPLE_FILENAME, np.int16( np.reshape( data, np.size( data ) ) ), sample['sr'], bits_per_sample=16, num_channels=len(self.__channels) )
-                        #inspect_file( SAMPLE_FILENAME )
 
-                        # Old way ->
-                        #with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
-                        #    wavfile.setnchannels( len(self.__channels) )
-                        #    wavfile.setsampwidth( 2 )
-                        #    wavfile.setframerate( sample['sr'] )
+                        # Transform to torch tensor and reshape to (channels, samples_number)
+                        #data = np.reshape( data, ( channels_number, len(data)//channels_number ), order='C' )
+                        #data = torch.Tensor( data )
+                        ##data = data.reshape( len( self.__channels), -1 )
 
-                        #    data = data >> 8
-                        #    wavfile.writeframesraw( np.int16( np.reshape( data, np.size( data ) ) ) )
+                        #torchaudio.save( SAMPLE_FILENAME, data, int( sample['sr'] ), format='wav', channels_first=True, bits_per_sample=16 )
+                        ##inspect_file( SAMPLE_FILENAME )
 
                     print( f"100%" )
 
