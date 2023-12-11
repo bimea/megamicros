@@ -65,6 +65,54 @@ class MuAilabException( MuException ):
     """Exception base class for Megamicros Aidb systems """
 
 
+class AidbTimeStrechingTransform( torch.nn.Module ):
+    """ Time streching transform for Aidb dataset
+    Speed up in time without modifying pitch by a factor which is determined
+    by the ratio of input frames to output frames.
+
+    Parameters
+    ----------
+    factor: float
+        Time streching factor
+    """
+
+    def __init__( self, factor: float, output_length: int ):
+        super().__init__()
+        self._factor = factor
+        self._output_length = output_length
+
+    def forward( self, data: torch.Tensor ) -> torch.Tensor:
+        """ Apply time streching to the given data
+
+        Parameters
+        ----------
+        data: torch.Tensor
+            Data to transform
+        factor: float
+            Max or min value of streching factor
+        output_length: int
+            Length of the output data
+
+        Returns
+        -------
+        torch.Tensor
+            Transformed data
+        """
+
+        print( f" .data.shape: {data.shape}")
+        print( f" .data.dim(): {data.dim()}")
+        print( f" factor={self._factor}" )
+        print( f" output_length={self._output_length}")
+
+        if data.dim() != 3:
+            raise MuAilabException( "Input of AidbTimeStrechingTransform must be a 2d tensor." )
+
+        actual_length = data.shape[1]
+        print( f" .actual_length: {actual_length}" )
+        new_factor = self._output_length / actual_length
+        return torchaudio.functional.phase_vocoder( data, rate=new_factor )
+
+
 class AidbDataset( TensorDataset ):
     """ Aidb dataset 
     __init__() get meta informations from the remote database
@@ -80,7 +128,9 @@ class AidbDataset( TensorDataset ):
     __transform = None
     __target_transform = None
     __download: bool
-    __channels: list|None                      
+    __channels: list|None         
+    __sample_duration: float = None
+    __time_stretching: float = None             
 
     __meta: dict                                # Dataset meta informations
     __labels_meta: list                         # Meta info about labels
@@ -160,6 +210,8 @@ class AidbDataset( TensorDataset ):
         self.__transform = transform
         self.__target_transform = target_transform
         self.__download = False
+        self.__sample_duration = samples_duration
+        self.__time_stretching = time_stretching
 
         if self.__channels is None:
             log.warning( f" .No channel specified in arguments list. Set to channel 0" )
@@ -266,8 +318,10 @@ class AidbDataset( TensorDataset ):
                         else:
                             # same number of labels -> check every one
                             for label_idx, label in enumerate( self.__labels_meta ):
+                                # Find label occurence in local backup
                                 existing_label = next( (element for element in existing_meta['labels_meta'] if element['id'] == label['id']), None )
                                 if existing_label is None or existing_label['count'] != label['count'] or existing_label['channels'] != label['channels']:
+                                    # Label not found or samples number not the same or channels not the same
                                     is_same = False
                                     break
                         
@@ -281,20 +335,57 @@ class AidbDataset( TensorDataset ):
                                 'uddate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                             }
                             with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
-                                json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )  
+                                json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )
+                        else:
+                            self.__meta = existing_meta
 
                         self.__download = True                      
 
                     else:
-                        # User dont want to dowload data -> we do not use the existing meta file
+                        # User dont want to download data -> we do not use the existing meta file
                         pass
                 
-                # resize data if requested by user
+                # Resize data if requested by user. Note that download is always True in that case
                 if samples_duration is not None:
-                    ## TO DO...
-                    # But notice that samples_duration should be done in the database query
-                    pass
+                    if not self.__download:
+                        raise MuAilabException( f"Cannot resize data if not downloaded" )
 
+                    total_split_number = 0
+                    for sample_idx, sample in enumerate( self.__samples_meta ):
+                        label_id = sample['label_id']
+                        sample_start = sample['start']
+                        sample_end = sample['end']
+                        sr = int( sample['sr'] )
+                        sample_duration = ( sample_end - sample_start ) / sr
+                        if int( sample_duration/samples_duration ) > 1:
+                            # Sample is longer than requested duration -> split it
+                            split_number = int( sample_duration/samples_duration )
+                            total_split_number += split_number
+                            samples_meta_add = []
+                            for splitnumber in range( split_number ):
+                                split_start = int( sample_start + splitnumber * samples_duration * sr )
+                                split_end = int( split_start + samples_duration * sr )
+                                samples_meta_add.append( {
+                                    'label_class': label['class'],
+                                    'label_id': label_id,
+                                    'file_id': sample['file_id'],
+                                    'start': split_start,
+                                    'end': split_end,
+                                    'sr': sr
+                                } )
+
+                            # Add the split samples meta to the samples meta list
+                            #self.__meta['samples_meta'][sample_idx]['split'] = samples_meta_add
+                            self.__samples_meta[sample_idx]['split'] = samples_meta_add
+                        
+                    # Save the new meta file
+                    if total_split_number > 0:
+                        print( f"total split number: {total_split_number}")
+                        log.info( f" .Save new dataset meta file with {total_split_number} split samples" )
+                        DATASET_NEW = True
+                        self.__meta['samples_meta'] = self.__samples_meta
+                        with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
+                            json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )  
 
 
                 # Get data if requested by user
@@ -312,41 +403,56 @@ class AidbDataset( TensorDataset ):
 
                     # Get data as int32 and transform them as float32 the torch tensor will be created from
                     channels_number = len( self.__channels )
+                    split_number = 0
                     for sample_idx, sample in enumerate( self.__samples_meta ):
-                        data = np.frombuffer(
-                            session.get_samples_range( 
-                                start = sample['start'],
-                                stop =  sample['end'],
-                                channels = self.__channels,
-                                id = sample['file_id']
-                            ), 
-                            dtype=np.int32 
-                        )
+                        if 'split' in sample:
+                            # This sample has been split -> get the split data
+                            for split_index, split in enumerate( sample['split'] ):
+                                data = np.frombuffer(
+                                    session.get_samples_range( 
+                                        start = split['start'],
+                                        stop =  split['end'],
+                                        channels = self.__channels,
+                                        id = split['file_id']
+                                    ), 
+                                    dtype=np.int32 
+                                )
+                                # Save data as wav file in 16 bits integer format
+                                SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}-{split_index}.wav" )
+                                split_number += 1
+                                data = np.int16( data >> 8 )
+                                with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                                    wavfile.setnchannels( channels_number )
+                                    wavfile.setsampwidth( 2 )
+                                    wavfile.setframerate( int( split['sr'] ) )
+                                    wavfile.writeframesraw( data )
+
+                        else:
+                            # This sample has not been split -> get the original data
+                            data = np.frombuffer(
+                                session.get_samples_range( 
+                                    start = sample['start'],
+                                    stop =  sample['end'],
+                                    channels = self.__channels,
+                                    id = sample['file_id']
+                                ), 
+                                dtype=np.int32 
+                            )
+
+                            # Save data as wav file in 16 bits integer format
+                            SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
+                            data = np.int16( data >> 8 )
+                            with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                                wavfile.setnchannels( channels_number )
+                                wavfile.setsampwidth( 2 )
+                                wavfile.setframerate( int( sample['sr'] ) )
+                                wavfile.writeframesraw( data )
 
                         # Print counter
                         percent_before = percent
                         percent = sample_idx*100//samples_number
                         if percent%20 == 0 or percent%20 < percent_before%20 :
                             print( f"{percent}%" )
-
-                        # Save data as wav file in 16 bits integer format
-                        SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
-                        
-                        data = np.int16( data >> 8 )
-                        with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
-                            wavfile.setnchannels( channels_number )
-                            wavfile.setsampwidth( 2 )
-                            wavfile.setframerate( int( sample['sr'] ) )
-                            wavfile.writeframesraw( data )
-
-
-                        # Transform to torch tensor and reshape to (channels, samples_number)
-                        #data = np.reshape( data, ( channels_number, len(data)//channels_number ), order='C' )
-                        #data = torch.Tensor( data )
-                        ##data = data.reshape( len( self.__channels), -1 )
-
-                        #torchaudio.save( SAMPLE_FILENAME, data, int( sample['sr'] ), format='wav', channels_first=True, bits_per_sample=16 )
-                        ##inspect_file( SAMPLE_FILENAME )
 
                     print( f"100%" )
 
