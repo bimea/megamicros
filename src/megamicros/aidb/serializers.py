@@ -950,13 +950,13 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         """
         
         """ get config and the dataset object """
-        config = Config.objects.get( active=True )
+        #config = Config.objects.get( active=True )
         dataset: Dataset = self.instance
         
         if dataset.filename:
             """ remove dataset file """
             log.info( f" .Removing stored data for dataset '{dataset.name}'" )
-            remove_dataset_muh5_file( f"{config.dataset_path}/{dataset.filename}" )
+            #remove_dataset_muh5_file( f"{config.dataset_path}/{dataset.filename}" )
         else:
             log.info( f" .No stored data to remove for dataset '{dataset.name}'" )
 
