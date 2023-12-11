@@ -900,12 +900,12 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
     
     class Meta:
         model = Dataset
-        fields = ['id', 'url', 'name', 'code', 'domain', 'labels', 'contexts', 'channels', 'filelabelings', 'filename', 'tags', 'comment', 'info', 'crdate']
+        fields = ['id', 'url', 'name', 'code', 'domain', 'labels', 'contexts', 'channels', 'filelabelings', 'filename', 'tags', 'comment', 'info', 'crdate', 'uddate']
 
     def validate( self, data ):
         """ the default validate function should be OK if channels is set as mandatory in model """
         if not data['channels']:
-            """ Should provide channel(s) """
+            # Should provide channel(s)
             raise serializers.ValidationError( "Cannot build dataset: no channels (mems number) given." )
 
         if Dataset.objects.filter( code=data['code'] ).exists():
@@ -916,27 +916,66 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
 
     def create(self, validated_data):
-        """ populate the filelabelinbgs field """
+        """ populate the filelabelings field """
 
         log.info( f" .Note that label detection is limited to MUH5 files" )
 
+        # Get filelabelings. Only labels are taken into account and only MUH5 files
         filelabelings = []
         for label in validated_data['labels']:
-            """ search labelized MUH5 files """
             selected = FileLabeling.objects.filter( label=label, sourcefile__type=SourceFile.MUH5 )
-            for filelabeling in selected:
-                filelabelings.append( filelabeling )
-            log.info( f" .Label '{label}': detected {len(selected)} labelized files" )
+            filelabelings + selected
+            log.info( f" .Label '{label}': detected on {len(selected)} labelized files" )
 
         if not filelabelings:
             log.info( f" .No labelized file found for dataset {validated_data['name']}" )
 
+        # Update filelabelings field
         validated_data['filelabelings'] = filelabelings
 
-        """ Create Dataset object """
+        # Set dataset json filename
+        validated_data['filename'] = f"dataset-{dataset.code}-{datetime.strftime( dataset.crdate, '%Y%m%d-%H%M%S' )}.json"
+
+        # Create Dataset object
         dataset = super().create( validated_data )
 
         return dataset
+    
+
+    def store( self):
+        """ Store metadata in json file """
+
+        dataset: Dataset = self.instance
+        
+        # Set meta data for dataset
+        metadata = {
+            'name': dataset.name,
+            'code': dataset.code,
+            'domain': dataset.domain.name,
+            'labels': [label.code for label in dataset.labels.all()],
+            'filename': dataset.filename,
+            'crdate': dataset.crdate,
+            'uddate': None,
+        }
+
+        # Set samples meta data
+        samples_metadata = []
+        for filelabeling in dataset.filelabelings.all():
+            samples_metadata.append( {
+                'start': filelabeling.datetime_start,
+                'end': filelabeling.datetime_end,
+                'file': f"{filelabeling.sourcefile.directory.path}/{filelabeling.sourcefile.filename}",
+                'label': filelabeling.label.code,
+                'datetime': filelabeling.sourcefile.datetime,
+                'type': filelabeling.sourcefile.type,
+                'sample_width': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
+                'sampling_frequency': filelabeling.sourcefile.info['sampling_frequency']                
+            } )
+
+        # TODO: store samples metadata in json file
+        # >>>>>
+
+        dataset.save()
 
     
     def update( self, instance: Dataset, validated_data ):
@@ -961,7 +1000,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             log.info( f" .No stored data to remove for dataset '{dataset.name}'" )
 
 
-    def store( self ):
+    def store_old( self ):
         """ 
         Store dataset in H5 file 
         """

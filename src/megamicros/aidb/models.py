@@ -204,6 +204,16 @@ class FileLabeling( models.Model ):
 
 
 class Dataset( models.Model ):
+    """
+    Dataset model
+    
+    A dataset is a collection of file labelings. 
+    The collection is stored in a file which can be updated with new file labelings.
+    Criteria for a file labeling to be included in a dataset are:
+    - the file contains the requested label
+    - the file contains the requested context (if any)
+    - the file contains the requested tag (if any)
+    """
     name = models.CharField( '(*) Nom du dataset', max_length=128 )
     code = models.CharField( '(*) Code', max_length=64 )
     domain = models.ForeignKey( Domain, related_name='datasets', on_delete=models.CASCADE )
@@ -211,7 +221,7 @@ class Dataset( models.Model ):
     contexts = models.ManyToManyField( Context, blank=True )
     channels = models.JSONField( 'Voies (Mems)', default=list )
     filelabelings = models.ManyToManyField( FileLabeling, blank=True )
-    filename = models.CharField( 'Nom du fichier de sauvegarde', max_length=128, null=True )
+    filename = models.CharField( 'Nom du fichier de sauvegarde', max_length=128, null=True, auto_created=True )
     tags = models.ManyToManyField( Tag, related_name='datasets', blank=True )
     comment = models.TextField( 'Notes', null=True )
     info = models.JSONField( 'Infos', null=True  )

@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.46
+
+* Fix dataset error for entry removing in AiDB
+
 ### 2.0.45
 
 * Fix error made by the default limit=20 for label downloading
