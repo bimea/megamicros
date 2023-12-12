@@ -894,7 +894,8 @@ class SourceFileUploadAudioSerializer:
 
 
 class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
-    #channels = serializers.JSONField( initial=list )
+    """ Dataset serializer """
+
     info = serializers.JSONField( initial=dict )
     filename = serializers.CharField( read_only=True )
     filelabelings  = serializers.HyperlinkedRelatedField( many=True, read_only=True, view_name='filelabeling-detail' )
@@ -905,14 +906,16 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
     def validate( self, data ):
         """ the default validate function should be OK if channels is set as mandatory in model """
-        # Channels is no more needed since we use filelabelings
-        #if not data['channels']:
-        #    # Should provide channel(s)
-        #    raise serializers.ValidationError( "Cannot build dataset: no channels (mems number) given." )
 
+        log.info( f" .Validating dataset with data: {data}" )
+        
         # Datasets cannot have same code (in creating mode)
+        # Note that this is not a problem in updating mode since the code is not a field to be updated
         if self.instance is None:
+
+            # we are in creating mode
             if Dataset.objects.filter( code=data['code'] ).exists():
+                
                 # get this dataset and throw an exception
                 dataset = Dataset.objects.get( code=data['code'] )
                 raise serializers.ValidationError( f"A dataset '{dataset.name}' with same code '{data['code']}' already exists" )
@@ -1181,6 +1184,5 @@ class DatasetUploadSerializer:
 
             except Exception as e:
                 raise serializers.ValidationError( f"Streaming dataset failed: {e}" )
-
-
+        
 
