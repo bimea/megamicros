@@ -219,7 +219,7 @@ class Dataset( models.Model ):
     domain = models.ForeignKey( Domain, related_name='datasets', on_delete=models.CASCADE )
     labels = models.ManyToManyField( Label, blank=True )
     contexts = models.ManyToManyField( Context, blank=True )
-    channels = models.JSONField( 'Voies (Mems)', default=list )
+    #channels = models.JSONField( 'Voies (Mems)', default=list )
     filelabelings = models.ManyToManyField( FileLabeling, blank=True )
     filename = models.CharField( 'Nom du fichier de sauvegarde', max_length=128, null=True, auto_created=True )
     tags = models.ManyToManyField( Tag, related_name='datasets', blank=True )

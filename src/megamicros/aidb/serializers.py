@@ -30,6 +30,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 
 
 from array import array
+import os
 from os import listdir, path as ospath
 import io
 import wave
@@ -893,24 +894,28 @@ class SourceFileUploadAudioSerializer:
 
 
 class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
-    channels = serializers.JSONField( initial=list )
+    #channels = serializers.JSONField( initial=list )
     info = serializers.JSONField( initial=dict )
     filename = serializers.CharField( read_only=True )
     filelabelings  = serializers.HyperlinkedRelatedField( many=True, read_only=True, view_name='filelabeling-detail' )
     
     class Meta:
         model = Dataset
-        fields = ['id', 'url', 'name', 'code', 'domain', 'labels', 'contexts', 'channels', 'filelabelings', 'filename', 'tags', 'comment', 'info', 'crdate', 'uddate']
+        fields = ['id', 'url', 'name', 'code', 'domain', 'labels', 'contexts', 'filelabelings', 'filename', 'tags', 'comment', 'info', 'crdate' ]
 
     def validate( self, data ):
         """ the default validate function should be OK if channels is set as mandatory in model """
-        if not data['channels']:
-            # Should provide channel(s)
-            raise serializers.ValidationError( "Cannot build dataset: no channels (mems number) given." )
+        # Channels is no more needed since we use filelabelings
+        #if not data['channels']:
+        #    # Should provide channel(s)
+        #    raise serializers.ValidationError( "Cannot build dataset: no channels (mems number) given." )
 
-        if Dataset.objects.filter( code=data['code'] ).exists():
-            """ Datasets cannot have same code """
-            raise serializers.ValidationError( f"A dataset '{data['name']}' with same code '{data['code']}' already exists" )
+        # Datasets cannot have same code (in creating mode)
+        if self.instance is None:
+            if Dataset.objects.filter( code=data['code'] ).exists():
+                # get this dataset and throw an exception
+                dataset = Dataset.objects.get( code=data['code'] )
+                raise serializers.ValidationError( f"A dataset '{dataset.name}' with same code '{data['code']}' already exists" )
 
         return data
 
@@ -924,7 +929,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         filelabelings = []
         for label in validated_data['labels']:
             selected = FileLabeling.objects.filter( label=label, sourcefile__type=SourceFile.MUH5 )
-            filelabelings + selected
+            filelabelings += selected
             log.info( f" .Label '{label}': detected on {len(selected)} labelized files" )
 
         if not filelabelings:
@@ -934,53 +939,147 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         validated_data['filelabelings'] = filelabelings
 
         # Set dataset json filename
-        validated_data['filename'] = f"dataset-{dataset.code}-{datetime.strftime( dataset.crdate, '%Y%m%d-%H%M%S' )}.json"
+        validated_data['filename'] = f"dataset-{validated_data['code']}-{datetime.now().strftime( '%Y%m%d-%H%M%S' )}.json"
 
-        # Create Dataset object
+        # Create and save dataset
         dataset = super().create( validated_data )
 
+        # Create and store the metadata in json file 
+        try:
+            self.store( dataset )
+        except Exception as e:
+            dataset.delete()
+            raise serializers.ValidationError( f"Failed to store metadata of dataset: {e}" )
+        
         return dataset
     
 
-    def store( self):
+    def store( self, dataset: Dataset ):
         """ Store metadata in json file """
-
-        dataset: Dataset = self.instance
         
         # Set meta data for dataset
-        metadata = {
+        dataset_metadata = {
             'name': dataset.name,
             'code': dataset.code,
             'domain': dataset.domain.name,
-            'labels': [label.code for label in dataset.labels.all()],
-            'filename': dataset.filename,
-            'crdate': dataset.crdate,
-            'uddate': None,
+            'labels_code': [label.code for label in dataset.labels.all()],
+            'labels_id': [label.id for label in dataset.labels.all()],
+            'filename': dataset.filename
         }
 
         # Set samples meta data
         samples_metadata = []
         for filelabeling in dataset.filelabelings.all():
+
+            # Get file timestamp and segment timestamps, then convert to samples start and stop
+            file_timestamp = filelabeling.sourcefile.info['timestamp']
+            timestamp_start = filelabeling.datetime_start
+            timestamp_end = filelabeling.datetime_end
+            sampling_frequency = filelabeling.sourcefile.info['sampling_frequency']
+            start_time = timestamp_start - file_timestamp
+            end_time = timestamp_end - file_timestamp
+            sample_start = int( start_time * sampling_frequency )
+            sample_end = int( end_time * sampling_frequency )
+
             samples_metadata.append( {
-                'start': filelabeling.datetime_start,
-                'end': filelabeling.datetime_end,
-                'file': f"{filelabeling.sourcefile.directory.path}/{filelabeling.sourcefile.filename}",
-                'label': filelabeling.label.code,
+                'start': sample_start,
+                'end': sample_end,
+                'sourcefile_url': filelabeling.sourcefile,
+                'sourcefile_id': filelabeling.sourcefile_id,
+                'label_code': filelabeling.label_code,
+                'label_id': filelabeling.label_id,
                 'datetime': filelabeling.sourcefile.datetime,
                 'type': filelabeling.sourcefile.type,
                 'sample_width': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
-                'sampling_frequency': filelabeling.sourcefile.info['sampling_frequency']                
+                'sampling_frequency': sampling_frequency                
             } )
 
-        # TODO: store samples metadata in json file
-        # >>>>>
+        metadata = {
+            'dataset': dataset_metadata,
+            'samples': samples_metadata,
+            'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            'uddate': None
+        }
 
-        dataset.save()
+        # Get config and save metadata in json file
+        try:
+            config = Config.objects.get( active=True )
+        except Exception as e:
+            raise serializers.ValidationError( f"Cannot get active configuration: {e}" )
 
-    
+        try:
+            filename = f"{config.dataset_path}/{dataset.filename}"
+            with open( filename, 'w', encoding='utf-8') as json_file:
+                json.dump( metadata, json_file, ensure_ascii=False, indent=4 )
+
+        except Exception as e:
+            raise serializers.ValidationError( f"Failed to save dataset {filename}: {e}" )
+
+
     def update( self, instance: Dataset, validated_data ):
-        """ Update is forbidden: database labeling may have change """
-        raise serializers.ValidationError( f"Cannot update a dataset. Please create a new one" )
+        """ Update dataset content 
+        
+        instance: Dataset 
+            object to be updated
+        validated_data: dict
+            new data to be set
+        """
+
+        # Check name, code, domain and comment
+        if instance.name != validated_data['name']:
+            raise serializers.ValidationError( f"Cannot rename dataset. Please remove the dataset and create a new one" )
+        if instance.code != validated_data['code']:
+            raise serializers.ValidationError( f"Cannot change dataset code. Please remove the dataset and create a new one" )
+
+        if instance.domain != validated_data['domain']:
+            instance.domain = validated_data['domain']
+        if instance.comment != validated_data['comment']:
+            instance.comment = validated_data['comment']
+
+        # Check if code has been changed and if so, update the filename
+        json_needs_update = False
+
+        # Check if code, labels, ... dataset has been changed
+        if instance.labels != validated_data['labels']:
+            log.info( f" .Labels have been changed: updating the dataset labels" )
+            instance.labels.set( validated_data['labels'] )
+            json_needs_update = True
+
+        # Check if contexts dataset has been changed
+        if instance.contexts != validated_data['contexts']:
+            log.info( f" .Contexts have been changed: updating the dataset contexts" )
+            instance.contexts.set( validated_data['contexts'] )
+            json_needs_update = True
+
+        # Check if tags dataset has been changed
+        if instance.tags != validated_data['tags']:
+            log.info( f" .Tags have been changed: updating the dataset tags" )
+            instance.tags.set( validated_data['tags'] )
+            json_needs_update = True
+
+        if json_needs_update:
+            # Get new filelabelings
+            filelabelings = []
+            for label in instance.labels.all():
+                selected = FileLabeling.objects.filter( label=label, sourcefile__type=SourceFile.MUH5 )
+                filelabelings += selected
+                log.info( f" .Label '{label}': detected on {len(selected)} labelized files" )
+
+            # save filelabelings
+            instance.filelabelings.set( filelabelings )
+
+            # store update metadata in json file
+            try:
+                log.info( f" .Updating dataset json file..." )
+                self.store( instance )
+            except Exception as e:
+                log.info( f" .Failed to update metadata of dataset: {e}. Actually, the dataset json file has not been updated")
+                raise serializers.ValidationError( f"Failed to update metadata of dataset: {e}.  Actually, the dataset json file has not been updated" )
+
+        # Save dataset
+        super().update( instance, validated_data )
+
+        return instance
 
 
     def remove( self ):
@@ -988,74 +1087,26 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         Remove stored dataset if any
         """
         
-        """ get config and the dataset object """
-        #config = Config.objects.get( active=True )
-        dataset: Dataset = self.instance
-        
-        if dataset.filename:
-            """ remove dataset file """
-            log.info( f" .Removing stored data for dataset '{dataset.name}'" )
-            #remove_dataset_muh5_file( f"{config.dataset_path}/{dataset.filename}" )
-        else:
-            log.info( f" .No stored data to remove for dataset '{dataset.name}'" )
-
-
-    def store_old( self ):
-        """ 
-        Store dataset in H5 file 
-        """
-
-        """ get config and dataset object """
-        config = Config.objects.get( active=True )
-        dataset: Dataset = self.instance
-
-        if dataset.filename:
-            """ a dataset file already exist """
-            log.info( f" .Seems that a dataset file already exists with name '{dataset.filename}'" )
-            log.info( f" .Nothing to do. Please create a new dataset." )
-            log.info( f" .Nothing to do. Quitting." )
-            raise serializers.ValidationError( f"Cannot store dataset: file already exists. Please create a new dataset instead." )
-
-        """ get signals informations """
-        labelings = []
-        for filelabeling in dataset.filelabelings.all():
-            labelings.append( {
-                'start': filelabeling.datetime_start,
-                'end': filelabeling.datetime_end,
-                'file': f"{filelabeling.sourcefile.directory.path}/{filelabeling.sourcefile.filename}",
-                'label': filelabeling.label.code,
-                'datetime': filelabeling.sourcefile.datetime,
-                'type': filelabeling.sourcefile.type,
-                'sample_width': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
-                'sampling_frequency': filelabeling.sourcefile.info['sampling_frequency']                
-            } )
-
-        if not labelings:
-            raise serializers.ValidationError( "Found no labelized data" )
-
-        """ get meta-data """
-        metadata = {
-            'name': dataset.name,
-            'code': dataset.code,
-            'domain': dataset.domain.name,
-            'labels': [label.code for label in dataset.labels.all()],
-            'channels': dataset.channels,
-            'crdate': dataset.crdate
-        }
-
-        filename = f"mudset-{dataset.code}-{datetime.strftime( dataset.crdate, '%Y%m%d-%H%M%S' )}.h5"
-        log.info( f" .Found {len( labelings )} labelings in dataset" )
-        log.info( f" .Store data for dataset '{dataset.name}' in '{filename}'" )
-
-        """ save sound dataset in h5 file """
+        # Get config and dataset object
         try:
-            save_dataset_on_muh5_file( f"{config.dataset_path}/{filename}", metadata, labelings )
+            config = Config.objects.get( active=True )
+            dataset: Dataset = self.instance
+            filename = f"{config.dataset_path}/{dataset.filename}"
         except Exception as e:
-            raise serializers.ValidationError( f"Storing dataset failed: {e}" )
+            raise serializers.ValidationError( f"Cannot get active configuration: {e}" )
+        
+        # Remove dataset metadata file
+        if dataset.filename:
+            log.info( f" .Removing metadata file for dataset '{dataset.name}'" )
 
-        """ save the updated dataset object in database """
-        dataset.filename = filename
-        dataset.save()
+            if os.path.exists( filename ):
+                os.remove( filename )
+                log.info( f" .'{filename}' file successfully removed" )
+            else:
+                log.info( f" .'{filename}' file removing failed: file not found" )
+        else:
+            log.info( f" .No stored metadata to remove for dataset '{dataset.name}'" )
+
 
 
 class DatasetUploadSerializer:
@@ -1112,7 +1163,7 @@ class DatasetUploadSerializer:
                 'code': dataset.code,
                 'domain': dataset.domain.name,
                 'labels': [label.code for label in dataset.labels.all()],
-                'channels': dataset.channels,
+                #'channels': dataset.channels,
                 'crdate': dataset.crdate
             }
 
