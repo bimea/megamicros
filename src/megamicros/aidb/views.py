@@ -549,32 +549,24 @@ class DatasetViewSet( viewsets.ModelViewSet ):
             dataset: Dataset = self.get_object()
             log.info( f" .Removing dataset '{dataset.name}' for user '{request.user}'" )       
             
-            """ remove dataset file if any """
+            #remove dataset file if any
             serializer = DatasetSerializer( dataset, context={'request': request}  )
             serializer.remove()
 
-            """ remove database entry """
+            #remove database entry
             return super( DatasetViewSet, self).destroy( request, *args, **kwargs )
         
-        except Exception as e:
-            return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
-
-
-    @action( detail=True, methods=['put', 'get'], name='Store dataset' )
-    def store( self, request, pk=None ):
-        try:
-            dataset: Dataset = self.get_object()
-            log.info( f" .Store data for dataset '{dataset.name} (pk={pk})'" )
-            serializer = DatasetSerializer( dataset, context={'request': request}  )
-            serializer.store()
-            return Response( serializer.data )
-
         except Exception as e:
             return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
         
 
     @action( detail=True, methods=['get'] )
     def upload( self, request, pk=None ):
+        """ Upload the json metadata file of dataset
+
+        Endpoint:
+            /dataset/<dataset_id>/upload
+        """
         try:
             dataset = self.get_object()
             serializer = DatasetUploadSerializer( dataset )
@@ -583,3 +575,4 @@ class DatasetViewSet( viewsets.ModelViewSet ):
         except Exception as e:
             return Response( str(e), status=status.HTTP_412_PRECONDITION_FAILED)
             #return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
+

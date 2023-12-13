@@ -1113,35 +1113,42 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
 
 class DatasetUploadSerializer:
-    """
-    Upload serializer for Dataset. Send a http response with file content if dataset has been stored in a file.
-    If not, send a http response with a buffer stream as H5 file created on the fly.
-    """
+    """ Upload serializer for Dataset. Send a http response with file content. """
 
     def __init__( self, dataset: Dataset ):
         """
-        Download a stored dataset or create an equivalent stream whether dataset has been stored or not
-        Request: /dataset/<id>/upload
+        Download a stored dataset jason metadata file
+        Endpoint: /dataset/<id>/upload
         """
         
+        # A stored file exist for dataset
         if dataset.filename:
-            """ a stored file exist for dataset """
 
-            """ check file existance """
+            # check file existance
             config = Config.objects.get( active=True )
             filename = f"{config.dataset_path}/{dataset.filename}"
             if not ospath.exists( filename ):
-                log.info( f" .Failed at dataset uploading: file not found" )
-                raise Exception( f"Unable to upload: file dataset was not found." )            
+                log.info( f" .Dataset uploading failed: file not found" )
+                raise Exception( f"Unable to upload: no dataset file found." )            
 
-            """ download file content """
+            # download file content
             log.info( f" .Starting dataset file download..." )
             with open( filename, 'rb') as file_to_upload:
-                self.data = HttpResponse( file_to_upload, content_type='application/x-hdf5' )
-                self.data['Content-Disposition'] = f"attachment; filename={dataset.name}.h5"
+                self.data = HttpResponse( file_to_upload, content_type='application/json' )
+                self.data['Content-Disposition'] = f"attachment; filename={dataset.name}.json"
 
         else:
-            """ dataset has not been stored -> build a stream to be sent as H5 file """
+            # dataset has not been stored -> build a stream to be sent as H5 file """
+            raise serializers.ValidationError( f"No dataset metadat file found" )
+
+            # A possible response could be to create an empty json file as a text stream
+            h5stream = io.BytesIO()
+            save_dataset_on_muh5_file( h5stream, metadata, labelings )
+            h5stream.seek( 0 )
+            log.info( f" .Starting dataset stream download..." )
+            self.data = HttpResponse( h5stream, content_type='application/x-hdf5' )
+            self.data['Content-Disposition'] = f"attachment; filename={dataset.name}.h5"
+
 
             """ get signals informations """
             labelings = []
