@@ -83,6 +83,12 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.48
+
+* New Dataset view and serializer for AiDB
+
+### 2.0.47
+
 ### 2.0.46
 
 * Fix dataset error for entry removing in AiDB
