@@ -163,3 +163,4 @@ cython_debug/
 tmp/
 persist/
 .DS_Store
+migrations/

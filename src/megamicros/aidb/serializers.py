@@ -54,6 +54,7 @@ from .sp import compute_q50_from_file, compute_energy_from_file, compute_energy_
 from .sp import extract_range_from_muh5file, extract_samples_from_muh5file, extract_samples_from_wavfile
 from .sp import save_context_on_muh5_file, update_context_on_muh5_file, save_label_on_muh5_file, update_label_on_muh5_file, save_dataset_on_muh5_file, remove_dataset_muh5_file
 from megamicros.log import log
+from megamicros.aidb.exception import MuDbException
 
 """
 Django Rest Framework ManyToMany through, see: https://bitbucket.org/snippets/adautoserpa/MeLa/django-rest-framework-manytomany-through
@@ -915,7 +916,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
             # we are in creating mode
             if Dataset.objects.filter( code=data['code'] ).exists():
-                
+
                 # get this dataset and throw an exception
                 dataset = Dataset.objects.get( code=data['code'] )
                 raise serializers.ValidationError( f"A dataset '{dataset.name}' with same code '{data['code']}' already exists" )
@@ -987,11 +988,10 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             samples_metadata.append( {
                 'start': sample_start,
                 'end': sample_end,
-                'sourcefile_url': filelabeling.sourcefile,
-                'sourcefile_id': filelabeling.sourcefile_id,
-                'label_code': filelabeling.label_code,
-                'label_id': filelabeling.label_id,
-                'datetime': filelabeling.sourcefile.datetime,
+                'sourcefile_id': filelabeling.sourcefile.id,
+                'label_code': filelabeling.label.code,
+                'label_id': filelabeling.label.id,
+                'timestamp': filelabeling.sourcefile.info['timestamp'],
                 'type': filelabeling.sourcefile.type,
                 'sample_width': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
                 'sampling_frequency': sampling_frequency                
@@ -1001,7 +1001,6 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             'dataset': dataset_metadata,
             'samples': samples_metadata,
             'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-            'uddate': None
         }
 
         # Get config and save metadata in json file
@@ -1129,67 +1128,22 @@ class DatasetUploadSerializer:
             filename = f"{config.dataset_path}/{dataset.filename}"
             if not ospath.exists( filename ):
                 log.info( f" .Dataset uploading failed: file not found" )
-                raise Exception( f"Unable to upload: no dataset file found." )            
+                raise MuDbException( f"Unable to upload: no dataset file found." )            
 
             # download file content
             log.info( f" .Starting dataset file download..." )
             with open( filename, 'rb') as file_to_upload:
                 self.data = HttpResponse( file_to_upload, content_type='application/json' )
-                self.data['Content-Disposition'] = f"attachment; filename={dataset.name}.json"
+                self.data['Content-Disposition'] = f"attachment; filename={dataset.code}.json"
 
         else:
             # dataset has not been stored -> build a stream to be sent as H5 file """
-            raise serializers.ValidationError( f"No dataset metadat file found" )
+            raise MuDbException( f"No dataset metadata file found" )
 
-            # A possible response could be to create an empty json file as a text stream
-            h5stream = io.BytesIO()
-            save_dataset_on_muh5_file( h5stream, metadata, labelings )
-            h5stream.seek( 0 )
-            log.info( f" .Starting dataset stream download..." )
-            self.data = HttpResponse( h5stream, content_type='application/x-hdf5' )
-            self.data['Content-Disposition'] = f"attachment; filename={dataset.name}.h5"
+            # A possible response could be to create an empty json stream and send it
+            data = {}
+            self.data = HttpResponse( json.dumps(data), content_type='application/json' )
+            self.data['Content-Disposition'] = f'attachment; filename={dataset.code}.json'
 
-
-            """ get signals informations """
-            labelings = []
-            for filelabeling in dataset.filelabelings.all():
-                labelings.append( {
-                    'start': filelabeling.datetime_start,
-                    'end': filelabeling.datetime_end,
-                    'file': f"{filelabeling.sourcefile.directory.path}/{filelabeling.sourcefile.filename}",
-                    'label': filelabeling.label.code,
-                    'datetime': filelabeling.sourcefile.datetime,
-                    'type': filelabeling.sourcefile.type,
-                    'sample_width': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
-                    'sampling_frequency': filelabeling.sourcefile.info['sampling_frequency']                
-                } )
-
-            if not labelings:
-                raise serializers.ValidationError( "Found no labelized data" )
-
-            """ get meta-data """
-            metadata = {
-                'name': dataset.name,
-                'code': dataset.code,
-                'domain': dataset.domain.name,
-                'labels': [label.code for label in dataset.labels.all()],
-                #'channels': dataset.channels,
-                'crdate': dataset.crdate
-            }
-
-            log.info( f" .Found {len( labelings )} labelings in dataset" )
-            log.info( f" .Build stream file for dataset '{dataset.name}'" )
-
-            """ save sound dataset in file stream """
-            try:
-                h5stream = io.BytesIO()
-                save_dataset_on_muh5_file( h5stream, metadata, labelings )
-                h5stream.seek( 0 )
-                log.info( f" .Starting dataset stream download..." )
-                self.data = HttpResponse( h5stream, content_type='application/x-hdf5' )
-                self.data['Content-Disposition'] = f"attachment; filename={dataset.name}.h5"
-
-            except Exception as e:
-                raise serializers.ValidationError( f"Streaming dataset failed: {e}" )
         
 

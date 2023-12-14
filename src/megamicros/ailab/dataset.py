@@ -121,6 +121,367 @@ class AidbDataset( TensorDataset ):
 
     __root: str
     __dbhost: str
+    __dataset_name: str
+    __login: str
+    __email: str
+    __passwd: str
+    __transform = None
+    __target_transform = None
+    __download: bool
+    __channels: list|None        
+    __labels: list 
+    __sample_duration: float = None
+    __time_stretching: float = None             
+
+    __meta: dict                                # Dataset meta informations
+    __labels_meta: list                         # Meta info about labels
+    __samples_meta: list                        # Meta info about samples
+
+
+    def __init__( self, 
+        root: str|Path, 
+        url: str, 
+        dataset_name: str,
+        login: str=DATASET_DEFAULT_LOGIN, 
+        email:str=DATASET_DEFAULT_EMAIL, 
+        password: str=DATASET_DEFAULT_PASSWD, 
+        channels: int|list=None, 
+        transform=None, 
+        target_transform=None, 
+        download=False,
+        samples_duration: None|float=None,
+        time_stretching: None|float=None ):
+        """
+        Get meta informations from the remote dataset which name is `dataset_name`. 
+        If download is True, all sammples are downloaded from the database and saved in a local directory as wav files.
+        Either samples and labels can be transformed by giving a `transform` and/or `target_transform` callback as argument.
+        If `sample_duration` is given, samples are cut (and/or stretched wether the `time_stretching` argument is provided or not) to fit the given duration.
+        In that case, samples that are more than several times longer than the requested duration are split.  
+        A json index file is created which name is given by the `DATASET_CONFIG_NAME` constant
+
+        Parameters
+        ----------
+        root: str|Path
+            Path to the directory where the dataset is found or downloaded.
+        dbhost: str
+            hostname or IP address
+        dataset_name: str
+            name of dataset to download from database
+        login: str, optionnal
+            database acces login
+        email: str, optionnal
+            database user email
+        passwd: str, optionnal
+            database password
+        channels: int|list
+            channel number or list of channels to get
+        transform: callable, optional
+            Optional transform to be applied on a sample.
+        download: bool
+            Whether to download the dataset if it is not found at root path. (default: False).
+        samples_duration: float, optionnal
+            gives the duration of samples to set in seconds. If None, all samples are left unchanged (default: None).
+            samples that are more than several times longer than the requested duration are split.  
+        time_stretching: int, optionnal
+            gives time stretching factor to apply on samples when sample duration is given. If None, no time stretching is applied. (default: None)
+        """
+
+        # We do not work with pathlib. Path type is just for torch dataset compatibility
+        if type( root ) == Path:
+            self.__root = str( root )
+        else:
+            self.__root = root
+
+        # Check if dataset directory exist and make it if not
+        DATASET_CONFIG_PATH = self.__root
+        DATASET_CONFIG_FILENAME = os.path.join( DATASET_CONFIG_PATH, "datasetAIDB.json")
+        DATASET_NEW = False
+        if not path.exists( DATASET_CONFIG_FILENAME ):
+            log.info( f" .Create new dataset" )
+            os.makedirs( DATASET_CONFIG_PATH, exist_ok=True )
+            DATASET_NEW = True
+
+        # Set object properties
+        self.__dbhost = url
+        self.__dataset_name = dataset_name
+        self.__login = login
+        self.__email = email
+        self.__password = password
+        self.__channels = channels if type( channels ) is list else [channels] if type( channels ) is int else None
+        self.__transform = transform
+        self.__target_transform = target_transform
+        self.__download = False
+        self.__sample_duration = samples_duration
+        self.__time_stretching = time_stretching
+
+        if self.__channels is None:
+            log.warning( f" .No channel specified in arguments list. Set to channel 0" )
+            self.__channels = [0]
+
+        try:
+            with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+                
+                # Get dataset metafile
+                dataset_meta = session.get_dataset( name=self.__dataset_name )
+                
+                # Get dataset labels
+                self.__labels = dataset_meta['labels']
+
+
+
+
+
+
+
+                
+
+
+
+                # Check label existance and convert to label database identifiers
+                self.__labels_meta = []
+                self.__samples_meta = []
+                for label_class, label in enumerate( labels ):
+                    try:
+                        if type( label ) is int:
+                            label_meta = session.get_meta( object='label', id=label )
+                            label_id = label
+                        else:
+                            label_meta = session.get_meta( object='label', field={'label': 'code', 'value': label} )
+                            label_id = label_meta['id']
+
+                        self.__labels_meta.append( {
+                            'class': label_class,
+                            'id': label_id,
+                            'code': label_meta['code'],
+                            'name': label_meta['name'],
+                            'channels': self.__channels,
+                            'comment': label_meta['comment']
+                        } )
+
+                    except MuDbException as e:
+                        raise MuAilabException( f"Label id [{label}] not found in database" )
+                
+                # get labellings meta data and compute start and stop samples index in file
+                log.info( f" .Collecting labellings metadata ..." )
+                
+                for label_idx, label in enumerate( self.__labels_meta ):
+                    label_id = label['id']
+                    labellings = session.load_labelings( label_id=label_id )
+                    for labelling in labellings:
+                        
+                        file_meta = session.get_sourcefile( labelling['sourcefile_id'] )
+                        file_timestamp = file_meta['info']['timestamp']
+                        timestamp_start = labelling['datetime_start']
+                        timestamp_end = labelling['datetime_end']
+                        sampling_frequency = file_meta['info']['sampling_frequency']
+
+                        start_time = timestamp_start - file_timestamp
+                        end_time = timestamp_end - file_timestamp
+                        sample_start = int( start_time * sampling_frequency )
+                        sample_end = int( end_time * sampling_frequency )
+
+                        self.__samples_meta.append( {
+                            'label_class': label['class'],
+                            'label_id': label_id,
+                            'file_id': labelling['sourcefile_id'],
+                            'start': sample_start,
+                            'end': sample_end,
+                            'sr': sampling_frequency
+                        } )
+
+                    # Add the samples count
+                    self.__labels_meta[label_idx]['count'] = len( labellings )
+
+                if DATASET_NEW:
+                    # No local base 
+                    if download:
+                        # Now that we have all metadata info, one can save them
+                        self.__meta = {
+                            'labels_meta': self.__labels_meta,
+                            'samples_meta': self.__samples_meta,
+                            'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S") ,
+                            'uddate': None
+                        }
+
+                        with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
+                            json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )
+
+                        self.__download = True
+                        
+                    else:
+                        # no dowload means that data are not saved -> nothing to do
+                        pass
+
+                else:
+                    if download:
+                        # Load the existing meta file
+                        with open( DATASET_CONFIG_FILENAME, 'r') as json_file:
+                            existing_meta = json.load( json_file )
+
+                        # Compare metadata with existing meta file
+                        is_same = True
+                        if len( existing_meta['labels_meta'] ) != len( self.__labels_meta ):
+                            # Mismatch on the number of labels
+                            is_same = False
+                        else:
+                            # same number of labels -> check every one
+                            for label_idx, label in enumerate( self.__labels_meta ):
+                                # Find label occurence in local backup
+                                existing_label = next( (element for element in existing_meta['labels_meta'] if element['id'] == label['id']), None )
+                                if existing_label is None or existing_label['count'] != label['count'] or existing_label['channels'] != label['channels']:
+                                    # Label not found or samples number not the same or channels not the same
+                                    is_same = False
+                                    break
+                        
+                        if not is_same:
+                            # re-write the local basis
+                            DATASET_NEW = True
+                            self.__meta = {
+                                'labels_meta': self.__labels_meta,
+                                'samples_meta': self.__samples_meta,
+                                'crdate': existing_meta['crdate'],
+                                'uddate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                            }
+                            with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
+                                json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )
+                        else:
+                            self.__meta = existing_meta
+
+                        self.__download = True                      
+
+                    else:
+                        # User dont want to download data -> we do not use the existing meta file
+                        pass
+                
+                # Resize data if requested by user. Note that download is always True in that case
+                if samples_duration is not None:
+                    if not self.__download:
+                        raise MuAilabException( f"Cannot resize data if not downloaded" )
+
+                    total_split_number = 0
+                    for sample_idx, sample in enumerate( self.__samples_meta ):
+                        label_id = sample['label_id']
+                        sample_start = sample['start']
+                        sample_end = sample['end']
+                        sr = int( sample['sr'] )
+                        sample_duration = ( sample_end - sample_start ) / sr
+                        if int( sample_duration/samples_duration ) > 1:
+                            # Sample is longer than requested duration -> split it
+                            split_number = int( sample_duration/samples_duration )
+                            total_split_number += split_number
+                            samples_meta_add = []
+                            for splitnumber in range( split_number ):
+                                split_start = int( sample_start + splitnumber * samples_duration * sr )
+                                split_end = int( split_start + samples_duration * sr )
+                                samples_meta_add.append( {
+                                    'label_class': label['class'],
+                                    'label_id': label_id,
+                                    'file_id': sample['file_id'],
+                                    'start': split_start,
+                                    'end': split_end,
+                                    'sr': sr
+                                } )
+
+                            # Add the split samples meta to the samples meta list
+                            #self.__meta['samples_meta'][sample_idx]['split'] = samples_meta_add
+                            self.__samples_meta[sample_idx]['split'] = samples_meta_add
+                        
+                    # Save the new meta file
+                    if total_split_number > 0:
+                        print( f"total split number: {total_split_number}")
+                        log.info( f" .Save new dataset meta file with {total_split_number} split samples" )
+                        DATASET_NEW = True
+                        self.__meta['samples_meta'] = self.__samples_meta
+                        with open( DATASET_CONFIG_FILENAME, 'w', encoding='utf-8') as json_file:
+                            json.dump( self.__meta, json_file, ensure_ascii=False, indent=4 )  
+
+
+                # Get data if requested by user
+                if DATASET_NEW and download:
+                    log.info(  f" .Collecting data ..." )
+
+                    if not path.exists( os.path.join( DATASET_CONFIG_PATH, 'wav' ) ):
+                        log.info( f" .Create wav directory" )
+                        os.makedirs( os.path.join( DATASET_CONFIG_PATH, 'wav' ), exist_ok=True )
+
+                    samples_number = len( self.__samples_meta )
+                    percent = 0
+                    percent_before = 0
+                    print( f"Downloading {samples_number} samples from database..." )
+
+                    # Get data as int32 and transform them as float32 the torch tensor will be created from
+                    channels_number = len( self.__channels )
+                    split_number = 0
+                    for sample_idx, sample in enumerate( self.__samples_meta ):
+                        if 'split' in sample:
+                            # This sample has been split -> get the split data
+                            for split_index, split in enumerate( sample['split'] ):
+                                data = np.frombuffer(
+                                    session.get_samples_range( 
+                                        start = split['start'],
+                                        stop =  split['end'],
+                                        channels = self.__channels,
+                                        id = split['file_id']
+                                    ), 
+                                    dtype=np.int32 
+                                )
+                                # Save data as wav file in 16 bits integer format
+                                SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}-{split_index}.wav" )
+                                split_number += 1
+                                data = np.int16( data >> 8 )
+                                with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                                    wavfile.setnchannels( channels_number )
+                                    wavfile.setsampwidth( 2 )
+                                    wavfile.setframerate( int( split['sr'] ) )
+                                    wavfile.writeframesraw( data )
+
+                        else:
+                            # This sample has not been split -> get the original data
+                            data = np.frombuffer(
+                                session.get_samples_range( 
+                                    start = sample['start'],
+                                    stop =  sample['end'],
+                                    channels = self.__channels,
+                                    id = sample['file_id']
+                                ), 
+                                dtype=np.int32 
+                            )
+
+                            # Save data as wav file in 16 bits integer format
+                            SAMPLE_FILENAME = os.path.join( DATASET_CONFIG_PATH, 'wav', f"{sample_idx}-{sample['label_class']}.wav" )
+                            data = np.int16( data >> 8 )
+                            with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                                wavfile.setnchannels( channels_number )
+                                wavfile.setsampwidth( 2 )
+                                wavfile.setframerate( int( sample['sr'] ) )
+                                wavfile.writeframesraw( data )
+
+                        # Print counter
+                        percent_before = percent
+                        percent = sample_idx*100//samples_number
+                        if percent%20 == 0 or percent%20 < percent_before%20 :
+                            print( f"{percent}%" )
+
+                    print( f"100%" )
+
+        except MuException as e:
+            raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
+
+
+
+
+
+
+
+
+class AidbDataset_old( TensorDataset ):
+    """ Aidb dataset 
+    __init__() get meta informations from the remote database
+    __getitem__() is overloaded to support the dataset indexing
+    """
+
+    __root: str
+    __dbhost: str
     __labels: list
     __login: str
     __email: str

@@ -1122,13 +1122,52 @@ class AidbSession( RestDBSession ):
             request_url = f"{request_url}&" + '&'.join( f"contexts={context_id}" for context_id in contexts_id )
 
         if tags_id is not None:
-            request_url = f"{request_url}&" + '&'.join( f"labels={tag_id}" for tag_id in tags_id )
+            request_url = f"{request_url}&" + '&'.join( f"tags={tag_id}" for tag_id in tags_id )
 
         log.info( f" .Downloading datasets from {self.dbhost}..." )
         response = self.get( request_url, timeout=timeout ).json()['results']
         log.info( f" .Received {len( response )} datasets" )
 
         return response
+
+    def get_dataset( self, id:int|None=None, url:str|None=None, name:str|None=None, code:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
+        """
+        Get dataset metadata content from identifier, url or name
+
+        Parameter
+        ---------
+
+        id: int|None
+            identifier of the dataset
+        url: str|None
+            url of the dataset (should full pathname with endpoint)
+        name: str|None
+            name of the dataset
+        code: str|None
+            code of the dataset
+        timeout: int
+            timeout after what the request failed       
+        """
+
+        # id and url are not provided, find the dataset from its name
+        if id is None and url is None:
+            if name is None and code is None:
+                raise MuDbException( "Cannot get dataset: no identifier nor name or code given" )
+            elif name is not None:
+                field = {'label': 'name', 'value': name}
+            elif code is not None:
+                field = {'label': 'code', 'value': code}
+
+            object = self.get_meta( object='dataset', field=field, timeout=timeout )
+            id = object['id']
+        
+        if id is not None:
+            response = self.get(  f"/dataset/{id}/upload", timeout=timeout ).json()['results']
+        else:
+            response = self.get( url, timeout=timeout, full_url=True ).json()['results']
+            
+        return response        
+
 
     def create_dataset( self, name:str, code:str, domain_id:int, labels_id:list|None, channels:list, contexts_id:list|None=None, tags_id:list|None=None, comment:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
         """
