@@ -83,7 +83,11 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
-### 2.0.48, 2.0.49, 2.0.50, 2.0.51, 2.0.51
+### 2.0.53
+
+* ailab/sataset updated for data split and temporal zero padding
+
+### 2.0.48, 2.0.49, 2.0.50, 2.0.51, 2.0.51, 2.0.52
 
 * New Dataset view and serializer for AiDB
 

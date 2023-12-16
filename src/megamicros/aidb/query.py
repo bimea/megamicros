@@ -1146,7 +1146,12 @@ class AidbSession( RestDBSession ):
         code: str|None
             code of the dataset
         timeout: int
-            timeout after what the request failed       
+            timeout after what the request failed
+
+        Return
+        ------
+        dataset: dict
+            the dataset metadata content as a dict object
         """
 
         # id and url are not provided, find the dataset from its name
@@ -1162,9 +1167,9 @@ class AidbSession( RestDBSession ):
             id = object['id']
         
         if id is not None:
-            response = self.get(  f"/dataset/{id}/upload", timeout=timeout ).json()['results']
+            response = self.get(  f"/dataset/{id}/upload", timeout=timeout ).json()
         else:
-            response = self.get( url, timeout=timeout, full_url=True ).json()['results']
+            response = self.get( url, timeout=timeout, full_url=True ).json()
             
         return response        
 

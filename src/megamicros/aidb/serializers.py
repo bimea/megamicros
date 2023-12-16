@@ -906,7 +906,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         fields = ['id', 'url', 'name', 'code', 'domain', 'labels', 'contexts', 'filelabelings', 'filename', 'tags', 'comment', 'info', 'crdate' ]
 
     def validate( self, data ):
-        """ the default validate function should be OK if channels is set as mandatory in model """
+        """ Overload the default validate method """
 
         log.info( f" .Validating dataset with data: {data}" )
         
@@ -915,6 +915,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         if self.instance is None:
 
             # we are in creating mode
+            data['code'] = data['code'].replace( ' ', '-' )
             if Dataset.objects.filter( code=data['code'] ).exists():
 
                 # get this dataset and throw an exception
@@ -986,6 +987,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             sample_end = int( end_time * sampling_frequency )
 
             samples_metadata.append( {
+                'labeling_id': filelabeling.id,
                 'start': sample_start,
                 'end': sample_end,
                 'sourcefile_id': filelabeling.sourcefile.id,
@@ -993,8 +995,8 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
                 'label_id': filelabeling.label.id,
                 'timestamp': filelabeling.sourcefile.info['timestamp'],
                 'type': filelabeling.sourcefile.type,
-                'sample_width': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
-                'sampling_frequency': sampling_frequency                
+                'sw': 4 if filelabeling.sourcefile.type==SourceFile.MUH5 else filelabeling.sourcefile.info['sample_width'],
+                'sr': sampling_frequency                
             } )
 
         metadata = {
@@ -1010,12 +1012,12 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             raise serializers.ValidationError( f"Cannot get active configuration: {e}" )
 
         try:
-            filename = f"{config.dataset_path}/{dataset.filename}"
-            with open( filename, 'w', encoding='utf-8') as json_file:
+            json_filename = os.path.join( config.dataset_path, dataset.filename )
+            with open( json_filename, 'w', encoding='utf-8') as json_file:
                 json.dump( metadata, json_file, ensure_ascii=False, indent=4 )
 
         except Exception as e:
-            raise serializers.ValidationError( f"Failed to save dataset {filename}: {e}" )
+            raise serializers.ValidationError( f"Failed to save dataset {dataset.name}: {e}" )
 
 
     def update( self, instance: Dataset, validated_data ):
