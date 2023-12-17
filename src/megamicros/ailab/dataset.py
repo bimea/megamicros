@@ -55,6 +55,7 @@ DATASET_DEFAULT_LOGIN       = 'ailab'
 DATASET_DEFAULT_EMAIL       = 'bruno.gas@biimea.com'
 DATASET_DEFAULT_PASSWD      = '#T;uZnQ5UJ_JC~&'
 DATASET_CONFIG_NAME         = 'dataset.json'
+DATASET_CONFIG_NAME_SPLIT   = 'dataset-split.json'
 
 
 # =============================================================================
@@ -133,6 +134,18 @@ class AidbDataset( TensorDataset ):
 
     __meta: dict                                # Dataset meta informations
 
+
+    @property
+    def sample_rate( self ) -> int:
+
+        """ Get the sample rate of the dataset """
+        return int( self.__meta['samples'][0]['sr'] ) if self.__split_size is None else int( self.__meta['split']['samples'][0]['sr'] )
+
+    @property
+    def sample_frequency( self ) -> int:
+        """ Get the sample frequency of the dataset """
+
+        return self.sample_rate
 
 
     def __init__( self, 
@@ -220,7 +233,7 @@ class AidbDataset( TensorDataset ):
                 should_be_downloaded = False
 
                 # Check if dataset directory exist and make it if not and then save dataset meta file
-                config_filename = os.path.join( self.__root, f"dataset.json")
+                config_filename = os.path.join( self.__root, DATASET_CONFIG_NAME )
                 if not path.exists( self.__root ):
                     log.info( f" .Create new dataset" )
                     os.makedirs( self.__root, exist_ok=True )
@@ -233,22 +246,29 @@ class AidbDataset( TensorDataset ):
                     should_be_downloaded = True
 
                 else:
-                    # Get existing dataset meta file
-                    with open( config_filename, 'r') as json_file:
-                        try:
-                            existing_meta = json.load( json_file )
+                    # check json config file existance
+                    if not path.exists( config_filename ):
+                        log.info( f" .Create new dataset" )
+                        self.__meta =  dataset_meta
+                        should_be_downloaded = True
                     
-                            # Check if existing meta file is the same as the one in database
-                            if not 'dataset' in existing_meta or not 'crdate' in existing_meta:
+                    else:
+                        # Get existing dataset meta file
+                        with open( config_filename, 'r') as json_file:
+                            try:
+                                existing_meta = json.load( json_file )
+                        
+                                # Check if existing meta file is the same as the one in database
+                                if not 'dataset' in existing_meta or not 'crdate' in existing_meta:
+                                    log.info( f" .Existing dataset meta file {config_filename} is not valid. Downloading dataset..." )
+                                    should_be_downloaded = True
+                                elif existing_meta['crdate'] != dataset_meta['crdate']:
+                                    log.info( f" .Existing dataset meta file {config_filename} is not up to date. Downloading dataset..." )
+                                    should_be_downloaded = True
+
+                            except json.decoder.JSONDecodeError as e:
                                 log.info( f" .Existing dataset meta file {config_filename} is not valid. Downloading dataset..." )
                                 should_be_downloaded = True
-                            elif existing_meta['crdate'] != dataset_meta['crdate']:
-                                log.info( f" .Existing dataset meta file {config_filename} is not up to date. Downloading dataset..." )
-                                should_be_downloaded = True
-
-                        except json.decoder.JSONDecodeError as e:
-                            log.info( f" .Existing dataset meta file {config_filename} is not valid. Downloading dataset..." )
-                            should_be_downloaded = True
 
                     if should_be_downloaded:
 
@@ -264,25 +284,30 @@ class AidbDataset( TensorDataset ):
 
                         # Check for channels
                         # Get filename of first wav file in directory:
-                        first_vawfile = next( (f for f in os.listdir( os.path.join( self.__root, 'wav' ) ) if f.endswith('.wav')), None )
+                        if self.__split_size is None:
+                            wavpath = os.path.join( self.__root, 'wav' )
+                        else:
+                            wavpath = os.path.join( self.__root, 'split', 'wav' )
+
+                        first_vawfile = next( (f for f in os.listdir( wavpath ) if f.endswith('.wav')), None )
                         if first_vawfile is None:
                             # No wav file in directory -> download dataset
-                            log.info( f" .No wav file in directory {os.path.join( self.__root, 'wav' )}. Downloading dataset..." )
+                            log.info( f" .No wav file in directory {wavpath}. Downloading dataset..." )
                             should_be_downloaded = True
                         else:
                             # Get first wav file in directory and check channels number
                             try:
-                                with wave.open( os.path.join( self.__root, 'wav', first_vawfile ) ,'r' )  as wavefile:
+                                with wave.open( os.path.join( wavpath, first_vawfile ) ,'r' )  as wavefile:
                                     channels_number = wavefile.getnchannels()
 
                                 if channels_number != len( self.__channels ):
                                     # Channels number mismatch -> download dataset
-                                    log.info( f" .Channels number mismatch in directory {os.path.join( self.__root, 'wav' )}. Downloading dataset..." )
+                                    log.info( f" .Channels number mismatch in directory {wavpath}. Downloading dataset..." )
                                     should_be_downloaded = True   
 
                             except wave.Error as e:
                                 # File is not a wav file -> download dataset
-                                log.info( f" .File {os.path.join( self.__root, 'wav', first_vawfile )} is not a vaild wav file. Downloading dataset..." )
+                                log.info( f" .File {os.path.join( wavpath, first_vawfile )} is not a vaild wav file. Downloading dataset..." )
                                 should_be_downloaded = True                    
 
                             
@@ -335,15 +360,19 @@ class AidbDataset( TensorDataset ):
                         # Check if split directory exist and make it if not
                         if not path.exists( os.path.join( self.__root, 'split', 'wav' ) ):
                             should_be_split = True 
-                        elif not path.exists( os.path.join( self.__root, 'split', 'dataset-split.json' ) ):
+                        elif not path.exists( os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT ) ):
                             should_be_split = True
                         else:
                             # Check if split size is the same
-                            with open( os.path.join( self.__root, 'split', 'dataset-split.json' ), 'r') as json_file:
+                            with open( os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT ), 'r') as json_file:
                                 try:
                                     existing_split_meta = json.load( json_file )
                                     if existing_split_meta['split_size'] != self.__split_size or existing_split_meta['zero_padding'] != self.__zero_padding:
                                         should_be_split = True
+                                    else:
+                                        # Should not be split -> use existing split meta data
+                                        self.__meta['split'] = existing_split_meta
+
                                 except json.decoder.JSONDecodeError as e:
                                     should_be_split = True
 
@@ -382,7 +411,7 @@ class AidbDataset( TensorDataset ):
                 split_number = int( sample_duration/self.__split_size )
                 for splitnumber in range( split_number ):
                     split_start = int( sample_start + splitnumber * self.__split_size * sr )
-                    split_end = int( split_start + self.__split_size * sr )
+                    split_end = int( split_start + self.__split_size * sr - 1)
                     split_meta.append( {
                         'labeling_id': sample['labeling_id'],
                         'label_id': sample['label_id'],
@@ -421,7 +450,6 @@ class AidbDataset( TensorDataset ):
                 pass
 
         # Save the split samples meta data
-        self.__meta['split'] = split_meta
         log.info( f" .Save new split meta file" )
         dataset_split = {
             'samples': split_meta,
@@ -429,19 +457,22 @@ class AidbDataset( TensorDataset ):
             'zero_padding': self.__zero_padding,
             'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         }
-        json_split_filename = os.path.join( self.__root, 'split', 'dataset-split.json' )
+        json_split_filename = os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT )
         with open( json_split_filename, 'w', encoding='utf-8') as json_file:
             json.dump( dataset_split, json_file, ensure_ascii=False, indent=4 )
+        
+        self.__meta['split'] = dataset_split
+        
 
         # Get data from database and split them according to the split meta data
         percent = 0
         percent_before = 0
-        samples_number = len( self.__meta['split'])
+        samples_number = len( self.__meta['split']['samples'])
         if self.__zero_padding:
             sampling_frequency = self.__meta['samples'][0]['sr']
             samples_witdh = int( self.__split_size * sampling_frequency )
             
-        for sample_idx, sample in enumerate( self.__meta['split'] ):
+        for sample_idx, sample in enumerate( self.__meta['split']['samples'] ):
             data = np.frombuffer(
                 session.get_samples_range( 
                     start = sample['start'],
@@ -478,7 +509,10 @@ class AidbDataset( TensorDataset ):
     def __len__( self ):
         """ Get the total samples number in dataset"""
 
-        return len(self.__meta['samples'])
+        if self.__split_size is not None:
+            return len(self.__meta['split']['samples'])
+        else:   
+            return len(self.__meta['samples'])
 
     
 
@@ -495,13 +529,27 @@ class AidbDataset( TensorDataset ):
             The label identifier in database (for now)
         """
 
-        if torch.is_tensor(idx):
+        if torch.is_tensor( idx ):
             idx = idx.tolist()
 
         try:
-            if self.__download:
-                # Get data from local file
-                SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{idx}-{self.__samples_meta[idx]['label_class']}.wav" )
+            # Get data from split directory
+            if self.__split_size is not None:
+                SAMPLE_FILENAME = os.path.join( self.__root, 'split', 'wav', f"{idx}-{self.__meta['split']['samples'][idx]['labeling_id']}-{self.__meta['split']['samples'][idx]['label_id']}.wav" )
+                with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:                
+                    channels_number = wavefile.getnchannels()
+                    samples_number = wavefile.getnframes()
+                    data = np.frombuffer(
+                        wavefile.readframes( samples_number ),
+                        dtype=np.int16
+                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
+
+                label = self.__meta['split']['samples'][idx]['label_id']
+
+            # Get data from wav directory
+            else:
+        
+                SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{idx}-{self.__meta['samples'][idx]['label_id']}.wav" )
                 with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:
                     channels_number = wavefile.getnchannels()
                     samples_number = wavefile.getnframes()
@@ -510,32 +558,11 @@ class AidbDataset( TensorDataset ):
                         dtype=np.int16
                     ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
 
-                # transform binary data to torch tensor and get properties and label
-                frame_fength =  len( data ) // channels_number
-                data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
-                sr = int( self.__samples_meta[idx]['sr'] )
-                label = self.__samples_meta[idx]['label_class']
+                label = self.__meta['samples'][idx]['label_id']
 
-            else:
-                # Get data from remote database
-                with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
-                    idx = int(idx)
-                    data = np.frombuffer(
-                        session.get_samples_range( 
-                            start = self.__samples_meta[idx]['start'],
-                            stop =  self.__samples_meta[idx]['end'],
-                            channels = self.__channels,
-                            id = self.__samples_meta[idx]['file_id']
-                        ), 
-                        dtype=np.int32 
-                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
-
-                # transform binary data to torch tensor and get properties and label
-                channels_number = len( self.__channels )
-                frame_fength =  len( data ) // channels_number
-                data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
-                sr = int( self.__samples_meta[idx]['sr'] )
-                label = self.__samples_meta[idx]['label_class']
+            # transform binary data to torch tensor and reshape it
+            frame_fength = len( data ) // channels_number
+            data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
 
             # Exec processing callback if any 
             if self.__transform:
@@ -548,4 +575,5 @@ class AidbDataset( TensorDataset ):
         except MuException as e:
             raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
 
-        return data, label, sr
+        return data, label
+
