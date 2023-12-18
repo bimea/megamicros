@@ -115,65 +115,11 @@ dataset_form_card = dbc.Modal( [
                 ], className="mb-3", align="center" ),
 
                 dbc.Row(
-                    dbc.Col(  dbc.Label( "Canaux", html_for="dataset-card-form-channels"), width=2)
-                ),
-                dbc.Row( [
-                    dbc.Col( [
-                        dbc.Checklist(
-                            options=[ {'label':i, 'value':i} for i in range(8) ],
-                            id="dataset-card-form-channels-beam-1",
-                            input_style={"backgroundColor": "grey", "borderColor": "black"},
-                            label_checked_style={"color": "green"},
-                            input_checked_style={
-                                "backgroundColor": "green",
-                                "borderColor": "green",
-                            },
-                            inline=True,
-                            className="dbc" 
-                        ),
-                        dbc.Checklist(
-                            options=[ {'label':i, 'value':i} for i in range(8) ],
-                            id="dataset-card-form-channels-beam-2",
-                            input_style={"backgroundColor": "grey", "borderColor": "black"},
-                            label_checked_style={"color": "green"},
-                            input_checked_style={
-                                "backgroundColor": "green",
-                                "borderColor": "green",
-                            },
-                            inline=True,
-                        ),
-                        dbc.Checklist(
-                            options=[ {'label':i, 'value':i} for i in range(8) ],
-                            id="dataset-card-form-channels-beam-3",
-                            input_style={"backgroundColor": "grey", "borderColor": "black"},
-                            label_checked_style={"color": "green"},
-                            input_checked_style={
-                                "backgroundColor": "green",
-                                "borderColor": "green",
-                            },
-                            inline=True,
-                        ),
-                        dbc.Checklist(
-                            options=[ {'label':i, 'value':i} for i in range(8) ],
-                            id="dataset-card-form-channels-beam-4",
-                            input_style={"backgroundColor": "grey", "borderColor": "black"},
-                            label_checked_style={"color": "green"},
-                            input_checked_style={
-                                "backgroundColor": "green",
-                                "borderColor": "green",
-                            },
-                            inline=True,
-                        ),
-
-                    ], width={"size": 12, "offset": 1} )
-                ], className="mb-3", align="center", justify="center" ),
-
-                dbc.Row(
                     dbc.Col( html.Hr() )
                 ),
                 dbc.Row(
                     dbc.Col( [
-                        dbc.Tooltip( "Cette action valide la cration du dataset", target="dataset-card-form-confirm-btn", placement="top"  ),
+                        dbc.Tooltip( "Cette action valide la création du dataset", target="dataset-card-form-confirm-btn", placement="top"  ),
                         dbc.Button("Valider", id="dataset-card-form-confirm-btn", n_clicks=0, outline=True, color="info", class_name="me-1") 
                     ] )
                 )
@@ -358,10 +304,6 @@ def onDatasetSelect_enabler( dataset_idx, config_store ):
     Output( 'dataset-card-form-tags-select', 'options' ),
     Output( 'dataset-card-form-tags-select', 'value' ),
     Output( 'dataset-card-form-comment', 'value' ),
-    Output( 'dataset-card-form-channels-beam-1', 'value' ),
-    Output( 'dataset-card-form-channels-beam-2', 'value' ),
-    Output( 'dataset-card-form-channels-beam-3', 'value' ),
-    Output( 'dataset-card-form-channels-beam-4', 'value' ),
 
 	Output( 'dataset-card-store', 'data' ),
 	Output( 'dataset-card-errormsg', 'children' ),
@@ -381,20 +323,15 @@ def onDatasetSelect_enabler( dataset_idx, config_store ):
     State( 'dataset-card-form-tags-select', 'value' ),
     State( 'dataset-card-form-comment', 'value' ),
 
-    State( 'dataset-card-form-channels-beam-1', 'value' ),
-    State( 'dataset-card-form-channels-beam-2', 'value' ),
-    State( 'dataset-card-form-channels-beam-3', 'value' ),
-    State( 'dataset-card-form-channels-beam-4', 'value' ),
-
     State( 'dataset-card-store', 'data' ),
     State( 'config-store', 'data' )
 )
-def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn, download_btn, form_confirm_btn, name, code, labels_idx, contexts_idx, tags_idx, comment, beam_1, beam_2, beam_3, beam_4, card_store, config_store ):
+def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn, download_btn, form_confirm_btn, name, code, labels_idx, contexts_idx, tags_idx, comment, card_store, config_store ):
     
     output: cpn.Output = cpn.Ouput( [
         'domain_options', 'domain_value', 'dataset_options', 'dataset_value', 'content_children',
         'form_is_open', 'form_name', 'form_code', 'form_labels_options', 'form_labels_value', 'form_contexts_options', 
-        'form_contexts_value', 'form_tags_option', 'form_tags_value', 'form_comment', 'form_beam_1', 'form_beam_2', 'form_beam_3', 'form_beam_4',
+        'form_contexts_value', 'form_tags_option', 'form_tags_value', 'form_comment',
         'store_data', 'errormsg_children'
     ] )
 
@@ -453,7 +390,6 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
                         f"Labels présents dans le dataset: ",
                         html.Ul( [ html.Li( f"{label_name}" ) for label_name in labels_name ] )
                     ] ),
-                    html.Li( f"Voies: {dataset['channels']}" ),
                     html.Li( [
                         f"Contextes: ",
                         html.Ul( [ html.Li( f"{context_name}" ) for context_name in contexts_name ] )
@@ -572,22 +508,9 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
                 tags_id = [tags[tag_idx]['id'] for tag_idx in tags_idx]      
 
             domain_id = store['domains'][domain_idx]['id']
-
-            channels = []
-            if beam_1 is not None:
-                channels = beam_1
-
-            if beam_2 is not None:
-                channels += [i+8 for i in beam_2]
-
-            if beam_3 is not None:
-                channels += [i+16 for i in beam_3]
-
-            if beam_4 is not None:
-                channels += [i+24 for i in beam_4]
             
             """ save in database """
-            session.create_dataset( name, code, domain_id, labels_id, channels, contexts_id, tags_id, comment )
+            session.create_dataset( name, code, domain_id, labels_id, contexts_id, tags_id, comment )
 
             """ reload dataset """
             datasets = session.load_datasets()
@@ -606,13 +529,17 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
                 form_tags_option = [],
                 form_tags_value = [],
                 form_comment = '',
-                form_beam_1 = [],
-                form_beam_2 = [],
-                form_beam_3 = [],
-                form_beam_4 = [],
                 dataset_options = dataset_options
             )
 
+        elif clicked == 'dataset-card-delete-btn':
+
+            # Remove in database
+            session.delete_dataset( store['datasets'][dataset_idx]['id'] )
+            
+            # Set initial card state
+            return generate_card_init( dbhost, store )
+        
         else:
             raise Exception( "Evènement inconnu" )
 

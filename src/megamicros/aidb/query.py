@@ -1174,7 +1174,7 @@ class AidbSession( RestDBSession ):
         return response        
 
 
-    def create_dataset( self, name:str, code:str, domain_id:int, labels_id:list|None, channels:list, contexts_id:list|None=None, tags_id:list|None=None, comment:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
+    def create_dataset( self, name:str, code:str, domain_id:int, labels_id:list|None, contexts_id:list|None=None, tags_id:list|None=None, comment:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
         """
         Create a new label in database
         
@@ -1184,7 +1184,6 @@ class AidbSession( RestDBSession ):
         * code: the dataset code
         * domain_id: domain identifier
         * labels_id: labels identifier
-        * channels: list of audio channels numbers
         * contexts_id: list of contexts if any
         * tags_id: list of tags if any
         * comment: some optional comments
@@ -1202,7 +1201,6 @@ class AidbSession( RestDBSession ):
                 'code': code,
                 'domain': f"{self.dbhost}/domain/{domain_id}/",   
                 'labels': labels,
-                'channels': channels,
                 'contexts': contexts,
                 'tags': tags,
                 'comment': None if comment is None or not comment else comment,
@@ -1213,6 +1211,20 @@ class AidbSession( RestDBSession ):
 
         log.info( f" .Successfully created new dataset [{response['id']}]")
 
+    def delete_dataset( self, id:int ):
+        """
+        delete a dataset in database
+        
+        Parameters
+        ==========
+        * id: the dataset identifier
+        """
+
+        log.info( f" .Sending DELETE request for dataset deleting..." )
+        response = self.delete( request=f"/dataset/{id}/" ).json()
+        log.info( f" .Successfully deleted dataset <{id}> on database")
+
+        return response
 
 
 # =============================================================================
