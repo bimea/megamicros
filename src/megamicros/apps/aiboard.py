@@ -31,7 +31,7 @@ Launch the Aiboard application
 
 Documentation
 -------------
-MegaMicros documentation is available on https://readthedoc.biimea.io
+MegaMicros documentation is available on https://readthedoc.bimea.io
 """
 
 import argparse
