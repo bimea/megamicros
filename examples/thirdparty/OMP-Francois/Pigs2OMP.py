@@ -161,6 +161,7 @@ for prfx in Prefix :
     for Seq in Seqs[Debut:Fin]:
     # Pour chaque séquence d'une seconde:   
         # without counter, replace by -->>> Mems = h5f['muh5'][Seq]['sig'][:].T/S    
+        # Get all channels from the sequence without counter
         Mems = h5f['muh5'][Seq]['sig'][1:].T/S
         print( 'processing sequence ' + prfx + ' - ' + str(int(NumSec)) + '/' + str(NbSeqs)  + ', Seq: ' + str(Seq) )
         ax3.set_title('sequence ' + prfx + ' - ' + str(int(NumSec)) + '/' + str(NbSeqs))
