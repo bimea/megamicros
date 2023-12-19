@@ -176,8 +176,15 @@ for prfx in Prefix :
             BF = np.std(BFSig,axis = 0)            
 
             OMPfo = np.zeros((nx,ny))
+
+            # frequency index giving the max mean energy on all mems 
             ifo  = np.argmax(np.mean(np.abs(Spec), axis=1)) 
+
+            # Get the beamformer matrix at ifo frequency:
             Dico = G[ifo,:,:]
+
+            # Compute the OMP for getting the first formed channel that match best with the beamformer matrix
+            # The idea is to decompose signal at frequency `ifo` along all the preformed channels (i.e. spatial positions)
             result = omp.omp(Dico, Spec[ifo,:], maxit = 1)
             OMPfo = result.coef+1e-12 #.reshape(nx,ny)
 
