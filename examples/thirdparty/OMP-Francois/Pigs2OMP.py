@@ -72,6 +72,10 @@ f = np.fft.rfftfreq(nfft,1/Fe)
 G = np.outer(f,Rms).reshape(f.shape[0],Rms.shape[0], Rms.shape[1])/c0
 G = np.exp(1j*2*np.pi*G)
 
+print( f"f.shape={f.shape}" )
+print( f"Rms.shape={Rms.shape}" )
+print( f"G.shape={G.shape}" )
+
 
 #%%###################################################################
 ## Affichage 
