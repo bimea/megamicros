@@ -132,14 +132,16 @@ class AidbDataset( TensorDataset ):
     __split_size: float = None
     __zero_padding: bool = False           
 
-    __meta: dict                                # Dataset meta informations
+    __dataset_meta: dict = None                     # Database dataset meta informations
+    __dataset_meta_split: dict = None               # Database split dataset meta informations
+    __meta: dict                                    # Dataset meta informations
 
 
     @property
     def sample_rate( self ) -> int:
 
         """ Get the sample rate of the dataset """
-        return int( self.__meta['samples'][0]['sr'] ) if self.__split_size is None else int( self.__meta['split']['samples'][0]['sr'] )
+        return int( self.__dataset_meta['samples'][0]['sr'] ) if self.__split_size is None else int( self.__dataset_meta_split['samples'][0]['sr'] )
 
     @property
     def sample_frequency( self ) -> int:
@@ -225,6 +227,483 @@ class AidbDataset( TensorDataset ):
             log.warning( f" .No channel specified in arguments list. Set to channel 0" )
             self.__channels = [0]
 
+        # Get metadata from database
+        self.__dataset_meta = self.download_metadata( dataset_name )
+
+        # Get original dataset from database
+        if self.__split_size is None:
+            
+            if self.check_dataset():
+                log.info( f" .Dataset {dataset_name} is up to date" )
+            else:
+                log.info( f" .Dataset {dataset_name} is not up to date. Downloading..." )
+                self.download_dataset( self.__dataset_meta )
+        
+        # Get dataset from database and split it
+        else:
+            if self.check_dataset():
+                # There is already an up to date local original dataset that can be split
+                log.info( f" .There is an original up do date dataset {dataset_name}" )
+                if self.check_dataset_split_wav():
+                    # There is already an up to date local split dataset -> nothing to do
+                    log.info( f" .Split dataset {dataset_name} is up to date. Nothing do do." )
+                else:
+                    # Generate split dataset from local original dataset
+                    log.info( f" .Generate split dataset from local original dataset..." )
+                    # !!! WARNING !!!
+                    # The split_from_local_dataset failed to generate the split dataset
+                    # -> use download_dataset_and_split instead. Should be fixed
+                    #self.split_from_local_dataset()
+                    self.download_dataset_and_split()
+            elif not self.check_dataset_split_wav():
+                # There is no local dataset or it is not up to date
+                log.info( f" .Split dataset {dataset_name} is not up to date. Downloading..." )
+                self.download_dataset_and_split()
+            else:
+                # There is already an up to date local split dataset -> nothing to do
+                pass
+
+
+    def split_from_local_dataset( self ):
+        """ Generate split dataset from local original dataset """
+
+        # Create split directory if not exist
+        if not path.exists( os.path.join( self.__root, 'split', 'wav' ) ):
+            log.info( f" .Create split/wav directory" )
+            os.makedirs( os.path.join( self.__root, 'split', 'wav' ), exist_ok=True )
+
+        # Delete all files in split/wav directory if any
+        else:
+            for file in os.listdir( os.path.join( self.__root, 'split', 'wav' ) ):
+                os.remove( os.path.join( self.__root, 'split', 'wav', file ) )
+
+        # Build the split samples meta data
+        split_samples = self.build_split_samples( self.__dataset_meta )
+
+        # Save the split samples meta data
+        log.info( f" .Save new split meta file" )
+        self.__dataset_meta_split = {
+            'samples': split_samples,
+            'split_size': self.__split_size,
+            'zero_padding': self.__zero_padding,
+            'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        }
+        json_split_filename = os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT )
+        with open( json_split_filename, 'w', encoding='utf-8') as json_file:
+            json.dump( self.__dataset_meta_split, json_file, ensure_ascii=False, indent=4 )
+
+        # Get data from local repository and split them according to the split meta data
+        percent = 0
+        percent_before = 0
+        samples_number = len( self.__dataset_meta_split['samples'])
+        if self.__zero_padding:
+            sampling_frequency = self.__dataset_meta['samples'][0]['sr']
+            samples_witdh = int( self.__split_size * sampling_frequency )
+
+
+        for sample_idx, sample in enumerate( self.__dataset_meta_split['samples'] ):
+            # Get data from local repository
+            ORIGINAL_SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{sample_idx}-{sample['label_id']}.wav" )
+
+            # Read wavfile
+            with wave.open( ORIGINAL_SAMPLE_FILENAME, mode='rb' ) as wavfile:
+                data = np.frombuffer( 
+                    wavfile.readframes( wavfile.getnframes() ), 
+                    dtype=np.int16
+                )
+                data = np.reshape( data, ( wavfile.getnframes(), wavfile.getnchannels() ) )
+                data = data[sample['start']:sample['stop'],:]    
+
+            # Perform zero padding if requested
+            if self.__zero_padding:
+                if np.shape( data )[0] < samples_witdh:
+                    data = data + np.ndarray( (samples_witdh - np.shape( data )[0], wavfile.getnchannels() ), dtype=np.int16 )           
+
+            data = data.flatten()
+
+            # Save data as wav file in 16 bits integer format
+            SAMPLE_FILENAME = os.path.join( self.__root, 'split', 'wav', f"{sample_idx}-{sample['labeling_id']}-{sample['label_id']}.wav" )
+
+            # Save wav file
+            with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                wavfile.setnchannels( len( self.__channels ) )
+                wavfile.setsampwidth( 2 )
+                wavfile.setframerate( int( sample['sr'] ) )
+                wavfile.writeframesraw( data )
+
+            # Print counter
+            percent_before = percent
+            percent = sample_idx*100//samples_number
+            if percent%20 == 0 or percent%20 < percent_before%20 :
+                print( f"{percent}%" )
+
+
+
+    def build_split_samples( self, dataset_meta: dict ) -> list:
+        """ Build the samples index list
+
+        Parameters
+        ----------
+        dataset_meta: dict
+            The original dataset meta data
+        """
+
+        # Build the split samples meta data
+        split_samples = []
+        for sample in dataset_meta['samples']:
+            sample_start = sample['start']
+            sample_end = sample['end']
+            sr = int( sample['sr'] )
+            sample_duration = ( sample_end - sample_start ) / sr
+            if int( sample_duration/self.__split_size ) > 0:
+
+                # Sample is longer than requested duration -> split it
+                split_number = int( sample_duration/self.__split_size )
+                for splitnumber in range( split_number ):
+                    split_start = int( sample_start + splitnumber * self.__split_size * sr )
+                    split_end = int( split_start + self.__split_size * sr - 1)
+                    split_samples.append( {
+                        'labeling_id': sample['labeling_id'],
+                        'label_id': sample['label_id'],
+                        'file_id': sample['sourcefile_id'],
+                        'start': split_start,
+                        'end': split_end,
+                        'sr': sr
+                    } )
+
+                # Add remainder signal if its size is greater than half of the requested duration
+                if sample_duration - split_number * self.__split_size > self.__split_size/2:
+                    split_start = int( sample_start + split_number * self.__split_size * sr )
+                    split_end = int( sample_end )
+                    split_samples.append( {
+                        'labeling_id': sample['labeling_id'],
+                        'label_id': sample['label_id'],
+                        'file_id': sample['sourcefile_id'],
+                        'start': split_start,
+                        'end': split_end,
+                        'sr': sr
+                    } )
+
+            # Sample is shorter than requested duration -> keep it if its size is greater than half of the requested duration
+            elif sample_duration > self.__split_size/2: 
+                split_samples.append( {
+                    'labeling_id': sample['labeling_id'],
+                    'label_id': sample['label_id'],
+                    'file_id': sample['sourcefile_id'],
+                    'start': sample_start,
+                    'end': sample_end,
+                    'sr': sr
+                } )
+
+            # Sample is too short -> do not keep it
+            else:
+                pass
+
+        return split_samples
+
+
+    def download_dataset_and_split( self ):
+        """ Get data from database and save them as wav files in the dataset directory after split and zero padding if requested """
+
+        # Create split directory if not exist
+        if not path.exists( os.path.join( self.__root, 'split', 'wav' ) ):
+            log.info( f" .Create split/wav directory" )
+            os.makedirs( os.path.join( self.__root, 'split', 'wav' ), exist_ok=True )
+
+        # Delete all files in split/wav directory if any
+        else:
+            for file in os.listdir( os.path.join( self.__root, 'split', 'wav' ) ):
+                os.remove( os.path.join( self.__root, 'split', 'wav', file ) )
+                        
+        # Build the split samples meta data
+        split_samples = self.build_split_samples( self.__dataset_meta )
+
+        # Save the split samples meta data
+        log.info( f" .Save new split meta file" )
+        self.__dataset_meta_split = {
+            'samples': split_samples,
+            'split_size': self.__split_size,
+            'zero_padding': self.__zero_padding,
+            'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        }
+        json_split_filename = os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT )
+        with open( json_split_filename, 'w', encoding='utf-8') as json_file:
+            json.dump( self.__dataset_meta_split, json_file, ensure_ascii=False, indent=4 )
+                
+        # Get data from database and split them according to the split meta data
+        percent = 0
+        percent_before = 0
+        samples_number = len( self.__dataset_meta_split['samples'])
+        if self.__zero_padding:
+            sampling_frequency = self.__dataset_meta['samples'][0]['sr']
+            samples_witdh = int( self.__split_size * sampling_frequency )
+
+        with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+
+            for sample_idx, sample in enumerate( self.__dataset_meta_split['samples'] ):
+                data = np.frombuffer(
+                    session.get_samples_range( 
+                        start = sample['start'],
+                        stop =  sample['end'],
+                        channels = self.__channels,
+                        id = sample['file_id']
+                    ), 
+                    dtype=np.int32 
+                )
+
+                # Save data as wav file in 16 bits integer format
+                SAMPLE_FILENAME = os.path.join( self.__root, 'split', 'wav', f"{sample_idx}-{sample['labeling_id']}-{sample['label_id']}.wav" )
+                data = np.int16( data >> 8 )
+
+                # Perform zero padding if requested
+                if self.__zero_padding:
+                    if len( data ) < samples_witdh:
+                        data = np.pad( data, (0, samples_witdh - len( data )), 'constant' )
+
+                # Save wav file
+                with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                    wavfile.setnchannels( len( self.__channels ) )
+                    wavfile.setsampwidth( 2 )
+                    wavfile.setframerate( int( sample['sr'] ) )
+                    wavfile.writeframesraw( data )
+
+                # Print counter
+                percent_before = percent
+                percent = sample_idx*100//samples_number
+                if percent%20 == 0 or percent%20 < percent_before%20 :
+                    print( f"{percent}%" )
+
+
+    def download_dataset( self, dataset_meta: dict ):
+        """ Get data from database and save them as wav files in the dataset directory 
+        
+        Parameter
+        ---------
+        dataset_meta: dict
+            The original dataset meta data
+        """
+
+        # Create dataset directory if needed
+        if not path.exists( self.__root ):
+            log.info( f" .Create new dataset path" )
+            os.makedirs( self.__root, exist_ok=True )
+
+        # Save metadata json file
+        config_filename = os.path.join( self.__root, DATASET_CONFIG_NAME )
+        with open( config_filename, 'w', encoding='utf-8') as json_file:
+            json.dump( dataset_meta, json_file, ensure_ascii=False, indent=4 )            
+
+        # Delete existing wav files if any
+        if path.exists( os.path.join( self.__root, 'wav' ) ):
+            log.info( f" .Remove existing wav files" )
+            for file in os.listdir( os.path.join( self.__root, 'wav' ) ):
+                os.remove( os.path.join( self.__root, 'wav', file ) )
+        else:
+            log.info( f" .Create wav directory" )
+            os.makedirs( os.path.join( self.__root, 'wav' ), exist_ok=True )           
+
+        # Download samples and save them as wav files
+        with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+            for sample_idx, sample in enumerate( self.__dataset_meta['samples'] ):
+                data = np.frombuffer(
+                    session.get_samples_range( 
+                        start = sample['start'],
+                        stop =  sample['end'],
+                        channels = self.__channels,
+                        id = sample['sourcefile_id']
+                    ), 
+                    dtype=np.int32 
+                )
+
+                # Save data as wav file in 16 bits integer format
+                SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{sample_idx}-{sample['label_id']}.wav" )
+                data = np.int16( data >> 8 )
+                with wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
+                    wavfile.setnchannels( len( self.__channels ) )
+                    wavfile.setsampwidth( 2 )
+                    wavfile.setframerate( int( sample['sr'] ) )
+                    wavfile.writeframesraw( data )
+
+
+    def download_metadata( self, dataset_name ):
+        """ Get metadata from the remote dataset which name is `dataset_name` 
+        
+        Parameters
+        ----------
+        dataset_name: str
+            name of dataset to download from database
+        """
+
+        try:
+            with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+                dataset_meta = session.get_dataset( name=dataset_name )
+        except MuException as e:
+            raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
+        
+        return dataset_meta
+
+
+    def check_dataset_split_wav( self ) -> bool:
+        """ Check if local split dataset wav files are up to date
+        Notice that this method does not check the wav file themselves but only their number and their size
+
+        Return
+        ------
+        bool
+            True if local dataset is up to date, False otherwise
+        """ 
+
+        # Check split directory existance
+        if not path.exists( os.path.join( self.__root, 'split', 'wav' ) ):
+            return False
+        
+        # Check split json config file existance
+        json_split_filename = os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT )
+        if not path.exists( json_split_filename ):
+            return False
+
+        # Get existing split dataset meta file
+        try:
+            with open( json_split_filename, 'r') as json_file:
+                existing_split_meta = json.load( json_file )
+
+        except json.decoder.JSONDecodeError as e:
+            log.info( f"Existing split dataset meta file {json_split_filename} seems not valid. Downloading split dataset..." )
+            return False
+        except Exception as e:
+            log.info( f"Failed to open local split json metafile {json_split_filename}. Downloading split dataset..." )
+            return False
+        
+        if existing_split_meta['split_size'] != self.__split_size or existing_split_meta['zero_padding'] != self.__zero_padding:
+            return False
+
+        return True
+
+
+
+    def check_dataset( self ) -> bool :
+        """ Check if local dataset is up to date 
+        Just compare the dataset meta file with the one in database
+        
+        Return
+        ------
+        bool
+            True if local dataset is up to date, False otherwise
+        """
+
+        # Check if dataset directory exist
+        if not path.exists( self.__root ):
+            return False
+
+        # Check json config file existance
+        config_filename = os.path.join( self.__root, DATASET_CONFIG_NAME )
+        if not path.exists( config_filename ):
+            return False
+
+        if self.__dataset_meta is None:
+            return False
+        
+        # Get existing dataset meta file
+        try:
+            with open( config_filename, 'r') as json_file:
+                existing_meta = json.load( json_file )
+        except json.decoder.JSONDecodeError as e:
+            log.info( f"Existing dataset meta file {config_filename} seems not valid. Downloading dataset..." )
+            return False
+        except Exception as e:
+            log.info( f"Failed to open local json metafile {config_filename}. Downloading dataset..." )
+            return False
+        
+        # Check if existing meta file is the same as the one in database
+        if not 'dataset' in existing_meta or not 'crdate' in existing_meta:
+            log.info( f" .Existing dataset meta file {config_filename} is not valid. Downloading dataset..." )
+            return False
+        
+        if existing_meta['crdate'] != self.__dataset_meta['crdate']:
+            log.info( f" .Existing dataset meta file {config_filename} is not up to date. Downloading dataset..." )
+            return False
+        
+        return True
+
+
+
+    def __len__( self ):
+        """ Get the total samples number in dataset"""
+
+        if self.__split_size is not None:
+            return len(self.__dataset_meta_split['samples'])
+        else:   
+            return len(self.__dataset_meta['samples'])
+
+    
+
+    def __getitem__( self, idx ):
+        """ get sample which index is given as argument 
+        
+        Return
+        ------
+        data: torch.Tensor
+            Tensor built from a numpy array which dimensions are (samples_number, channels_number)
+        sample rate: int 
+            Data sampling frequency
+        label: int
+            The label identifier in database (for now)
+        """
+
+        if torch.is_tensor( idx ):
+            idx = idx.tolist()
+
+        try:
+            # Get data from split directory
+            if self.__split_size is not None:
+                SAMPLE_FILENAME = os.path.join( self.__root, 'split', 'wav', f"{idx}-{self.__dataset_meta_split['samples'][idx]['labeling_id']}-{self.__dataset_meta_split['samples'][idx]['label_id']}.wav" )
+                with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:                
+                    channels_number = wavefile.getnchannels()
+                    samples_number = wavefile.getnframes()
+                    data = np.frombuffer(
+                        wavefile.readframes( samples_number ),
+                        dtype=np.int16
+                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
+
+                label = self.__dataset_meta_split['samples'][idx]['label_id']
+
+            # Get data from wav directory
+            else:
+        
+                SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{idx}-{self.__dataset_meta['samples'][idx]['label_id']}.wav" )
+                with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:
+                    channels_number = wavefile.getnchannels()
+                    samples_number = wavefile.getnframes()
+                    data = np.frombuffer(
+                        wavefile.readframes( samples_number ),
+                        dtype=np.int16
+                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
+
+                label = self.__dataset_meta['samples'][idx]['label_id']
+
+            # transform binary data to torch tensor and reshape it
+            frame_fength = len( data ) // channels_number
+            data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
+
+            # Exec processing callback if any 
+            if self.__transform:
+                data = self.__transform( data )
+
+            if self.__target_transform:
+                label = self.__target_transform( label )
+            
+
+        except MuException as e:
+            raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
+
+        return data, label
+
+
+
+
+
+"""
+
         try:
             with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
                 
@@ -245,8 +724,8 @@ class AidbDataset( TensorDataset ):
                     self.__meta =  dataset_meta
                     should_be_downloaded = True
 
+                # Dataset directory exist -> check json config file existance
                 else:
-                    # check json config file existance
                     if not path.exists( config_filename ):
                         log.info( f" .Create new dataset" )
                         self.__meta =  dataset_meta
@@ -271,7 +750,6 @@ class AidbDataset( TensorDataset ):
                                 should_be_downloaded = True
 
                     if should_be_downloaded:
-
                         # Save dataset meta file
                         log.info( f" .Save new dataset meta file" )
                         with open( config_filename, 'w', encoding='utf-8') as json_file:
@@ -280,14 +758,18 @@ class AidbDataset( TensorDataset ):
                         self.__meta =  dataset_meta
 
                     else:
+                        # Should not be downloaded -> use existing meta data
                         self.__meta =  existing_meta
 
-                        # Check for channels
-                        # Get filename of first wav file in directory:
+                        # Check for channels. 
+                        # If user as changed channels list, we have to download dataset
+                        # This check is performed by looking at the first wav file which can be in wav directory or in split/wav directory
                         if self.__split_size is None:
                             wavpath = os.path.join( self.__root, 'wav' )
-                        else:
+                        elif path.exists( os.path.join( self.__root, 'split' ) ):
                             wavpath = os.path.join( self.__root, 'split', 'wav' )
+                        else:
+                            wavpath = os.path.join( self.__root, 'wav' )
 
                         first_vawfile = next( (f for f in os.listdir( wavpath ) if f.endswith('.wav')), None )
                         if first_vawfile is None:
@@ -355,6 +837,7 @@ class AidbDataset( TensorDataset ):
                     # Dataset is already downloaded -> nothing to do
                     log.info( f" .Dataset already downloaded and up to date" )
                     
+                    # Check for dataset split
                     should_be_split = False
                     if self.__split_size is not None:
                         # Check if split directory exist and make it if not
@@ -385,195 +868,5 @@ class AidbDataset( TensorDataset ):
             raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
 
 
-    def split_data( self, session: AidbSession ):
-        """ Get data from database and save them as wav files in the dataset directory after split and zero padding if requested """
 
-        # Create split directory if not exist
-        if not path.exists( os.path.join( self.__root, 'split', 'wav' ) ):
-            log.info( f" .Create split/wav directory" )
-            os.makedirs( os.path.join( self.__root, 'split', 'wav' ), exist_ok=True )
-
-        # Delete all files in split/wav directory
-        else:
-            for file in os.listdir( os.path.join( self.__root, 'split', 'wav' ) ):
-                os.remove( os.path.join( self.__root, 'split', 'wav', file ) )
-                        
-        # Build the split samples meta data
-        split_meta = []
-        for sample in self.__meta['samples']:
-            sample_start = sample['start']
-            sample_end = sample['end']
-            sr = int( sample['sr'] )
-            sample_duration = ( sample_end - sample_start ) / sr
-            if int( sample_duration/self.__split_size ) > 1:
-
-                # Sample is longer than requested duration -> split it
-                split_number = int( sample_duration/self.__split_size )
-                for splitnumber in range( split_number ):
-                    split_start = int( sample_start + splitnumber * self.__split_size * sr )
-                    split_end = int( split_start + self.__split_size * sr - 1)
-                    split_meta.append( {
-                        'labeling_id': sample['labeling_id'],
-                        'label_id': sample['label_id'],
-                        'file_id': sample['sourcefile_id'],
-                        'start': split_start,
-                        'end': split_end,
-                        'sr': sr
-                    } )
-
-                # Add last split if its size is greater than half of the requested duration
-                if sample_duration - split_number * self.__split_size > self.__split_size/2:
-                    split_start = int( sample_start + split_number * self.__split_size * sr )
-                    split_end = int( sample_end )
-                    split_meta.append( {
-                        'labeling_id': sample['labeling_id'],
-                        'label_id': sample['label_id'],
-                        'file_id': sample['sourcefile_id'],
-                        'start': split_start,
-                        'end': split_end,
-                        'sr': sr
-                    } )
-
-            # Sample is shorter than requested duration -> keep it if its size is greater than half of the requested duration
-            elif sample_duration > self.__split_size/2: 
-                split_meta.append( {
-                    'labeling_id': sample['labeling_id'],
-                    'label_id': sample['label_id'],
-                    'file_id': sample['sourcefile_id'],
-                    'start': sample_start,
-                    'end': sample_end,
-                    'sr': sr
-                } )
-
-            # Sample is too short -> do not keep it
-            else:
-                pass
-
-        # Save the split samples meta data
-        log.info( f" .Save new split meta file" )
-        dataset_split = {
-            'samples': split_meta,
-            'split_size': self.__split_size,
-            'zero_padding': self.__zero_padding,
-            'crdate': datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        }
-        json_split_filename = os.path.join( self.__root, 'split', DATASET_CONFIG_NAME_SPLIT )
-        with open( json_split_filename, 'w', encoding='utf-8') as json_file:
-            json.dump( dataset_split, json_file, ensure_ascii=False, indent=4 )
-        
-        self.__meta['split'] = dataset_split
-        
-
-        # Get data from database and split them according to the split meta data
-        percent = 0
-        percent_before = 0
-        samples_number = len( self.__meta['split']['samples'])
-        if self.__zero_padding:
-            sampling_frequency = self.__meta['samples'][0]['sr']
-            samples_witdh = int( self.__split_size * sampling_frequency )
-            
-        for sample_idx, sample in enumerate( self.__meta['split']['samples'] ):
-            data = np.frombuffer(
-                session.get_samples_range( 
-                    start = sample['start'],
-                    stop =  sample['end'],
-                    channels = self.__channels,
-                    id = sample['file_id']
-                ), 
-                dtype=np.int32 
-            )
-
-            # Save data as wav file in 16 bits integer format
-            SAMPLE_FILENAME = os.path.join( self.__root, 'split', 'wav', f"{sample_idx}-{sample['labeling_id']}-{sample['label_id']}.wav" )
-            data = np.int16( data >> 8 )
-
-            # Perform zero padding if requested
-            if self.__zero_padding:
-                if len( data ) < samples_witdh:
-                    data = np.pad( data, (0, samples_witdh - len( data )), 'constant' )
-
-            # Save wav file
-            with  wave.open( SAMPLE_FILENAME, mode='wb' ) as wavfile:
-                wavfile.setnchannels( len( self.__channels ) )
-                wavfile.setsampwidth( 2 )
-                wavfile.setframerate( int( sample['sr'] ) )
-                wavfile.writeframesraw( data )
-
-            # Print counter
-            percent_before = percent
-            percent = sample_idx*100//samples_number
-            if percent%20 == 0 or percent%20 < percent_before%20 :
-                print( f"{percent}%" )
-
-
-    def __len__( self ):
-        """ Get the total samples number in dataset"""
-
-        if self.__split_size is not None:
-            return len(self.__meta['split']['samples'])
-        else:   
-            return len(self.__meta['samples'])
-
-    
-
-    def __getitem__( self, idx ):
-        """ get sample which index is given as argument 
-        
-        Return
-        ------
-        data: torch.Tensor
-            Tensor built from a numpy array which dimensions are (samples_number, channels_number)
-        sample rate: int 
-            Data sampling frequency
-        label: int
-            The label identifier in database (for now)
-        """
-
-        if torch.is_tensor( idx ):
-            idx = idx.tolist()
-
-        try:
-            # Get data from split directory
-            if self.__split_size is not None:
-                SAMPLE_FILENAME = os.path.join( self.__root, 'split', 'wav', f"{idx}-{self.__meta['split']['samples'][idx]['labeling_id']}-{self.__meta['split']['samples'][idx]['label_id']}.wav" )
-                with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:                
-                    channels_number = wavefile.getnchannels()
-                    samples_number = wavefile.getnframes()
-                    data = np.frombuffer(
-                        wavefile.readframes( samples_number ),
-                        dtype=np.int16
-                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
-
-                label = self.__meta['split']['samples'][idx]['label_id']
-
-            # Get data from wav directory
-            else:
-        
-                SAMPLE_FILENAME = os.path.join( self.__root, 'wav', f"{idx}-{self.__meta['samples'][idx]['label_id']}.wav" )
-                with wave.open( SAMPLE_FILENAME ,'r' )  as wavefile:
-                    channels_number = wavefile.getnchannels()
-                    samples_number = wavefile.getnframes()
-                    data = np.frombuffer(
-                        wavefile.readframes( samples_number ),
-                        dtype=np.int16
-                    ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
-
-                label = self.__meta['samples'][idx]['label_id']
-
-            # transform binary data to torch tensor and reshape it
-            frame_fength = len( data ) // channels_number
-            data = torch.from_numpy( np.reshape( data, ( frame_fength, channels_number ) ).T )
-
-            # Exec processing callback if any 
-            if self.__transform:
-                data = self.__transform( data )
-
-            if self.__target_transform:
-                label = self.__target_transform( label )
-            
-
-        except MuException as e:
-            raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
-
-        return data, label
-
+"""

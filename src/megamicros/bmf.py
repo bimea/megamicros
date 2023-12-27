@@ -363,7 +363,6 @@ class Beamformer:
         # frequency step
         frequency_step = self.__sampling_frequency / self.__freq_number / 2
 
-
         # bandwidth range
         self.__bw_range_start = int( self.__sampling_frequency * self.__band_width[0] / frequency_step / 2 )
         self.__bw_range_end = int( self.__sampling_frequency * self.__band_width[1] / frequency_step / 2 ) - 1
