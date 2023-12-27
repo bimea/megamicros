@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.55
+
+* fix the download error in dataset samples duration
+
 ### 2.0.54
 
 * update http address for aiboard
