@@ -253,8 +253,8 @@ class AidbDataset( TensorDataset ):
                     # !!! WARNING !!!
                     # The split_from_local_dataset failed to generate the split dataset
                     # -> use download_dataset_and_split instead. Should be fixed
-                    #self.split_from_local_dataset()
-                    self.download_dataset_and_split()
+                    self.split_from_local_dataset()
+                    #self.download_dataset_and_split()
             elif not self.check_dataset_split_wav():
                 # There is no local dataset or it is not up to date
                 log.info( f" .Split dataset {dataset_name} is not up to date. Downloading..." )
@@ -278,7 +278,7 @@ class AidbDataset( TensorDataset ):
                 os.remove( os.path.join( self.__root, 'split', 'wav', file ) )
 
         # Build the split samples meta data
-        split_samples = self.build_split_samples( self.__dataset_meta )
+        split_samples = self.build_split_metadata( self.__dataset_meta )
 
         # Save the split samples meta data
         log.info( f" .Save new split meta file" )
@@ -299,7 +299,6 @@ class AidbDataset( TensorDataset ):
         if self.__zero_padding:
             sampling_frequency = self.__dataset_meta['samples'][0]['sr']
             samples_witdh = int( self.__split_size * sampling_frequency )
-
 
         for sample_idx, sample in enumerate( self.__dataset_meta_split['samples'] ):
             # Get data from local repository
@@ -339,8 +338,8 @@ class AidbDataset( TensorDataset ):
 
 
 
-    def build_split_samples( self, dataset_meta: dict ) -> list:
-        """ Build the samples index list
+    def build_split_metadata( self, dataset_meta: dict ) -> list:
+        """ Build the split samples index list
 
         Parameters
         ----------
@@ -403,7 +402,9 @@ class AidbDataset( TensorDataset ):
 
 
     def download_dataset_and_split( self ):
-        """ Get data from database and save them as wav files in the dataset directory after split and zero padding if requested """
+        """ Get data from database and save them as wav files in the dataset directory 
+        Samples are split and remainders are zero padded if requested 
+        """
 
         # Create split directory if not exist
         if not path.exists( os.path.join( self.__root, 'split', 'wav' ) ):
@@ -416,7 +417,7 @@ class AidbDataset( TensorDataset ):
                 os.remove( os.path.join( self.__root, 'split', 'wav', file ) )
                         
         # Build the split samples meta data
-        split_samples = self.build_split_samples( self.__dataset_meta )
+        split_samples = self.build_split_metadata( self.__dataset_meta )
 
         # Save the split samples meta data
         log.info( f" .Save new split meta file" )
@@ -578,7 +579,6 @@ class AidbDataset( TensorDataset ):
             return False
 
         return True
-
 
 
     def check_dataset( self ) -> bool :

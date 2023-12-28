@@ -208,11 +208,18 @@ class Dataset( models.Model ):
     Dataset model
     
     A dataset is a collection of file labelings. 
-    The collection is stored in a file which can be updated with new file labelings.
+    The collection is stored in a meta info file which can be updated with new file labelings.
     Criteria for a file labeling to be included in a dataset are:
     - the file contains the requested label
     - the file contains the requested context (if any)
     - the file contains the requested tag (if any)
+
+    In addition of the meta info file, the dataset can be associated to a file containing the dataset itself.
+    This file is a zip file containing all the files of the dataset. 
+    Selected channels for the stored dataset instance must be provided in the `info` field.
+    The dataset instance is created when the `filename` field is set to a non null value.
+    If the `info` field is null, no dataset instance is created at the object creation.
+    The gzip dataset instance file is updated if the `info` field is updated.
     """
     name = models.CharField( '(*) Nom du dataset', max_length=128 )
     code = models.CharField( '(*) Code', max_length=64 )

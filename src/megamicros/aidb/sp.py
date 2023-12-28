@@ -3,12 +3,15 @@ import io
 import numpy as np
 import wave
 import h5py
+import json
 from datetime import datetime, timedelta
 from dateutil import tz
 from rest_framework.exceptions import NotFound, server_error
 from .models import SourceFile
+from .exception import MuDbException
 from megamicros.log import log, logging
 from megamicros.muh5 import MuH5
+
 
 """
 dateutil: https://www.epochconverter.com/timezones
@@ -1231,3 +1234,53 @@ def save_dataset_on_muh5_file( filename: str|io.BytesIO, metadata: dict, labelin
             os.remove( filename )
         raise e
 
+
+def compress_dataset( json_filename: str, gzip_filename: str, channels: list ):
+    """ Compress dataset in gzip format 
+    
+    Parameters
+    ----------
+    json_filename: str
+        the json file name with absolute path    
+    gzip_filename: str
+        the gzip file name with absolute path
+    """
+
+    # Load metadata fjson file:
+    try:
+        with open( json_filename, 'r' ) as f:
+            dataset_metadata = json.load( f )
+    except Exception as e:
+        log.info( f" .Unable to load json file '{json_filename}': {e}" )
+        raise MuDbException( f"Unable to load json file '{json_filename}': {e}" )
+    else:
+        log.info( f" .Json file '{json_filename}' successfully loaded" )
+
+    # Build gzip file:
+    for sample_idx, sample in enumerate( dataset_metadata['samples'] ):
+        sample['labeling_id']
+        #start, end sourcefile_id, label_code, label_id, timestamp, type, sw, sr
+
+        # Get path and filename from sourcefile identifier 
+        try:
+            sourcefile = SourceFile.objects.get( pk=sample['sourcefile_id'] )
+        except SourceFile.DoesNotExist:
+            log.info( f" .Sourcefile '{sample['sourcefile_id']}' not found" )
+            raise MuDbException( f"Sourcefile '{sample['sourcefile_id']}' not found" )
+
+        sourcefilename = f"{sourcefile.directory.path}/{sourcefile.filename}"
+        data = extract_samples_from_muh5file( sourcefilename, start=sample['start'], stop=sample['end'], channels=channels, dtype=np.int32 )
+        requested_samples_number = sample['end'] - sample['start'] + 1
+
+        wavstream = io.BytesIO()
+        with wave.open( wavstream, 'wb' ) as w:
+            w.setnchannels( len( channels ) )
+            w.setsampwidth( 2 )
+            w.setframerate( sample['sr'] )
+            w.setnframes( requested_samples_number )
+            w.writeframes( (data >> 8).astype( np.int16 ) )
+        wavstream.seek( 0 )
+
+    # The problem is that we do not know the channels...
+    # We need to store the channels in the json file
+    # We need also to store the channels in dataset database Model !!!
