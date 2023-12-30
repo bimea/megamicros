@@ -44,7 +44,7 @@ from .serializers import ConfigSerializer, DomainSerializer, CampaignSerializer,
 from .serializers import DirectoryFileSerializer, SourceDirectoryCheckSerializer, SourceDirectoryReviseSerializer, TagcatSerializer, TagSerializer
 from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadSamplesSerializer, SourceFileUploadAudioSerializer
 from .serializers import ContextSerializer, LabelSerializer, FileLabelingSerializer
-from .serializers import DatasetSerializer, DatasetUploadSerializer, DatasetGzipUploadSerializer, SourceFileSegmentationSerializer
+from .serializers import DatasetSerializer, DatasetUploadSerializer, DatasetUploadMetaSerializer, SourceFileSegmentationSerializer
 from .tools import StandardResultsSetPagination, LargeResultsSetPagination
 from .serializers import FileContextingSerializer
 from .sp import log, delete_context_on_muh5_file, delete_label_on_muh5_file
@@ -559,10 +559,25 @@ class DatasetViewSet( viewsets.ModelViewSet ):
         except Exception as e:
             return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
         
+    @action( detail=True, methods=['get'] )
+    def meta( self, request, pk=None ):
+        """ Upload the json metadata file of dataset
 
+        Endpoint:
+            /dataset/<dataset_id>/meta
+        """
+        try:
+            dataset = self.get_object()
+            serializer = DatasetUploadMetaSerializer( dataset )
+            return serializer.data
+
+        except Exception as e:
+            #return Response( str(e), status=status.HTTP_412_PRECONDITION_FAILED)
+            return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
+        
     @action( detail=True, methods=['get'] )
     def upload( self, request, pk=None ):
-        """ Upload the json metadata file of dataset
+        """ Upload the gzip instance of dataset
 
         Endpoint:
             /dataset/<dataset_id>/upload
@@ -573,22 +588,7 @@ class DatasetViewSet( viewsets.ModelViewSet ):
             return serializer.data
 
         except Exception as e:
-            return Response( str(e), status=status.HTTP_412_PRECONDITION_FAILED)
-            #return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
+            #return Response( str(e), status=status.HTTP_412_PRECONDITION_FAILED)
+            return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
 
-
-    @action( detail=True, methods=['get'] )
-    def gzip( self, request, pk=None ):
-        """ Upload the compressed dataset file
-
-        Endpoint:
-            /dataset/<dataset_id>/gzip
-        """
-        try:
-            dataset = self.get_object()
-            serializer = DatasetGzipUploadSerializer( dataset )
-            return serializer.data
-
-        except Exception as e:
-            return Response( str(e), status=status.HTTP_412_PRECONDITION_FAILED)
 

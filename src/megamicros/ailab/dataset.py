@@ -56,6 +56,7 @@ DATASET_DEFAULT_EMAIL       = 'bruno.gas@biimea.com'
 DATASET_DEFAULT_PASSWD      = '#T;uZnQ5UJ_JC~&'
 DATASET_CONFIG_NAME         = 'dataset.json'
 DATASET_CONFIG_NAME_SPLIT   = 'dataset-split.json'
+DATASET_GZIP_NAME           = 'dataset.gzip'    
 
 
 # =============================================================================
@@ -172,10 +173,11 @@ class AidbDataset( TensorDataset ):
         This means that if you're using random data augmentation techniques during training,
         these transformations will be applied randomly and differently for each epoch of training.
         
-        If `sample_duration` is given, samples are cut (and/or stretched wether the `time_stretching` argument is provided or not) to fit the given duration.
-        In that case, samples that are more than several times longer than the requested duration are split.  
-        A json index file is created which name is given by the `DATASET_CONFIG_NAME` constant
-
+        If `split_size` is given, samples are split into samples or `split_size` seconds. 
+        In addition, if `zero_padding` is provided, remainder samples whose duration is greater than half of the requested duration are zero padded.
+        Samples whose duration is less than the split size are lost. 
+        This ensure that all samples have same size.
+        
         Parameters
         ----------
         root: str|Path
@@ -193,7 +195,7 @@ class AidbDataset( TensorDataset ):
         channels: int|list
             channel number or list of channels to get
         transform: callable, optional
-            Optional transform to be applied on a sample.
+            Optional transform to be applied on samples.
         split_size: float, optionnal
             gives the duration of samples to split in seconds. If None, all samples are left unchanged (default: None).
             Samples which duration is less than the split size are left unchanged. 
@@ -224,11 +226,23 @@ class AidbDataset( TensorDataset ):
         self.__zero_padding = zero_padding
 
         if self.__channels is None:
-            log.warning( f" .No channel specified in arguments list. Set to channel 0" )
-            self.__channels = [0]
+            log.warning( f" .No channel specified in arguments list. Set to channel one" )
+            self.__channels = [1]
 
         # Get metadata from database
         self.__dataset_meta = self.download_metadata( dataset_name )
+
+        # Get data  and save them as gzip file
+        self.download_data( dataset_name )
+
+
+
+        print( f" .dataset_meta: {self.__dataset_meta}")
+
+
+
+
+
 
         # Get original dataset from database
         if self.__split_size is None:
@@ -542,6 +556,35 @@ class AidbDataset( TensorDataset ):
             raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
         
         return dataset_meta
+    
+
+    def download_data( self, dataset_name ):
+        """ Get data instance of thge remote dataset which name is `dataset_name` 
+        
+        Parameters
+        ----------
+        dataset_name: str
+            name of dataset to download from database
+        return: bytes
+            gzip compressed data
+        """
+
+        try:
+            with AidbSession( dbhost=self.__dbhost, login=self.__login, email=self.__email, password=self.__password ) as session:
+                gzip_data = session.download_dataset( name=dataset_name )
+        except MuException as e:
+            raise MuAilabException( f"Connection to database {self.__dbhost} failed ({type(e).__name__}): {e}" )
+
+        # Create dataset directory if needed
+        if not path.exists( self.__root ):
+            log.info( f" .Create new dataset path" )
+            os.makedirs( self.__root, exist_ok=True )
+
+        # Save data gzipfile
+        gzip_filename = os.path.join( self.__root, DATASET_GZIP_NAME )
+        with open( gzip_filename, 'bw' ) as gzip_file:
+            gzip_file.write( gzip_data )
+
 
 
     def check_dataset_split_wav( self ) -> bool:

@@ -926,24 +926,19 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
                 raise serializers.ValidationError( f"A dataset '{dataset.name}' with same code '{data['code']}' already exists" )
 
             # Check if the dataset info is not empty
-            if data['info']:
-                # Check if the info is a valid json
-                try:
-                    info = json.loads( data['info'] )
-                except Exception as e:
-                    raise serializers.ValidationError( f"Invalid json `info` field: {e}. Please correct it" )
-
+            if 'info' in data:
                 # Check if the info contains the required fields
-                if 'channels' not in info:
+                if 'channels' not in data['info']:
                     raise serializers.ValidationError( f"Missing `channels` field in `info` field" )
-                else:
-                    # Check if the channels field is a list or a MEMs number
-                    try:
-                        channels = list( info['channels'] )
-                    except Exception as e:
-                        raise serializers.ValidationError( f"Invalid json `info['channels']` field: {e}. Should be a list or MEMs numbers" )
-                    else:
-                        data['info']['channels'] = channels
+                if data['info']['channels'] is None or data['info']['channels'] == '':
+                    raise serializers.ValidationError( f"Empty `channels` field in `info` field" )
+                if type(data['info']['channels']) is not tuple and type(data['info']['channels']) is not list and type(data['info']['channels']) is not int:
+                    raise serializers.ValidationError( f"Invalid `channels` field in `info` field: should be a list or an integer" )
+                if type(data['info']['channels']) is int:
+                    data['info']['channels'] = [data['info']['channels']]
+
+                channels = data['info']['channels']
+                log.info( f" .Found dataset info field: {data['info']}" )
                 
                 # Check channels number
                 if len( channels ) < 1:
@@ -1004,6 +999,8 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             Option to be used for storing the dataset. Can be 'all', 'meta' or 'instance
         """
 
+        log.info( f" .Storing dataset `{dataset.name}` with option `{option}`" )
+
         # Get config
         try:
             config = Config.objects.get( active=True )
@@ -1012,28 +1009,25 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
         # Get channels and check instance creation
         if option == 'all' or option == 'instance':
-            try:
-                info = json.loads( data['info'] )
-            except Exception as e:
-                raise serializers.ValidationError( f"Invalid json `info` field: {e}. Please correct it" )
-            else:
-                channels = info['channels']
-                channels_number = len( channels )
-                log.info( f" .Creating instance for dataset {dataset.name} with {channels_number} channels" )
+            info = dataset.info
+            channels = info['channels']
+            channels_number = len( channels )
+            log.info( f" .Creating instance for dataset {dataset.name} with {channels_number} channels" )
 
-                # Build a temporary directory where to store the instance files
-                instance_dir = os.path.join( config.dataset_path, 'tmp' )
-                log.info( f" .Creating temporary directory {instance_dir} for dataset {dataset.name}")
-                if not os.path.exists( instance_dir ):
-                    os.makedirs( instance_dir )
-                else:
-                    # Remove all files in the directory
-                    log.info( f" .Found existing temporary directory {instance_dir}. Removing all files")
-                    for file in os.listdir( instance_dir ):
-                        os.remove( os.path.join( instance_dir, file ) )
+            # Build a temporary directory where to store the instance files
+            instance_dir = os.path.join( config.dataset_path, 'tmp' )
+            log.info( f" .Creating temporary directory {instance_dir} for dataset {dataset.name}")
+            if not os.path.exists( instance_dir ):
+                os.makedirs( instance_dir )
+            else:
+                # Remove all files in the directory
+                log.info( f" .Found existing temporary directory {instance_dir}. Removing all files")
+                for file in os.listdir( instance_dir ):
+                    os.remove( os.path.join( instance_dir, file ) )
 
         # Init meta data for dataset
         dataset_labels_table = [{'label_class': idx, 'label_id': label.id, 'label_code': label.code} for idx, label in enumerate( dataset.labels.all() )]
+        log.info( f" .Found {len(dataset_labels_table)} labels for dataset {dataset.name}: {dataset_labels_table}" )
         dataset_metadata = {
             'name': dataset.name,
             'code': dataset.code,
@@ -1049,10 +1043,12 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         for sample_idx, filelabeling in enumerate( dataset.filelabelings.all() ):
 
             # Get file timestamp and segment timestamps, then convert to samples start and stop
-            label_id = filelabeling.label.id,
+            label_id = filelabeling.label.id
+            log.info( f" .label_id= {label_id}")
 
             # find label class from label id in dataset_labels_table:
-            label_class = res = next((label['label_class'] for label in dataset_labels_table if label['label_id'] == label_id), None)
+            label_class = next((label['label_class'] for label in dataset_labels_table if label['label_id'] == label_id), None)
+            log.info( f" .label_class= {label_class}")
 
             file_timestamp = filelabeling.sourcefile.info['timestamp']
             timestamp_start = filelabeling.datetime_start
@@ -1119,21 +1115,18 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
                 # Compress all .wav files in the temporary directory
                 log.info( f" .Compressing dataset {dataset.name} in {gzip_filename}.zip" )
-                shutil.make_archive( gzip_filename, 'zip', instance_dir )
-
-                # Move the compressed file to the dataset directory
-                log.info( f" .Moving compressed file from {instance_dir} to {config.dataset_path}" )
-                shutil.move( os.path.join( instance_dir, gzip_filename ), config.dataset_path )
+                shutil.make_archive( os.path.join( config.dataset_path, gzip_filename ), 'zip', instance_dir )
 
                 # Remove all files in the temporary directory
                 log.info( f" .Removing temporary directory {instance_dir} content" )
                 for file in os.listdir( instance_dir ):
-                    if file.endswith( '.wav' ):
-                        os.remove( os.path.join( instance_dir, file ) )
+                    os.remove( os.path.join( instance_dir, file ) )
                 
             except Exception as e:
                 # Remove the metadata file and raise exception
-                os.remove( os.path.join( instance_dir, file ) )
+                os.remove( json_filename )
+                if os.path.exists( gzip_filename ):
+                    os.remove( gzip_filename )
                 raise serializers.ValidationError( f"Failed to compress dataset {dataset.name}: {e}" )
 
         log.info( f" .Dataset {dataset.name} successfully stored" )
@@ -1161,6 +1154,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
 
         # Check if code has been changed and if so, update the filename
         json_needs_update = False
+        gzip_needs_update = False
 
         # Check if code, labels, ... dataset has been changed
         if instance.labels != validated_data['labels']:
@@ -1180,6 +1174,20 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             instance.tags.set( validated_data['tags'] )
             json_needs_update = True
 
+        # Check channels
+        if validated_data['info'] and 'channels' in validated_data['info']:
+            if not instance.info or 'channels' not in instance.info or instance.info['channels'] != validated_data['info']['channels']:
+                log.info( f" .Channels have been changed: updating the dataset channels" )
+                json_needs_update = True
+                gzip_needs_update = True
+        elif instance.info and 'channels' in instance.info:
+            if not validated_data['info'] or 'channels' not in validated_data['info'] or instance.info['channels'] != validated_data['info']['channels']:
+                log.info( f" .Channels have been changed: updating the dataset channels" )
+                json_needs_update = True
+                gzip_needs_update = True
+        else:
+            log.info( f" .No channels have been changed" )
+
         if json_needs_update:
             # Get new filelabelings
             filelabelings = []
@@ -1194,7 +1202,11 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
             # store update metadata in json file
             try:
                 log.info( f" .Updating dataset json file..." )
-                self.store( instance )
+                if gzip_needs_update:
+                    self.store( instance, 'all' )
+                else:
+                    self.store( instance, 'meta' )
+
             except Exception as e:
                 log.info( f" .Failed to update metadata of dataset: {e}. Actually, the dataset json file has not been updated")
                 raise serializers.ValidationError( f"Failed to update metadata of dataset: {e}.  Actually, the dataset json file has not been updated" )
@@ -1214,7 +1226,9 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         try:
             config = Config.objects.get( active=True )
             dataset: Dataset = self.instance
-            filename = f"{config.dataset_path}/{dataset.filename}"
+            json_filename = os.path.join( config.dataset_path, dataset.filename )
+            gzip_filename = ospath.splitext( json_filename )[0] + '.zip'
+
         except Exception as e:
             raise serializers.ValidationError( f"Cannot get active configuration: {e}" )
         
@@ -1222,22 +1236,28 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
         if dataset.filename:
             log.info( f" .Removing metadata file for dataset '{dataset.name}'" )
 
-            if os.path.exists( filename ):
-                os.remove( filename )
-                log.info( f" .'{filename}' file successfully removed" )
+            if os.path.exists( json_filename ):
+                os.remove( json_filename )
+                log.info( f" .'{json_filename}' file successfully removed" )
             else:
-                log.info( f" .'{filename}' file removing failed: file not found" )
+                log.info( f" .'{json_filename}' file removing failed: file not found" )
+
+            if os.path.exists( gzip_filename ):
+                os.remove( gzip_filename )
+                log.info( f" .'{gzip_filename}' file successfully removed" )
+            else:
+                log.info( f" .'{gzip_filename}' file removing failed: file not found" )
         else:
             log.info( f" .No stored metadata to remove for dataset '{dataset.name}'" )
 
 
 
-class DatasetUploadSerializer:
+class DatasetUploadMetaSerializer:
     """ Upload serializer for Dataset. Send a http response with meta info content. """
 
     def __init__( self, dataset: Dataset ):
         """
-        Download a stored dataset jason metadata file
+        Download the stored dataset jason metadata file
         Endpoint: /dataset/<id>/upload
         """
         
@@ -1246,7 +1266,7 @@ class DatasetUploadSerializer:
 
             # check file existance
             config = Config.objects.get( active=True )
-            filename = f"{config.dataset_path}/{dataset.filename}"
+            filename = os.path.join( config.dataset_path, dataset.filename )
             if not ospath.exists( filename ):
                 log.info( f" .Dataset uploading failed: file not found" )
                 raise MuDbException( f"Unable to upload: no dataset file found." )            
@@ -1265,3 +1285,34 @@ class DatasetUploadSerializer:
             data = {}
             self.data = HttpResponse( json.dumps(data), content_type='application/json' )   
             self.data['Content-Disposition'] = f'attachment; filename={dataset.code}.json'
+
+
+class DatasetUploadSerializer:
+    """ Upload serializer for Dataset. Send a http response with gzip data instance of dataset. """
+
+    def __init__( self, dataset: Dataset ):
+        """
+        Download the stored gzip file
+        Endpoint: /dataset/<id>/upload
+        """
+        
+        # A stored file exist for dataset
+        if dataset.filename:
+
+            # check file existance
+            config = Config.objects.get( active=True )
+            filename = os.path.join( config.dataset_path, dataset.filename )
+            gzip_filename = ospath.splitext( filename )[0] + '.zip'
+            if not ospath.exists( gzip_filename ):
+                log.info( f" .Dataset uploading failed: file not found" )
+                raise MuDbException( f"Unable to upload: no dataset file found." )          
+
+            # download file content
+            log.info( f" .Starting dataset file download..." )
+            with open( gzip_filename, 'rb') as file_to_upload:
+                self.data = HttpResponse( file_to_upload, content_type='application/zip' )
+                self.data['Content-Disposition'] = f"attachment; filename={dataset.code}.zip"
+
+        else:
+            # dataset has not been stored -> send error tresponse to client
+            raise MuDbException( f"No dataset gzip instance file found" )

@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.56 to 2.0.68
+
+* Update aidb dataset by adding instance storing
+
 ### 2.0.55
 
 * fix the download error in dataset samples duration

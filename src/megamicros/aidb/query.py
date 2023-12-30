@@ -1132,7 +1132,7 @@ class AidbSession( RestDBSession ):
 
     def get_dataset( self, id:int|None=None, url:str|None=None, name:str|None=None, code:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
         """
-        Get dataset metadata content from identifier, url or name
+        Get dataset metadata content from identifier, url, name or code
 
         Parameter
         ---------
@@ -1167,11 +1167,63 @@ class AidbSession( RestDBSession ):
             id = object['id']
         
         if id is not None:
-            response = self.get(  f"/dataset/{id}/upload", timeout=timeout ).json()
+            response = self.get(  f"/dataset/{id}/meta", timeout=timeout ).json()
         else:
             response = self.get( url, timeout=timeout, full_url=True ).json()
             
         return response        
+
+    def download_dataset( self, id:int|None=None, url:str|None=None, name:str|None=None, code:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
+        """ Upload dataset data from identifier, url, name or code
+
+        Parameter
+        ---------
+
+        id: int|None
+            identifier of the dataset
+        url: str|None
+            url of the dataset (should full pathname with endpoint)
+        name: str|None
+            name of the dataset
+        code: str|None
+            code of the dataset
+        timeout: int
+            timeout after what the request failed
+
+        Return
+        ------
+        data
+            the zip compressed dataset data content in bytes
+        """
+
+        # id and url are not provided, find the dataset from its name
+        if id is None and url is None:
+            if name is None and code is None:
+                raise MuDbException( "Cannot get dataset: no identifier nor name or code given" )
+            elif name is not None:
+                field = {'label': 'name', 'value': name}
+            elif code is not None:
+                field = {'label': 'code', 'value': code}
+
+            object = self.get_meta( object='dataset', field=field, timeout=timeout )
+            id = object['id']
+        
+        if id is not None:
+            response = self.get(  f"/dataset/{id}/upload", timeout=timeout )
+        else:
+            response = self.get( url, timeout=timeout, full_url=True )
+            
+        # Check if the response is a zip file
+        if response.headers['Content-Type'] != 'application/zip':
+            if response.headers['Content-Type'] == 'application/json':
+                if response.json()['status'] == 'error':
+                    raise MuDbException( f"Failed to download data. Server response was: {response.json()['message']}" )
+                else:
+                    raise MuDbException( f"Failed to download data. Server response was: {response.json()}" )                
+            else:
+                raise MuDbException( f"Failed to download data: server didn't give a zip file as response" )
+
+        return response.content
 
 
     def create_dataset( self, name:str, code:str, domain_id:int, labels_id:list|None, contexts_id:list|None=None, tags_id:list|None=None, comment:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
@@ -1210,6 +1262,7 @@ class AidbSession( RestDBSession ):
         ).json()
 
         log.info( f" .Successfully created new dataset [{response['id']}]")
+
 
     def delete_dataset( self, id:int ):
         """
