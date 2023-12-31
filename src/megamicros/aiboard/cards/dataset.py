@@ -113,6 +113,17 @@ dataset_form_card = dbc.Modal( [
                         dbc.FormText("Commentaire optionnel")
                     ], width=10 )
                 ], className="mb-3", align="center" ),
+                dbc.Row( [
+                    dbc.Col( 
+                        dbc.Label( "Info", html_for="dataset-card-form-info"),
+                        width=2 
+                    ),
+                    dbc.Col( [ 
+                        dbc.Tooltip( "Informations: placer ici les voies souhaitées au format json. Exemple: {\"channels\":[1]}", target="dataset-card-form-info", placement="top"  ),
+                        dbc.Textarea( id="dataset-card-form-info", size="sm", valid=True ),
+                        dbc.FormText("Infos (channels)")
+                    ], width=10 )
+                ], className="mb-3", align="center" ),
 
                 dbc.Row(
                     dbc.Col( html.Hr() )
@@ -158,7 +169,6 @@ dataset_card = dbc.Card( [
         dbc.Container( [
             dbc.Row( [ 
                 dbc.Col( [
-
                         dbc.Container( [
                             dbc.Row( [
                                 dbc.Col( [ 
@@ -304,6 +314,7 @@ def onDatasetSelect_enabler( dataset_idx, config_store ):
     Output( 'dataset-card-form-tags-select', 'options' ),
     Output( 'dataset-card-form-tags-select', 'value' ),
     Output( 'dataset-card-form-comment', 'value' ),
+    Output( 'dataset-card-form-info', 'value' ),
 
 	Output( 'dataset-card-store', 'data' ),
 	Output( 'dataset-card-errormsg', 'children' ),
@@ -322,16 +333,17 @@ def onDatasetSelect_enabler( dataset_idx, config_store ):
     State( 'dataset-card-form-contexts-select', 'value' ),
     State( 'dataset-card-form-tags-select', 'value' ),
     State( 'dataset-card-form-comment', 'value' ),
+    State( 'dataset-card-form-info', 'value'),
 
     State( 'dataset-card-store', 'data' ),
     State( 'config-store', 'data' )
 )
-def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn, download_btn, form_confirm_btn, name, code, labels_idx, contexts_idx, tags_idx, comment, card_store, config_store ):
+def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn, download_btn, form_confirm_btn, name, code, labels_idx, contexts_idx, tags_idx, comment, info, card_store, config_store ):
     
     output: cpn.Output = cpn.Ouput( [
         'domain_options', 'domain_value', 'dataset_options', 'dataset_value', 'content_children',
         'form_is_open', 'form_name', 'form_code', 'form_labels_options', 'form_labels_value', 'form_contexts_options', 
-        'form_contexts_value', 'form_tags_option', 'form_tags_value', 'form_comment',
+        'form_contexts_value', 'form_tags_option', 'form_tags_value', 'form_comment', 'form_info',
         'store_data', 'errormsg_children'
     ] )
 
@@ -399,7 +411,8 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
                 f"Informations sur le dataset:",
                 html.Ul( [
                     html.Li( f"Nombre total d'exemples : {len(dataset['filelabelings'])}" ),
-                    html.Li( f"Infos: {dataset['comment']}" ),
+                    html.Li( f"Infos: {dataset['info']}" ),
+                    html.Li( f"Commentaire: {dataset['comment']}" ),
                 ] )
 
             ] ),
@@ -478,7 +491,7 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
             return output.generate(
                 form_is_open = True,
                 form_labels_options = labels_options,
-                orm_contexts_options = contexts_options,
+                form_contexts_options = contexts_options,
                 form_tags_option = tags_options
             )
 
@@ -510,7 +523,7 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
             domain_id = store['domains'][domain_idx]['id']
             
             """ save in database """
-            session.create_dataset( name, code, domain_id, labels_id, contexts_id, tags_id, comment )
+            session.create_dataset( name, code, domain_id, labels_id, contexts_id, tags_id, comment, info )
 
             """ reload dataset """
             datasets = session.load_datasets()
@@ -529,6 +542,7 @@ def onDatasetSelect( domain_idx, dataset_idx, create_btn, store_btn, delete_btn,
                 form_tags_option = [],
                 form_tags_value = [],
                 form_comment = '',
+                form_info = '',
                 dataset_options = dataset_options
             )
 

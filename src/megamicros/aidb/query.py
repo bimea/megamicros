@@ -23,6 +23,7 @@
 
 from datetime import datetime
 import numpy as np
+import json
 
 from megamicros.log import log
 from megamicros.data import MuAudio, FILETYPE_MUH5, FILETYPE_WAV
@@ -1226,7 +1227,7 @@ class AidbSession( RestDBSession ):
         return response.content
 
 
-    def create_dataset( self, name:str, code:str, domain_id:int, labels_id:list|None, contexts_id:list|None=None, tags_id:list|None=None, comment:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
+    def create_dataset( self, name:str, code:str, domain_id:int, labels_id:list|None, contexts_id:list|None=None, tags_id:list|None=None, comment:str|None=None, info:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
         """
         Create a new label in database
         
@@ -1239,6 +1240,7 @@ class AidbSession( RestDBSession ):
         * contexts_id: list of contexts if any
         * tags_id: list of tags if any
         * comment: some optional comments
+        * info: json object with some optional information like channels
         """
 
         # build labels, tags and contexts url
@@ -1256,7 +1258,7 @@ class AidbSession( RestDBSession ):
                 'contexts': contexts,
                 'tags': tags,
                 'comment': None if comment is None or not comment else comment,
-                'info': {},
+                'info': json.loads( info ),
             },
             timeout=timeout
         ).json()
