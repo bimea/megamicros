@@ -1092,6 +1092,7 @@ class DatasetSerializer( serializers.HyperlinkedModelSerializer ):
                     wavfile.setframerate( int( sampling_frequency ) )
                     wavfile.writeframesraw( data )
 
+        dataset_metadata['count'] = len( samples_metadata )
         metadata = {
             'dataset': dataset_metadata,
             'samples': samples_metadata,
@@ -1305,7 +1306,7 @@ class DatasetUploadSerializer:
             gzip_filename = ospath.splitext( filename )[0] + '.zip'
             if not ospath.exists( gzip_filename ):
                 log.info( f" .Dataset uploading failed: file not found" )
-                raise MuDbException( f"Unable to upload: no dataset file found." )          
+                raise MuDbException( f"Unable serve: no dataset file found. One reason may be that you have not created a dataset instance" )          
 
             # download file content
             log.info( f" .Starting dataset file download..." )

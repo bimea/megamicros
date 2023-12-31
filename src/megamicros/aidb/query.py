@@ -1130,7 +1130,7 @@ class AidbSession( RestDBSession ):
 
         return response
 
-    def get_dataset( self, id:int|None=None, url:str|None=None, name:str|None=None, code:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
+    def get_dataset_metadata( self, id:int|None=None, url:str|None=None, name:str|None=None, code:str|None=None, timeout:int=DEFAULT_TIMEOUT ) -> dict:
         """
         Get dataset metadata content from identifier, url, name or code
 
