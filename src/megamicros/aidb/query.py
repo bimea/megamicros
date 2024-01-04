@@ -1164,7 +1164,14 @@ class AidbSession( RestDBSession ):
             elif code is not None:
                 field = {'label': 'code', 'value': code}
 
-            object = self.get_meta( object='dataset', field=field, timeout=timeout )
+            try:
+                object = self.get_meta( object='dataset', field=field, timeout=timeout )
+            except Exception as e:
+                raise MuDbException( f"Unable to get metadata from dataset: {str( e )}" )
+            
+            if object is None or not object or object == {}:
+                raise MuDbException( f"Unable to get metadata from dataset: no dataset found" )
+            
             id = object['id']
         
         if id is not None:

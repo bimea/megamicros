@@ -491,6 +491,7 @@ class AidbDataset( TensorDataset ):
                 # Sample size is less than the split size -> zero padding
                 if self.__dataset_meta_split['samples'][idx]['margin'] == -1:
                     delta = self.__dataset_meta_split['size'] - self.__dataset_meta_split['samples'][idx]['size']
+                    
                     with wave.open( filename ,'r' )  as wavefile:
                         channels_number = wavefile.getnchannels()
                         samples_number = wavefile.getnframes()
@@ -499,6 +500,7 @@ class AidbDataset( TensorDataset ):
                             dtype=np.int16
                         ).astype(np.float32) * DEFAULT_MEMS_SENSIBILITY
                         data = np.concatenate( (data, np.zeros( delta ) ) )
+                        samples_number += delta
 
                 else:
                     # Add random margin if margin is available
