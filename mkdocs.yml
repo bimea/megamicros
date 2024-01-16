@@ -42,6 +42,7 @@ nav:
         - Jetson Nano: tutorials/mu-server/install/jetson.md
         - Mini PC: tutorials/mu-server/install/minipc.md
         - Raspberry Pi: tutorials/mu-server/install/raspi.md
+        - Orange Pi 3B: tutorials/mu-server/install/orangepi3b.md
         - 4G Router: tutorials/mu-server/install/4Grouter.md
       - Using: 'tutorials/mu-server/using.md'
       - Dev: 

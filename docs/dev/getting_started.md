@@ -1,6 +1,9 @@
 # Getting started
 
+## TO BE REVIZED
+
 ## Installing the development environment
+
 
 Megamicros comes with several packages:
 
@@ -72,7 +75,7 @@ All should be working right now.
 For users that only want to use some Megamicros package(s), the simplest way is to use the python *pip* installer on the private Megamicros repository:
 
 ```bash
-    $ > pip install --extra-index-url http://python.biimea.io megamicros megamicros_aidb
+    $ > pip install --extra-index-url https://pypi.bimea.io megamicros megamicros_aidb
 ```
 
 ## Working on all packages with `megamicros.sh` batch file

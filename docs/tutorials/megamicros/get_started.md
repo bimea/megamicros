@@ -8,13 +8,13 @@ You can install the Megamicros library in two different ways:
 ## Pip install
 
 As usual, you need to create a virtual environment, then install the Megamicros library.
-The Megamicros library is no longer public, so you need to install it from `pyrepos.biimea.io` remote private repository:
+The Megamicros library is no longer public, so you need to install it from `pypi.bimea.io` remote private repository:
 
 ```bash
     > cd your_path
     > virtualenv venv
     > source venv/bin/activate
-    (venv) > pip install --extra-index-url http://pyrepos.biimea.io megamicros
+    (venv) > pip install --extra-index-url http://pypi.bimea.io megamicros
 ```
 
 All necessary dependencies are also installed. But others must be installed manually:
@@ -31,13 +31,13 @@ Full installation details are given below.
 This is the second way to install Megamicros.
 You can create a local copy of the official *Megamicros* repository:
 
-* by going to the Github repository site ``https://github.com/biimea/megamicros`` and downloading the .zip image of the repository,
+* by going to the Github repository site ``https://github.com/bimea/megamicros`` and downloading the .zip image of the repository,
 * by creating the repository on the command line:
 
 ```bash
     > cd your_path
-    > git clone https://github.com/biimea/megamicros.git   # https mode
-    > git clone git@github.com:biimea/megamicros.git       # ssh mode 
+    > git clone https://github.com/bimea/megamicros.git   # https mode
+    > git clone git@github.com:bimea/megamicros.git       # ssh mode 
 ```
 
 Then install all the dependencies from the `requirements.txt` file located in the Megamicros respository root directory :
@@ -180,9 +180,6 @@ Also be sure to add the user to the audio group:
 
 
 
-
-
-
 ## Verifications
 
 Please, plugg in your Megamicros usb cable and test your usb device:
@@ -200,38 +197,38 @@ You should see the fe27:ac03 vendor/product numbers correponding to the MegaMicr
 Then try the usbcheck program of the Mu32 python package acoording the two following ways:
 
 ```bash
-	$ > python src/mu32/apps/mu32usbcheck.py        # from the Mu32 git repository
-	$ > mu32-usbcheck                               # if you have installed de Mu32 python package
-	--------------------
-	Mu32 usb check program
-	Copyright (C) 2022  DistalSense
-	This program comes with ABSOLUTELY NO WARRANTY; for details see the source code.
-	This is free software, and you are welcome to redistribute it
-	under certain conditions; see the source code for details.
-	--------------------
-	2022-05-21 10:28:49,659 [INFO]:  .Checking usb devices...
-	Found following devices:
-	--------------------
-	.ID fe27:ac03  Bus 003->1 Device 3
-	.ID 1d6b:0003  Bus 003 Device 1
-	.ID 1d6b:0002  Bus 002 Device 1
-	.ID 0627:0001  Bus 001->1 Device 2
-	.ID 1d6b:0001  Bus 001 Device 1
-	--------------------
-	Found MegaMicro device fe27:ac03
-	Gain handle on USB device fe27:ac03
-	--------------------
-	Found following device fe27:ac03 characteristics :
-	.Bus number: 3
-	.Ports number: 1
-	.Device address: 3 (0003)
-	.Device name: M?
-	.Manufacturer: DALEMBE
-	.Serial number: None
-	.Device speed:  [SUPER SPEED] (The device is operating at high speed (480MBit/s))
-	--------------------
-	2022-05-21 10:28:49,663 [INFO]: --------------------
-	2022-05-21 10:28:49,663 [INFO]: MegaMicro: end
+    > python src/mu32/apps/mu32usbcheck.py        # from the Mu32 git repository
+    > mu32-usbcheck                               # if you have installed de Mu32 python package
+    --------------------
+    Mu32 usb check program
+    Copyright (C) 2022  DistalSense
+    This program comes with ABSOLUTELY NO WARRANTY; for details see the source code.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; see the source code for details.
+    --------------------
+    2022-05-21 10:28:49,659 [INFO]:  .Checking usb devices...
+    Found following devices:
+    --------------------
+    .ID fe27:ac03  Bus 003->1 Device 3
+    .ID 1d6b:0003  Bus 003 Device 1
+    .ID 1d6b:0002  Bus 002 Device 1
+    .ID 0627:0001  Bus 001->1 Device 2
+    .ID 1d6b:0001  Bus 001 Device 1
+    --------------------
+    Found MegaMicro device fe27:ac03
+    Gain handle on USB device fe27:ac03
+    --------------------
+    Found following device fe27:ac03 characteristics :
+    .Bus number: 3
+    .Ports number: 1
+    .Device address: 3 (0003)
+    .Device name: M?
+    .Manufacturer: DALEMBE
+    .Serial number: None
+    .Device speed:  [SUPER SPEED] (The device is operating at high speed (480MBit/s))
+    --------------------
+    2022-05-21 10:28:49,663 [INFO]: --------------------
+    2022-05-21 10:28:49,663 [INFO]: MegaMicro: end
 ```
 
 
