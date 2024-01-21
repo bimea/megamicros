@@ -39,6 +39,8 @@ nav:
       - tutorials/mu-server/index.md
       - Installing: 
         - tutorials/mu-server/install/index.md
+        - Linux: tutorials/mu-server/install/linux.md
+        - Mac: tutorials/mu-server/install/mac.md
         - Jetson Nano: tutorials/mu-server/install/jetson.md
         - Mini PC: tutorials/mu-server/install/minipc.md
         - Raspberry Pi: tutorials/mu-server/install/raspi.md
