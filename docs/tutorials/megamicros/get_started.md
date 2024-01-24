@@ -151,7 +151,13 @@ Using brew:
 
 ### With Mac systems
 
-No problems noted.
+No issue if `portaudio` is already installed. If not:
+
+```bash
+    > brew install portaudio
+```
+
+This will make `portaudio.h` available, which is needed for the `pyaudio` python package installation.
 
 ### With Linux systems
 
@@ -174,7 +180,6 @@ Also be sure to add the user to the audio group:
 ```bash
     > sudo usermod -a -G audio user_account
 ```
-
 
 
 
