@@ -138,6 +138,7 @@ MU_TRANSFER_DATAWORDS_SIZE		= 4											# Size of transfer words in bytes (sam
 # Default run propertie's values
 DEFAULT_TIME_ACTIVATION			= 1											# Waiting time after MEMs powering in seconds
 DEFAULT_TIME_ACTIVATION_RESET	= 0.01										# Waiting time between commands of the MegaMicro device reset sequence  
+DEFAULT_CLOCKDIV				= 0x09										# Default internal acquisition clock value
 
 
 
@@ -227,6 +228,7 @@ class Megamicros( base.MemsArray ):
     __usb_vendor_product = 0
     __usb_bus_address = 0
     __pluggable_beams_number = 0
+    __pluggable_analogs_number = 0
     __usb_handle: usb1.USBDeviceHandle | None= None
 
 
@@ -254,50 +256,56 @@ class Megamicros( base.MemsArray ):
         self.__check_device()
 
         # Autotest for getting antenna prperties
-        self.__autotest()
+        self.__selftest()
 
 
 
     def __selftest( self ):
         """ Perform a test on the antenna system and get its properties then populate class properties with them """
 
-        data: bytearray
+        if self.__usb_handle is None:
+            raise MuUsbException( 'Cannot perform selftest: USB device not connected' )
         
-        data = self.__usb_handle.bulkRead(
-            self.__usb_bus_address,
-            1,
-            0
-        )
+        try:
+            log.info( f" .Performing Megamicros selftest..." )
+            data_length = 512
+            mems_number = self.__pluggable_beams_number * MU_BEAM_MEMS_NUMBER
+            analogs_number = self.__pluggable_analogs_number
+            channels_number = mems_number + analogs_number + 2
+            self.__ctrlResetMu()
+            self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION )
+            self.__ctrlTixels( data_length )
+            self.__ctrlDatatype( 'int32' )
+            self.__ctrlMems( request='activate', mems='all' )
+            self.__ctrlCSA( counter=True, status=True, analogs='all' )
+            self.__ctrlStart()            
+            data:bytearray = self.__usb_handle.bulkRead( 
+                self.__usb_bus_address, 
+                data_length * MU_TRANSFER_DATAWORDS_SIZE * channels_number, 
+                0 
+            )
+            self.__ctrlStop()
 
-    """
-            transfer: usb1.USBTransfer
-    bulk_transfer = CFUNC(ct.c_int,
-                        ct.POINTER(device_handle),
-                        ct.c_ubyte,
-                        ct.POINTER(ct.c_ubyte),
-                        ct.c_int,
-                        ct.POINTER(ct.c_int),
-                        ct.c_uint)(
-                        ("libusb_bulk_transfer", dll), (
-                        (1, "dev_handle"),
-                        (1, "endpoint"),
-                        (1, "data"),
-                        (1, "length"),
-                        (1, "actual_length"),
-                        (1, "timeout")))
+        except Exception as e:
+            raise MuUsbException( f"Selftest failed: {e}" )
 
+        # Compute mean energy
+        data = np.frombuffer( data, dtype=np.int32 )
+        data = data.reshape( ( channels_number, data_length ), order='F' )
 
-    int transferred;
-    int error = libusb_bulk_transfer (
-        __handle,
-        getSystemType().getUsbBusAddress(),
-        buffer,
-        buffer_size,
-        &transferred,
-        getTransferTimeout()
-    );
+        channels_power = np.sum( data**2, axis=1 ) / data_length
+        mems_power = channels_power[1:mems_number+1]
+        if analogs_number > 0:
+            analogs_power = channels_power[mems_number+1:mems_number+analogs_number+1]
+        else:
+            analogs_power = []
+			
+        log.info( f" .Autotest results:" )
+        log.info( f"  > counted {data_length} recorded data buffers" )
+        log.info( f"  > equivalent recording time is: {data_length / self.sampling_frequency} " )
+        log.info( f"  > detected {len( np.where( mems_power > 0 )[0] )} active MEMs: {np.where( mems_power > 0 )[0]}" )
+        log.info( f"  > detected {len( np.where( analogs_power > 0 )[0] )} active analogs: {np.where( analogs_power > 0 )[0]}" )
 
-    """
 
     def _set_settings( self, args, kwargs ) -> None :
         """ Set settings for Megamicros objects 
@@ -345,6 +353,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU32_USB2_BUS_ADDRESS
+                    self.__pluggable_analogs_number = MU32_USB2_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU32_USB3_VENDOR_ID and device_product_id == MU32_USB3_VENDOR_PRODUCT:
                     log.info(' .Found Megamicros [Mu32] device')
@@ -352,6 +361,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU32_USB3_BUS_ADDRESS
+                    self.__pluggable_analogs_number = MU32_USB3_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU128_USB2_VENDOR_ID and device_product_id == MU128_USB2_VENDOR_PRODUCT:
                     log.info(' .Found Megamicros [Mu128] device')
@@ -359,6 +369,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU128_USB2_BUS_ADDRESS
+                    self.__pluggable_analogs_number = MU128_USB2_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU256_USB3_VENDOR_ID and device_product_id == MU256_USB3_VENDOR_PRODUCT:
                     log.info(' .Found Megamicros [Mu256] device')
@@ -366,6 +377,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU256_USB3_BUS_ADDRESS
+                    self.__pluggable_analogs_number = MU256_USB3_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU1024_USB3_VENDOR_ID and device_product_id == MU1024_USB3_VENDOR_PRODUCT:
                     log.info(' .Found Megamicros [Mu1024] device')
@@ -373,6 +385,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU1024_USB3_BUS_ADDRESS
+                    self.__pluggable_analogs_number = MU1024_USB3_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU_CYPRESS_VENDOR_ID and device_product_id == MU_CYPRESS_VENDOR_PRODUCT:
                     log.warning( f"Found Cypress device. If USB device is not present you may face to USB connection problem. Please disconnect or run usb soft disconnecting program." )
@@ -494,7 +507,7 @@ class Megamicros( base.MemsArray ):
 
     def __ctrlTixels( self, samples_number ):
         """
-        Set the samples number to be sent by the Mu32 system 
+        Set the samples number to be sent by the Megamicros system 
         """
 
         buf = create_string_buffer( 5 )
@@ -607,53 +620,75 @@ class Megamicros( base.MemsArray ):
             log.error( f"Mu32 datatype setting failed: {e}" ) 
             raise	
 
-    def __ctrlMems( self, request, beams_number, mems='all' ):
+
+    def __ctrlMems( self, request:str, mems:str|list|tuple ='all' ):
         """
         Activate or deactivate MEMs
+
+        Parameters
+        ----------
+        request: str
+            The request type: activate or deactivate
+        mems: str or array, optional
+            The MEMs to activate or deactivate (default is 'all')
         """
+
         try:
             buf = create_string_buffer( 4 )
             buf[0] = MU_CMD_ACTIVE		
             buf[1] = 0x00					# module
             if mems == 'all':
                 if request == 'activate':
-                    for beam in range( beams_number ):
+                    for beam in range( self.__pluggable_beams_number ):
                         buf[2] = beam		# beam number
                         buf[3] = 0xFF		# active MEMs map
                         self.__ctrlWrite( MU_CMD_FPGA_3, buf )
                 elif request == 'deactivate':
-                    for beam in range( beams_number ):
+                    for beam in range( self.__pluggable_beams_number ):
                         buf[2] = beam		
                         buf[3] = 0x00		
                         self.__ctrlWrite( MU_CMD_FPGA_3, buf )
                 else:
-                    raise MuException( 'In Mu32::ctrlMems(): Unknown parameter [%s]' % request )
+                    raise MuException( 'Megamicros::ctrlMems(): Unknown parameter [%s]' % request )
             else:
                 if request == 'activate':
-                    map_mems = [0 for _ in range( beams_number )]
+                    map_mems = [0 for _ in range( self.__pluggable_beams_number )]
                     for mic in mems:
                         mic_index = mic % MU_BEAM_MEMS_NUMBER
                         beam_index = int( mic / MU_BEAM_MEMS_NUMBER )
-                        if beam_index >= beams_number:
-                            raise MuException( 'microphone index [%d] is out of range (should be less than %d)' % ( mic,  beams_number*MU_BEAM_MEMS_NUMBER ) )
+                        if beam_index >= self.__pluggable_beams_number:
+                            raise MuException( 'microphone index [%d] is out of range (should be less than %d)' % ( mic,  self.__pluggable_beams_number*MU_BEAM_MEMS_NUMBER ) )
                         map_mems[beam_index] += ( 0x01 << mic_index )
 
-                    for beam in range( beams_number ):
+                    for beam in range( self.__pluggable_beams_number ):
                         if map_mems[beam] != 0:
                             buf[2] = beam
                             buf[3] = map_mems[beam]				
                             self.__ctrlWrite( MU_CMD_FPGA_3, buf )
                 else:
-                    raise MuException( 'In Mu32::ctrlMems(): request [%s] is not implemented' % request )
+                    raise MuException( 'Megamicros::ctrlMems(): request [%s] is not implemented' % request )
         except Exception as e:
-            log.error( f"Mu32 microphones activating failed: {e}" ) 
+            log.error( f"Megamicros microphones activating failed: {e}" ) 
             raise	
 
 
-    def __ctrlCSA( self, counter, status, analogs ):
+    def __ctrlCSA( self, counter: bool, status: bool, analogs: str|list|tuple='all' ):
         """
         Activate or deactivate analogic, status and counter channels
+
+        Parameters
+        ----------
+        counter: bool
+            Activate or deactivate counter channel
+        status: bool
+            Activate or deactivate status channel
+        analogs: list or tuple
+            Activate or deactivate analogic channels
         """		
+
+        if analogs == 'all':
+            analogs = [i for i in range( self.__pluggable_analogs_number )]
+            
         buf = create_string_buffer( 4 )
         buf[0] = MU_CMD_ACTIVE		# command
         buf[1] = 0x00				# module

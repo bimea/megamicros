@@ -104,6 +104,12 @@ Make the `build` directory inside the `megamicros-server` directory and run *cma
     > make install
 ```
 
+Test with the following command:
+
+```bash
+    > megamicros-server -h
+```
+
 ## Documentation
 
 * [Ubuntu official site](https://ubuntu.com)
