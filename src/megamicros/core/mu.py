@@ -95,10 +95,12 @@ MU1024_SYSTEM_NAME				        = 'Mu1024'
 
 
 # USB properties
-USB_DEFAULT_TIMEOUT				        = 1000                  # Default timeout for USB commands
+USB_DEFAULT_TIMEOUT				        = 1000                              # Default timeout for USB commands
 USB_RECIPIENT_DEVICE			        = 0x00  
 USB_REQUEST_TYPE_VENDOR			        = 0x40
 USB_ENDPOINT_OUT				        = 0x00
+USB_DEFAULT_BUFFERS_NUMBER		        = 8
+USB_DEFAULT_BUFFER_LENGTH		        = base.DEFAULT_FRAME_LENGTH         # Default buffer length in samples number: same as frame length
 
 
 # MegaMicro hardware commands
@@ -139,7 +141,8 @@ MU_TRANSFER_DATAWORDS_SIZE		= 4											# Size of transfer words in bytes (sam
 DEFAULT_TIME_ACTIVATION			= 1											# Waiting time after MEMs powering in seconds
 DEFAULT_TIME_ACTIVATION_RESET	= 0.01										# Waiting time between commands of the MegaMicro device reset sequence  
 DEFAULT_CLOCKDIV				= 0x09										# Default internal acquisition clock value
-
+DEFAULT_SELFTEST_DURATION       = 0.1                                       # Default selftest duration in seconds     
+DEFAULT_START_TRIGG_STATUS      = False								        # Default start trigger status (external hard (True) or internal soft (False))
 
 
 # =============================================================================
@@ -229,7 +232,52 @@ class Megamicros( base.MemsArray ):
     __usb_bus_address = 0
     __pluggable_beams_number = 0
     __pluggable_analogs_number = 0
+    __start_trigg_status = DEFAULT_START_TRIGG_STATUS
     __usb_handle: usb1.USBDeviceHandle | None= None
+    __usb_buffer_length = USB_DEFAULT_BUFFER_LENGTH
+    __usb_buffers_number = USB_DEFAULT_BUFFERS_NUMBER
+
+    @property
+    def start_trigg_status( self ) -> int:
+        return self.__start_trigg_status
+
+    @property
+    def usb_buffer_length( self ) -> int:
+        return self.__usb_buffer_length
+    
+    @property
+    def usb_buffers_number( self ) -> int:
+        return self.__usb_buffers_number
+    
+    def setStartTriggStatus( self, status: bool ) -> None:
+        """ Set the start trigger status
+
+        Parameters
+        ----------
+        status: bool
+            The start trigger status (True for external hard trigger, False for internal soft trigger)
+        """
+        self.__start_trigg_status = status
+
+    def setUsbBufferLength( self, length: int ) -> None:
+        """ Set the USB buffer length in samples number
+
+        Parameters
+        ----------
+        length: int
+            The USB buffer length in samples number
+        """
+        self.__usb_buffer_length = length
+
+    def setUsbBuffersNumber( self, number: int ) -> None:
+        """ Set the USB buffers number
+
+        Parameters
+        ----------
+        number: int
+            The USB buffers number
+        """
+        self.__usb_buffers_number = number
 
 
     def __init__( self, **kwargs ):
@@ -255,56 +303,11 @@ class Megamicros( base.MemsArray ):
         # Check USB megamicros device
         self.__check_device()
 
-        # Autotest for getting antenna prperties
-        self.__selftest()
+        # Autotest for getting antenna properties
+        mems_power, analogs_power = self.__selftest()
 
-
-
-    def __selftest( self ):
-        """ Perform a test on the antenna system and get its properties then populate class properties with them """
-
-        if self.__usb_handle is None:
-            raise MuUsbException( 'Cannot perform selftest: USB device not connected' )
-        
-        try:
-            log.info( f" .Performing Megamicros selftest..." )
-            data_length = 512
-            mems_number = self.__pluggable_beams_number * MU_BEAM_MEMS_NUMBER
-            analogs_number = self.__pluggable_analogs_number
-            channels_number = mems_number + analogs_number + 2
-            self.__ctrlResetMu()
-            self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION )
-            self.__ctrlTixels( data_length )
-            self.__ctrlDatatype( 'int32' )
-            self.__ctrlMems( request='activate', mems='all' )
-            self.__ctrlCSA( counter=True, status=True, analogs='all' )
-            self.__ctrlStart()            
-            data:bytearray = self.__usb_handle.bulkRead( 
-                self.__usb_bus_address, 
-                data_length * MU_TRANSFER_DATAWORDS_SIZE * channels_number, 
-                0 
-            )
-            self.__ctrlStop()
-
-        except Exception as e:
-            raise MuUsbException( f"Selftest failed: {e}" )
-
-        # Compute mean energy
-        data = np.frombuffer( data, dtype=np.int32 )
-        data = data.reshape( ( channels_number, data_length ), order='F' )
-
-        channels_power = np.sum( data**2, axis=1 ) / data_length
-        mems_power = channels_power[1:mems_number+1]
-        if analogs_number > 0:
-            analogs_power = channels_power[mems_number+1:mems_number+analogs_number+1]
-        else:
-            analogs_power = []
-			
-        log.info( f" .Autotest results:" )
-        log.info( f"  > counted {data_length} recorded data buffers" )
-        log.info( f"  > equivalent recording time is: {data_length / self.sampling_frequency} " )
-        log.info( f"  > detected {len( np.where( mems_power > 0 )[0] )} active MEMs: {np.where( mems_power > 0 )[0]}" )
-        log.info( f"  > detected {len( np.where( analogs_power > 0 )[0] )} active analogs: {np.where( analogs_power > 0 )[0]}" )
+        self.setAvailableMems( np.where( mems_power > 0 )[0].tolist() )
+        self.setAvailableAnalogs( np.where( analogs_power > 0 )[0].tolist() )
 
 
     def _set_settings( self, args, kwargs ) -> None :
@@ -325,11 +328,15 @@ class Megamicros( base.MemsArray ):
         try:  
             log.info( f" .Installing Megamicros settings..." )
 
-            # No Megamicros settoings to set so far
-            pass
-                        
+            if 'usb_buffers_number' in kwargs:
+                self.setUsbBuffersNumber(  kwargs['usb_buffers_number'] )
+
+            if 'usb_buffer_length' in kwargs:
+                self.setUsbBufferLength(  kwargs['usb_buffer_length'] )
+
         except Exception as e:
             raise MuUsbException( f"Init settings failed: {e}")
+
 
 
 
@@ -353,6 +360,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU32_USB2_BUS_ADDRESS
+                    self.__pluggable_beams_number = MU32_USB2_PLUGGABLE_BEAMS_NUMBER
                     self.__pluggable_analogs_number = MU32_USB2_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU32_USB3_VENDOR_ID and device_product_id == MU32_USB3_VENDOR_PRODUCT:
@@ -361,6 +369,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU32_USB3_BUS_ADDRESS
+                    self.__pluggable_beams_number = MU32_USB3_PLUGGABLE_BEAMS_NUMBER
                     self.__pluggable_analogs_number = MU32_USB3_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU128_USB2_VENDOR_ID and device_product_id == MU128_USB2_VENDOR_PRODUCT:
@@ -369,6 +378,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU128_USB2_BUS_ADDRESS
+                    self.__pluggable_beams_number = MU128_USB2_PLUGGABLE_BEAMS_NUMBER
                     self.__pluggable_analogs_number = MU128_USB2_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU256_USB3_VENDOR_ID and device_product_id == MU256_USB3_VENDOR_PRODUCT:
@@ -377,6 +387,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU256_USB3_BUS_ADDRESS
+                    self.__pluggable_beams_number = MU256_USB3_PLUGGABLE_BEAMS_NUMBER
                     self.__pluggable_analogs_number = MU256_USB3_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU1024_USB3_VENDOR_ID and device_product_id == MU1024_USB3_VENDOR_PRODUCT:
@@ -385,6 +396,7 @@ class Megamicros( base.MemsArray ):
                     self.__usb_vendor_id = device_vendor_id
                     self.__usb_vendor_product = device_product_id
                     self.__usb_bus_address = MU1024_USB3_BUS_ADDRESS
+                    self.__pluggable_beams_number = MU1024_USB3_PLUGGABLE_BEAMS_NUMBER
                     self.__pluggable_analogs_number = MU1024_USB3_PLUGGABLE_ANALOGS_NUMBER
                     break
                 elif device_vendor_id == MU_CYPRESS_VENDOR_ID and device_product_id == MU_CYPRESS_VENDOR_PRODUCT:
@@ -437,6 +449,106 @@ class Megamicros( base.MemsArray ):
                 log.info( f"  > Device speed:  [LIBUSB_SPEED_UNKNOWN] (The device is operating at unknown speed)" )
             else:
                 log.info( f"  > Device speed:  [?] (The device is operating at unknown speed)" )
+
+
+    def _check_settings( self ) -> None :
+        """ Check settings values for Megamicros and parents settings """
+
+        super()._check_settings()
+
+        if self.usb_buffer_length != self.frame_length:
+            log.warning( f" .USB buffer length ({self.usb_buffer_length}) and frame length ({self.frame_length}) should be the same" )
+            log.info( f" .Set usb_buffer_length to {self.frame_length} samples" )
+            self.setUsbBufferLength( self.frame_length )
+
+
+    def run( self, *args, **kwargs ) :
+        """ The main run method that runs the Megamicros antenna """
+
+        if len( args ) > 0:
+            raise MuUsbException( f"Run() method does not accept direct arguments" )
+                
+        # Set all settings
+        # Run does not call the super().run() method so that we have to handle all settings here      
+        try:
+            super()._set_settings( [], kwargs=kwargs )
+            self._set_settings( [], kwargs=kwargs )
+
+        except Exception as e:
+            raise MuUsbException( f"Cannot run: settings loading failed ({type(e).__name__}): {e}" )
+            
+        # Set job on 'run': this is the only job available for Megamicros 
+        self.setJob( 'run' )
+
+        # Check settings values
+        try:
+            self._check_settings()
+        except Exception as e:
+            raise MuUsbException( f"Unable to execute run: control failure  ({type(e).__name__}): {e}" )
+
+        # verbose
+        buffer_words_length = self.usb_buffer_length * self.channels_number
+        log.info( f" .Starting run execution" )
+        log.info( f"  > Run infinite loop (duration=0)" if self.duration == 0 else f"  > Perform a {self.duration}s run loop" )
+        log.info( f"  > {self.mems_number} activated microphones" )
+        log.info( f"  > Activated microphones: {self.mems}" )
+        log.info( f"  > MEMs sensibility: {self.sensibility}" )
+        log.info( f"  > {self.analogs_number} activated analogic channels" )
+        log.info( f"  > Activated analogic channels: {self.analogs }" )
+        log.info( f"  > Whether counter is activated: {self.counter}" )
+        log.info( f"  > Whether status is activated: {self.status}" )
+        log.info( f"  > Total channels number is {self.channels_number}" )
+        log.info( f"  > Datatype: {str( self.datatype )}" )
+        log.info( f"  > Number of USB transfer buffers: {self.usb_buffers_number}" )
+        log.info( f"  > Frame length in samples number: {self.frame_length} samples")
+        log.info( f"  > Buffer length in samples number: {self.usb_buffer_length} samples ({self.usb_buffer_length*1000/self.sampling_frequency} ms duration)" )			
+        log.info( f"  > Buffer length in 32 bits words number: {self.usb_buffer_length}x{self.channels_number}={buffer_words_length} ({buffer_words_length*MU_TRANSFER_DATAWORDS_SIZE} bytes)" )
+        log.info( f"  > starting from external triggering: {'True' if self.start_trigg_status else 'False'}" )
+        log.info( f"  > Local H5 recording {'on' if self.h5_recording else 'off'}" )
+
+        # Start the timer if a limited execution time is requested
+        # In this case, the timeout causes a stop command to be sent to the server
+        # We have then to wait for the remote server to end the transfer
+        if self.duration > 0 :
+            self._thread_timer = threading.Timer( self.duration, self._run_endding )
+            self._thread_timer_flag = True
+            self._thread_timer.start()
+
+        # Start run thread
+        self._async_transfer_thread = threading.Thread( target= self.__run_thread )
+        self._async_transfer_thread.start()
+
+
+    def __run_thread( self ) -> None :
+        """ Start run execution
+
+        Start FPGA, listen to the Megamicros USB interface and post data in the internal queue
+        """
+
+        try:
+            log.info( " .Run thread execution started" )
+            
+            transfer_lost: int = 0
+            self.setRunningFlag( True )
+            while self.running:
+
+                #data = ...
+                data = None
+
+                # post them in the internal queue as float32 array
+                self.signal_q.put(
+                    self._run_process_data_float32( 
+                        data, 
+                        h5_recording = self.h5_recording
+                    )
+                )
+
+            log.info( " .Running stopped: normal thread termination" )
+
+        except Exception as e:
+            log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )
+            self._async_transfer_thread_exception = e
+
 
 
     def __ctrlWrite( self, request, data, time_out=USB_DEFAULT_TIMEOUT, recipient_device=USB_RECIPIENT_DEVICE, type_vendor=USB_REQUEST_TYPE_VENDOR, endpoint_out=USB_ENDPOINT_OUT ):
@@ -768,3 +880,98 @@ class Megamicros( base.MemsArray ):
         except Exception as e:
             log.error( f"Mu32 microphones powering off failed: {e}" ) 
             raise	
+
+
+    def __selftest( self, duration=DEFAULT_SELFTEST_DURATION ) -> tuple:
+        """ Perform a test on the antenna system and get its properties then populate class properties with them 
+        
+        The USB port is suposed free and the antenna connected to the host
+
+        Parameters
+        ----------
+        duration: float, optional
+            The selftest duration in seconds (default is 0.1s)
+        
+        Returns
+        -------
+        mems_power: np.array
+            The MEMs power numpy array
+        analogs_power: array
+            The analogs power numpy array
+        """
+
+        if self.__system_type == self.SystemType.unknown:
+            raise MuUsbException( 'Cannot perform selftest: USB device not connected' )
+        
+        if self.__usb_handle is not None:
+            raise MuUsbException( 'Cannot perform selftest: USB device buzy' )
+        
+        try:
+            data_length = int( duration * self.sampling_frequency )
+            log.info( f" .Performing Megamicros selftest on {duration} s ({data_length} samples) ..." )
+
+            # Try to connect to the device
+            with usb1.USBContext() as context:
+
+                self.__usb_handle = context.openByVendorIDAndProductID( 
+                    self.__usb_vendor_id, 
+                    self.__usb_vendor_product,
+                    skip_on_error=True,
+                )
+
+                if self.__usb_handle is None:
+                    raise MuUsbException( 'Failed to connect to USB device: the device may be disconnected or user not allowed to access' )
+                else:
+                    log.info( f' .Connected on USB device {str( self.__system_type )}: {self.__usb_vendor_id:04x}:{self.__usb_vendor_product:04x}' )
+
+                # try to claim the device
+                with self.__usb_handle.claimInterface( 0 ):
+
+                    mems_number = self.__pluggable_beams_number * MU_BEAM_MEMS_NUMBER
+                    analogs_number = self.__pluggable_analogs_number
+                    channels_number = mems_number + analogs_number + 2
+                    self.__ctrlResetMu()
+                    self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION )
+                    self.__ctrlTixels( data_length )
+                    self.__ctrlDatatype( 'int32' )
+                    self.__ctrlMems( request='activate', mems='all' )
+                    self.__ctrlCSA( counter=True, status=True, analogs='all' )
+                    self.__ctrlStart()            
+                    data:bytearray = self.__usb_handle.bulkRead( 
+                        self.__usb_bus_address, 
+                        data_length * MU_TRANSFER_DATAWORDS_SIZE * channels_number, 
+                        0 
+                    )
+                    self.__ctrlStop()
+
+        except Exception as e:
+            raise MuUsbException( f"Selftest failed: {e}" )
+
+        # Compute mean energy        
+        data = np.frombuffer( data, dtype=np.int32 )
+        data = data.reshape( ( channels_number, data_length ), order='F' )
+
+        channels_power = np.sum( data**2, axis=1 ) / data_length
+        mems_power = channels_power[1:mems_number+1]
+        if analogs_number > 0:
+            analogs_power = channels_power[mems_number+1:mems_number+analogs_number+1]
+        else:
+            analogs_power = np.array([])
+			
+        log.info( f" .Autotest results:" )
+        log.info( f"  > equivalent recording time is: {data_length / self.sampling_frequency} " )
+        log.info( f"  > Received {len(data)} data bytes: {data_length} samples on {channels_number} channels")
+        log.info( f"  > detected {len( np.where( mems_power > 0 )[0] )} active MEMs: {np.where( mems_power > 0 )[0]}" )
+        if analogs_number > 0:
+            log.info( f"  > detected {len( np.where( analogs_power > 0 )[0] )} active analogs: {np.where( analogs_power > 0 )[0]}" )
+        else:
+            log.info( f"  > detected no active analogs" )
+        log.info( f"  > detected counter channel with values from {data[0][0]} to {data[0][-1]}" )
+        log.info( f"  > estimated data lost: {data[0][-1] - data[0][0] + 1 - data_length} samples" )
+        log.info( f"  > detected status channel with values {data[channels_number-1][0]} <-> {data[channels_number-1][-1]}" )
+        log.info( f" .Selftest endded successfully" )
+
+        # free the USB device
+        self.__usb_handle = None
+
+        return mems_power, analogs_power

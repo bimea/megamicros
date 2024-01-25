@@ -388,6 +388,11 @@ class MemsArray:
     def signal_q_maxsize( self ) -> int:
         """ Get the max length of the queue """
         return self.signal_q.maxsize
+    
+    @property
+    def _iteration( self ) -> int:
+        """ Get the current iteration value """
+        return self.__it
 
 
     #def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None|None=None, unit: str|None=None ):
@@ -1002,7 +1007,7 @@ class MemsArray:
 
 
     def _run_endding( self ) -> None:
-        """ Timer callback for running stop """
+        """ Timer callback for run stopping """
 
         log.info( f" .Thread timer started for {self.duration}s duration" )
         self.setRunningFlag( False )
@@ -1112,9 +1117,11 @@ class MemsArray:
             output data in the format required by the user
         """
 
+        print( f'self.sensibility = {self.sensibility}' )
         # convert to int32 if requested
         if self.datatype == self.Datatype.bint32 or self.datatype == self.Datatype.int32:
             data = np.frombuffer( data, dtype=np.float32 )
+            print( f'data = {data}' )
             data = ( data / self.sensibility ).astype( np.int32 )
 
         # Save in H5 format if requested
