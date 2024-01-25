@@ -233,6 +233,7 @@ class Megamicros( base.MemsArray ):
     __pluggable_beams_number = 0
     __pluggable_analogs_number = 0
     __start_trigg_status = DEFAULT_START_TRIGG_STATUS
+    __clockdiv = DEFAULT_CLOCKDIV
     __usb_handle: usb1.USBDeviceHandle | None= None
     __usb_buffer_length = USB_DEFAULT_BUFFER_LENGTH
     __usb_buffers_number = USB_DEFAULT_BUFFERS_NUMBER
@@ -249,6 +250,10 @@ class Megamicros( base.MemsArray ):
     def usb_buffers_number( self ) -> int:
         return self.__usb_buffers_number
     
+    @property
+    def clockdiv( self ) -> int:
+        return self.__clockdiv
+
     def setStartTriggStatus( self, status: bool ) -> None:
         """ Set the start trigger status
 
@@ -278,6 +283,25 @@ class Megamicros( base.MemsArray ):
             The USB buffers number
         """
         self.__usb_buffers_number = number
+
+    def setSamplingFrequency( self, sampling_frequency: float ) -> None :
+        """ Overload the parent method to set the clockdiv property on FPGA
+        
+        Parameters:
+        -----------
+        sampling_frequency : float
+            The sampling frequency (default is 50kHz)
+        """
+
+        # Set clockdiv property
+        self.__clockdiv = int( ( 500000 - sampling_frequency ) / sampling_frequency )
+
+        if self.__clockdiv < 9:
+            raise MuUsbException( f"Sampling frequency {sampling_frequency} is not valid (clockdiv={self.__clockdiv}<9): limit is 50kHz" )
+
+        # Set parent property
+        super().setSamplingFrequency( ( self.__clockdiv + 1 )/500000 )
+        log.info( f" .Set sampling frequency to {self.sampling_frequency} Hz" )
 
 
     def __init__( self, **kwargs ):
@@ -506,6 +530,13 @@ class Megamicros( base.MemsArray ):
         log.info( f"  > starting from external triggering: {'True' if self.start_trigg_status else 'False'}" )
         log.info( f"  > Local H5 recording {'on' if self.h5_recording else 'off'}" )
 
+        # Check if the USB device is connected and free
+        if self.__system_type == self.SystemType.unknown:
+            raise MuUsbException( 'Cannot start run process: USB device not connected' )
+        
+        if self.__usb_handle is not None:
+            raise MuUsbException( 'Cannot perform run process: USB device buzy' )
+
         # Start the timer if a limited execution time is requested
         # In this case, the timeout causes a stop command to be sent to the server
         # We have then to wait for the remote server to end the transfer
@@ -528,22 +559,114 @@ class Megamicros( base.MemsArray ):
         try:
             log.info( " .Run thread execution started" )
             
-            transfer_lost: int = 0
             self.setRunningFlag( True )
-            while self.running:
+            with usb1.USBContext() as context:
 
-                #data = ...
-                data = None
-
-                # post them in the internal queue as float32 array
-                self.signal_q.put(
-                    self._run_process_data_float32( 
-                        data, 
-                        h5_recording = self.h5_recording
-                    )
+                self.__usb_handle = context.openByVendorIDAndProductID( 
+                    self.__usb_vendor_id, 
+                    self.__usb_vendor_product,
+                    skip_on_error=True,
                 )
 
-            log.info( " .Running stopped: normal thread termination" )
+                if self.__usb_handle is None:
+                    raise MuUsbException( 'Failed to connect to USB device: the device may be disconnected or user not allowed to access' )
+
+                log.info( f' .Connected on USB device {str( self.__system_type )}: {self.__usb_vendor_id:04x}:{self.__usb_vendor_product:04x}' )
+
+                # Claim the device
+                with self.__usb_handle.claimInterface( 0 ):
+
+                    # Init FPGA and send acquisition starting command
+                    self.__ctrlResetMu()
+                    self.__ctrlClockdiv( self.clockdiv, DEFAULT_TIME_ACTIVATION )
+                    self.__ctrlTixels( 0 )
+                    self.__ctrlDatatype( self.datatype )
+                    self.__ctrlMems( request='activate', mems=self.mems )
+                    self.__ctrlCSA( counter=self.counter, status=self.status, analogs=self.analogs )
+                    if self.start_trigg_status:
+                        self.__ctrlStartTrig()
+                    else:
+                        self.__ctrlStart()
+
+                    # Open H5 file if recording on
+                    if self.h5_recording:
+                        self.h5_start()
+
+                    # Allocate the list of transfer objects
+                    transfer_list: list[usb1.USBTransfer] = []
+                    buffer_size = self.usb_buffer_length * self.channels_number * MU_TRANSFER_DATAWORDS_SIZE
+                    for id in range( self.usb_buffers_number ):
+                        transfer = self.__usb_handle.getTransfer()
+                        transfer.setBulk(
+                            usb1.ENDPOINT_IN | self.__usb_bus_address,
+                            buffer_size,
+                            callback=self.__callback,
+                            user_data = id,
+                            timeout=USB_DEFAULT_TIMEOUT
+                        )
+                        transfer_list.append( transfer )
+                        transfer.submit()
+
+                    # Start the recording loop
+                    while self.running:
+
+                        # Main recording loop.
+                        # Waits for pending tranfers while there are any.
+                        # Once a transfer is finished, handleEvents() trigers callback  
+                        while any( x.isSubmitted() for x in transfer_list ):
+                            context.handleEvents()
+
+                        log.info( f" .quitting recording loop" )
+                        break
+
+                    # Stop recording
+                    if self.h5_recording:
+                        self.h5_stop()
+
+                    # After loop processing
+                    # Attempt to cancel transfers that could be yet pending
+                    for transfer in transfer_list:
+                        if transfer.isSubmitted():
+                            log.info( f" .cancelling transfer [{transfer.getUserData()}] (may take a while) ..." )
+                            try:
+                                transfer.cancel()
+                            except:
+                                pass
+                    
+                    while any( x.isSubmitted() for x in transfer_list ):
+                        context.handleEvents()
+
+                    log.info( f" .cancelling transfer [done]" )
+
+                    # Send stop command to Megamicros FPGA (too late ?)
+                    self.__ctrlStop()
+
+                    # Flush Mu32 remaining data from buffers
+                    log.info( f" .flushing buffers..." )
+                    for id in range( self.usb_buffers_number ):
+                        transfer = transfer_list[id]
+                        if not transfer.isSubmitted():
+                            transfer.setBulk(
+                                usb1.ENDPOINT_IN | self.__usb_bus_address,
+                                buffer_size,
+                                callback=self.__callback_flush,
+                                user_data = id,
+                                timeout=10
+                            )
+                            try:
+                                transfer.submit()
+                            except Exception as e:
+                                log.info( f" .transfer [{transfer.getUserData()}] flushing failed: {e}" )
+
+                    while any( x.isSubmitted() for x in transfer_list ):
+                        context.handleEvents()
+
+                    log.info( f" .flushing [done]" )
+                        
+                    # Reset Mu32 and powers off microphones
+                    self.__ctrlResetMu()
+
+            log.info( ' .end of acquisition' )
 
         except Exception as e:
             log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )
