@@ -122,7 +122,6 @@ MU_CMD_FPGA_3					= 0xB3										# Send a 3 byte command to FPGA
 MU_CMD_FPGA_4					= 0xB4										# Send a 4 byte command to FPGA
 MU_CMD_DATATYPE					= b'\x09'									# Set datatype
 
-
 # MemgaMicro hardware code values																	
 MU_CODE_DATATYPE_INT32			= b'\x00'									# Int32 datatype code
 MU_CODE_DATATYPE_FLOAT32		= b'\x01'									# Float32 datatype code
@@ -135,6 +134,7 @@ MU_MEMS_QUANTIZATION			= MU_MEMS_UQUANTIZATION - 1					# MEMs signed quantizatio
 MU_MEMS_AMPLITUDE				= 2**MU_MEMS_QUANTIZATION					# MEMs maximal amlitude value for "int32" data type
 MU_MEMS_SENSIBILITY				= 1/(MU_MEMS_AMPLITUDE*10**(-26/20)/3.17)	# MEMs sensibility factor (-26dBFS for 104 dB that is 3.17 Pa)
 MU_TRANSFER_DATAWORDS_SIZE		= 4											# Size of transfer words in bytes (same for in32 and float32 data type which always states for 32 bits (-> 4 bytes) )
+MU_DEFAULT_DATATYPE             = 'int32'                                   # Datatype for FPGA megamicros data 
 
 
 # Default run propertie's values
@@ -230,13 +230,18 @@ class Megamicros( base.MemsArray ):
     __usb_vendor_id = 0
     __usb_vendor_product = 0
     __usb_bus_address = 0
-    __pluggable_beams_number = 0
-    __pluggable_analogs_number = 0
-    __start_trigg_status = DEFAULT_START_TRIGG_STATUS
-    __clockdiv = DEFAULT_CLOCKDIV
+    __pluggable_beams_number: int = 0
+    __pluggable_analogs_number: int = 0
+    __start_trigg_status: bool = DEFAULT_START_TRIGG_STATUS
+    __clockdiv: int = DEFAULT_CLOCKDIV
     __usb_handle: usb1.USBDeviceHandle | None= None
-    __usb_buffer_length = USB_DEFAULT_BUFFER_LENGTH
-    __usb_buffers_number = USB_DEFAULT_BUFFERS_NUMBER
+    __usb_buffer_length: int = USB_DEFAULT_BUFFER_LENGTH
+    __usb_buffers_number: int = USB_DEFAULT_BUFFERS_NUMBER
+    __usb_buffer_duration: float = USB_DEFAULT_BUFFER_LENGTH / base.DEFAULT_SAMPLING_FREQUENCY
+    __usb_buffer_words_length: int = 0
+    __usb_transfer_index: int = 0
+    __fpga_counter_state: int = 0
+    __fpga_previous_counter_state: int = 0
 
     @property
     def start_trigg_status( self ) -> int:
@@ -254,6 +259,19 @@ class Megamicros( base.MemsArray ):
     def clockdiv( self ) -> int:
         return self.__clockdiv
 
+    @property
+    def usb_buffer_duration( self ) -> int:
+        return self.__usb_buffer_duration
+
+    @property
+    def usb_transfer_index( self ) -> int:
+        return self.__usb_transfer_index
+
+    @property
+    def usb_buffer_words_length( self ) -> int:
+        return self.__usb_buffer_words_length
+    
+
     def setStartTriggStatus( self, status: bool ) -> None:
         """ Set the start trigger status
 
@@ -267,12 +285,15 @@ class Megamicros( base.MemsArray ):
     def setUsbBufferLength( self, length: int ) -> None:
         """ Set the USB buffer length in samples number
 
+        Update usb_buffer_duration at the same time
+
         Parameters
         ----------
         length: int
             The USB buffer length in samples number
         """
         self.__usb_buffer_length = length
+        self.__usb_buffer_duration = length / self.sampling_frequency
 
     def setUsbBuffersNumber( self, number: int ) -> None:
         """ Set the USB buffers number
@@ -300,9 +321,112 @@ class Megamicros( base.MemsArray ):
             raise MuUsbException( f"Sampling frequency {sampling_frequency} is not valid (clockdiv={self.__clockdiv}<9): limit is 50kHz" )
 
         # Set parent property
-        super().setSamplingFrequency( ( self.__clockdiv + 1 )/500000 )
+        super().setSamplingFrequency( 500000 / ( self.__clockdiv + 1 ) )
         log.info( f" .Set sampling frequency to {self.sampling_frequency} Hz" )
 
+
+    def setActiveMems( self, mems: tuple ) -> None :
+        """ Activate mems
+
+        Overload the parent method for adding the actual buffer length according the channels number
+        
+        Parameters:
+        -----------
+        mems : tuple
+            list or tuple of mems number to activate
+        """
+
+        # Set parent property
+        super().setActiveMems( mems )
+
+        # Set buffer duration estimation
+        self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
+
+
+    def setActiveAnalogs( self, analogs: tuple ) -> None :
+        """ Activate analogs
+
+        Overload the parent method for adding the actual buffer length according the channels number
+        
+        Parameters:
+        -----------
+        analogs : tuple
+            list or tuple of analogs number to activate
+        """
+
+        # Set parent property
+        super().setActiveAnalogs( analogs )
+
+        # Set buffer duration estimation
+        self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
+
+    def setCounter( self, counter: bool ) -> None :
+        """ Activate counter
+
+        Overload the parent method for adding the actual buffer length according the channels number
+        
+        Parameters:
+        -----------
+        counter : bool
+            True for activating the counter
+        """
+
+        # Set parent property
+        super().setCounter( counter )
+
+        # Set buffer duration estimation
+        self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
+
+    def unsetCounter( self ) -> None :
+        """ Deactivate counter
+
+        Overload the parent method for adding the actual buffer length according the channels number
+        
+        Parameters:
+        -----------
+        counter : bool
+            True for activating the counter
+        """
+
+        # Set parent property
+        super().unsetCounter()
+
+        # Set buffer duration estimation
+        self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
+
+    def setStatus( self, status: bool ) -> None :
+        """ Activate status
+
+        Overload the parent method for adding the actual buffer length according the channels number
+        
+        Parameters:
+        -----------
+        status : bool
+            True for activating the status
+        """
+
+        # Set parent property
+        super().setStatus( status )
+
+        # Set buffer duration estimation
+        self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
+
+    def unsetStatus( self ) -> None :
+        """ Deactivate status
+
+        Overload the parent method for adding the actual buffer length according the channels number
+        
+        Parameters:
+        -----------
+        status : bool
+            True for activating the status
+        """
+
+        # Set parent property
+        super().unsetStatus()
+
+        # Set buffer duration estimation
+        self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
 
     def __init__( self, **kwargs ):
         """ Connect the antenna input stream to a megamicros antenna 
@@ -482,7 +606,7 @@ class Megamicros( base.MemsArray ):
 
         if self.usb_buffer_length != self.frame_length:
             log.warning( f" .USB buffer length ({self.usb_buffer_length}) and frame length ({self.frame_length}) should be the same" )
-            log.info( f" .Set usb_buffer_length to {self.frame_length} samples" )
+            log.info( f" .Setting usb_buffer_length to {self.frame_length} samples" )
             self.setUsbBufferLength( self.frame_length )
 
 
@@ -511,9 +635,10 @@ class Megamicros( base.MemsArray ):
             raise MuUsbException( f"Unable to execute run: control failure  ({type(e).__name__}): {e}" )
 
         # verbose
-        buffer_words_length = self.usb_buffer_length * self.channels_number
         log.info( f" .Starting run execution" )
-        log.info( f"  > Run infinite loop (duration=0)" if self.duration == 0 else f"  > Perform a {self.duration}s run loop" )
+        log.info( f"  > Run infinite loop (duration=0)" if self.duration == 0 else f"  > Perform {self.duration}s run loop" )
+        log.info( f"  > Sampling frequency: {self.sampling_frequency} Hz" )
+        log.info( f"  > FPGA clockdiv value: {self.clockdiv}" )
         log.info( f"  > {self.mems_number} activated microphones" )
         log.info( f"  > Activated microphones: {self.mems}" )
         log.info( f"  > MEMs sensibility: {self.sensibility}" )
@@ -526,7 +651,7 @@ class Megamicros( base.MemsArray ):
         log.info( f"  > Number of USB transfer buffers: {self.usb_buffers_number}" )
         log.info( f"  > Frame length in samples number: {self.frame_length} samples")
         log.info( f"  > Buffer length in samples number: {self.usb_buffer_length} samples ({self.usb_buffer_length*1000/self.sampling_frequency} ms duration)" )			
-        log.info( f"  > Buffer length in 32 bits words number: {self.usb_buffer_length}x{self.channels_number}={buffer_words_length} ({buffer_words_length*MU_TRANSFER_DATAWORDS_SIZE} bytes)" )
+        log.info( f"  > Buffer length in 32 bits words number: {self.usb_buffer_length}x{self.channels_number}={self.usb_buffer_words_length} ({self.usb_buffer_words_length*MU_TRANSFER_DATAWORDS_SIZE} bytes)" )
         log.info( f"  > starting from external triggering: {'True' if self.start_trigg_status else 'False'}" )
         log.info( f"  > Local H5 recording {'on' if self.h5_recording else 'off'}" )
 
@@ -540,8 +665,9 @@ class Megamicros( base.MemsArray ):
         # Start the timer if a limited execution time is requested
         # In this case, the timeout causes a stop command to be sent to the server
         # We have then to wait for the remote server to end the transfer
+        # We have also to take care of the microphones power-on duration
         if self.duration > 0 :
-            self._thread_timer = threading.Timer( self.duration, self._run_endding )
+            self._thread_timer = threading.Timer( self.duration + DEFAULT_TIME_ACTIVATION, self._run_endding )
             self._thread_timer_flag = True
             self._thread_timer.start()
 
@@ -549,6 +675,147 @@ class Megamicros( base.MemsArray ):
         self._async_transfer_thread = threading.Thread( target= self.__run_thread )
         self._async_transfer_thread.start()
 
+    def __callback_flush( self, transfer: usb1.USBTransfer ):
+        """ Callback flushing function: only intended to flush MegaMicro internal buffers
+
+        Parameters
+        ----------
+        transfer: usb1.USBTransfer
+            The transfer object
+        """
+
+        if transfer.getActualLength() > 0:
+            log.info( f" .flushed {transfer.getActualLength()} data bytes from transfer buffer [{transfer.getUserData()}]" )
+
+
+    def __callback( self, transfer: usb1.USBTransfer ):
+        """ Internal callback function: 
+        
+        check transfer error, read data from USB device, queue data, 
+        call the user callback function if any and submit next transfer
+
+        Parameters
+        ----------
+        transfer: usb1.USBTransfer
+            The transfer object
+        """
+
+        transfer_timestamp = time.time() - self.usb_buffer_duration
+
+
+        # Transfer not completed -> skip data transfer without runing user callback
+        # Data is lost, if any
+        if transfer.getStatus() != usb1.TRANSFER_COMPLETED:
+
+            if transfer.getStatus() == usb1.TRANSFER_CANCELLED:
+                log.info( f" .transfer [{transfer.getUserData()}] cancelled." )
+            elif transfer.getStatus() == usb1.TRANSFER_NO_DEVICE:
+                log.critical( f"transfer [{transfer.getUserData()}]: no device. Exit from internal callback transfer." )
+            elif transfer.getStatus() == usb1.TRANSFER_ERROR:
+                log.error( f"transfer [{transfer.getUserData()}] error. Exit from internal callback transfer." )
+
+            # Tranfer timeout
+            elif transfer.getStatus() == usb1.TRANSFER_TIMED_OUT:
+                
+                # This may due to trigger signal not send -> nothing to do but waiting for it...
+                # Submit a new transfer and return
+                if self.start_trigg_status:
+                    log.warning( f"transfer [{transfer.getUserData()}] timed out. Waiting for external trigger signal..." )
+                    if( self.running ):
+                        try:
+                            transfer.submit()
+                        except Exception as e:
+                            log.error( f"Megamicros.__callback(): transfer submit failed: {e}. Aborting..." )
+                            self._recording = False
+                    return
+                
+                # Unexpected timeout: exit from call back without submitting
+                else:
+                    log.error( f"Megamicros::__callback(): Unexpected transfer [{transfer.getUserData()}] timed out. Exit from internal callback." )
+
+            elif transfer.getStatus() == usb1.TRANSFER_STALL:
+                log.error( f"Megamicros.__callback(): Transfer [{transfer.getUserData()}] stalled. Exit from internal callback." )
+            elif transfer.getStatus() == usb1.TRANSFER_OVERFLOW:
+                log.error( f"Megamicros.__callback(): Transfer [{transfer.getUserData()}] overflow. Exit from internal callback." )
+            else:
+                log.error( f"Megamicros.__callback(): Transfer [{transfer.getUserData()}] unknown error. Exit from internal callback." )
+
+            # Stop acquisition process before exiting    
+            self.setRunningFlag( False )
+            return
+
+        # Transfer seems correct: get data from buffer
+        # Datatype is only 'int32'. If user datatype is 'float32', data will be converted later (when queuing data)
+        data = np.frombuffer( transfer.getBuffer()[:transfer.getActualLength()], dtype=np.int32 )
+
+        # Buffer is not fully completed. Some data are missing
+        # Submit again anyway but current transfer is lost
+        if len( data ) != self.usb_buffer_words_length:
+
+            log.warning( f" .lost {self.usb_buffer_words_length - len( data )} lost samples. Retry transfer" )
+            if( self.running ):
+                try:
+                    transfer.submit()
+                except Exception as e:
+                    log.error( f"Megamicros.__callback(): transfer submit failed: {e}" )
+                    self.setRunningFlag( False )
+            return
+
+        # counter flag is True: performs data control such as to know if some data have been lost
+        # This usually appears when user callback function takes too long.
+        # Control is done by substracting the frame last counter value with the frame first counter value. 
+        # Result should be equal to the buffer size in samples number
+        # Beware that, if not, it means that samples have been lost or, 
+        # whorst than that, data is no longer aligned in which case this difference no longer makes sense.
+        # Submit transfer again but current transfer is lost. 
+        # A restart request should be sent to the server to restart the acquisition process. See in the future...
+        if self.counter:
+            ctrl_buffer_length = data[self.usb_buffer_words_length-self.channels_number] - data[0] + 1
+            if ctrl_buffer_length != self.usb_buffer_length:
+                log.warning( f"Megamicros.__callback(): from transfer[{transfer.getUserData()}]: data has been lost. Send a restart request...")
+                if( self.running ):
+                    try:
+                        transfer.submit()
+                    except Exception as e:
+                        log.error( f"Megamicros.__callback(): transfer submit failed: {e}" )
+                        self.setRunningFlag( False )
+                return
+
+            # All seems correct
+            # save current counter value and performs data control by comparing with actual counter values
+            self.__fpga_previous_counter_state = self.__fpga_counter_state
+            self.__fpga_counter_state = data[self.usb_buffer_words_length-self.channels_number]
+            if self.__fpga_counter_state - self.__fpga_previous_counter_state > self.usb_buffer_length and self.__fpga_previous_counter_state != 0:
+                log.info( f" .{self.__fpga_counter_state - self.__fpga_previous_counter_state - self.usb_buffer_length} samples lost it seems.")
+
+        data = np.reshape( data, ( self.usb_buffer_length, self.channels_number ) ).T
+
+        # Remove counter signal if requested by user
+        if self.counter and self.counter_skip:
+            data = data[1:,:]
+
+        # Call user callback processing function if any.
+        # Not yet implementd..
+        # ...
+
+        # Queue size is limited and filled -> delete older element before queuing new:  
+        if self.queue_size > 0 and self.queue.qsize() >= self.queue_size:
+            self.queue.get()
+
+        # Push data and timestamp in the object signal queue
+        self.queue.put( data )
+
+        # Resubmit transfer once data is processed and while recording mode is on
+        if( self.running ):
+            try:
+                transfer.submit()
+            except Exception as e:
+                log.error( f"Megamicros.__callback(): transfer submit failed: {e}. Aborting..." )
+                self.setRunningFlag( False )
+
+        # Update transfer counter
+        self.__transfer_index += 1
+	
 
     def __run_thread( self ) -> None :
         """ Start run execution
@@ -580,7 +847,7 @@ class Megamicros( base.MemsArray ):
                     self.__ctrlResetMu()
                     self.__ctrlClockdiv( self.clockdiv, DEFAULT_TIME_ACTIVATION )
                     self.__ctrlTixels( 0 )
-                    self.__ctrlDatatype( self.datatype )
+                    self.__ctrlDatatype( 'int32' )
                     self.__ctrlMems( request='activate', mems=self.mems )
                     self.__ctrlCSA( counter=self.counter, status=self.status, analogs=self.analogs )
                     if self.start_trigg_status:
@@ -608,8 +875,10 @@ class Megamicros( base.MemsArray ):
                         transfer.submit()
 
                     # Start the recording loop
+                    self.__fpga_counter_state = self.__fpga_previous_counter_state = 0
+                    self.__transfer_index = 0
+                    start_time = time.time()
                     while self.running:
-
                         # Main recording loop.
                         # Waits for pending tranfers while there are any.
                         # Once a transfer is finished, handleEvents() trigers callback  
@@ -618,6 +887,9 @@ class Megamicros( base.MemsArray ):
 
                         log.info( f" .quitting recording loop" )
                         break
+
+                    # Send stop command to Megamicros FPGA
+                    #self.__ctrlStop()
 
                     # Stop recording
                     if self.h5_recording:
@@ -666,11 +938,22 @@ class Megamicros( base.MemsArray ):
                     # Reset Mu32 and powers off microphones
                     self.__ctrlResetMu()
 
-            log.info( ' .end of acquisition' )
+            elapsed_time = time.time() - start_time
+            mean_completion_time = elapsed_time/self.__transfer_index if self.__transfer_index != 0 else 0
+
+            log.info( f' .End of acquisition' )
+            log.info( f'  > Performed {self.__transfer_index} transfer(s), received {self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE} bytes' )
+            log.info( f'  > Equivalent recording time: {self.__transfer_index * self.usb_buffer_duration} s' )
+            log.info( f'  > Transfer rate: {self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE / self.__transfer_index / self.usb_buffer_duration / 1024 / 1024} MB/s' )
+            log.info( f'  > Elapsed time: {elapsed_time} s')
+            log.info( f'  > Mean completion time: {mean_completion_time} s')
 
         except Exception as e:
             log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )
             self._async_transfer_thread_exception = e
+        
+        # Don't forget to declare the USB device free
+        self.__usb_handle = None
 
 
 

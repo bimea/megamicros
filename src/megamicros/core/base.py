@@ -46,7 +46,8 @@ from megamicros.data import MuAudio
 
 DEFAULT_FRAME_LENGTH                = 256
 DEFAULT_SAMPLING_FREQUENCY          = 50000
-DEFAULT_QUEUE_SIZE                  = 0			            # Queue size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_QUEUE_MAXSIZE               = 0			            # Queue max size as the number of buffer that can be queued (0 means infinite signal queueing)
+DEFAULT_QUEUE_SIZE                  = 0                     # Queue limut after which the last signal is lost
 DEFAULT_QUEUE_TIMEOUT               = 2                     # The block delay until the queue is considered as empty  
 DEFAULT_DATATYPE			        = "int32"	            # Default receiver incoming data type ("int32" or "float32") 
 DEFAULT_SYNC_MODE                   = False                 # Default run mode is asynchronous
@@ -187,7 +188,8 @@ class MemsArray:
     __it: int = 0
     __max_it: int = 0
     __datatype: Datatype = getattr( Datatype, DEFAULT_DATATYPE ) 
-    __signal_q = Queue( maxsize=DEFAULT_QUEUE_SIZE )
+    __queue: Queue = Queue( maxsize=DEFAULT_QUEUE_MAXSIZE )
+    __queue_size: int = DEFAULT_QUEUE_SIZE
 
     # Running properties
     __duration: int|None = None
@@ -380,14 +382,19 @@ class MemsArray:
         return self.__duration
 
     @property
-    def signal_q( self ) -> Queue:
+    def queue( self ) -> Queue:
         """ Get the default queue """
-        return self.__signal_q
+        return self.__queue
 
     @property
-    def signal_q_maxsize( self ) -> int:
+    def queue_size( self ) -> int:
         """ Get the max length of the queue """
-        return self.signal_q.maxsize
+        return self.__queue_size
+
+    @property
+    def queue_maxsize( self ) -> int:
+        """ Get the max length of the queue """
+        return self.queue.maxsize
     
     @property
     def _iteration( self ) -> int:
@@ -467,7 +474,7 @@ class MemsArray:
 
             if 'datatype' in kwargs:
                 log.info( f" .Set datatype to {kwargs['datatype']} " )
-                if type( kwargs['datatype'] )is str:
+                if type( kwargs['datatype'] ) is str:
                     try:
                         self.setDatatype( getattr( MemsArray.Datatype, kwargs['datatype'] ) )
                     except:
@@ -508,8 +515,11 @@ class MemsArray:
                 else:
                     self.unsetH5Compressing()
 
-            if 'signal_q_size' in kwargs:
-                self.setQueueSize( kwargs['signal_q_size'] )
+            if 'queue_maxsize' in kwargs:
+                self.setQueueMaxSize( kwargs['queue_maxsize'] )
+
+            if 'queue_size' in kwargs:
+                self.setQueueSize( kwargs['queue_size'] )
 
         except Exception as e:
             raise MuException( f"Run failed on settings: {e}")
@@ -932,17 +942,32 @@ class MemsArray:
         self.__duration = duration
 
 
-    def setQueueSize( self, queue_size: int ) -> None :
-        """ Set the signal queue size. Beware that the current queue elements are lost
+    def setQueueSize( self, queue_size: int=0 ) -> None :
+        """ Set the signal queue size. Queue size allow to skip transfers if it is overloaded.
+        
+        Default value is 0 which mean that there is no size limit
         
         Parameters
         ----------
         queue_size: int
             The new queue size value. 0 means no size
         """
-        self.__signal_q = None
-        self.__signal_q = MemsArray.Queue( maxsize=queue_size )
+        if queue_size > self.queue_maxsize:
+            raise MuException( f"Cannot set queue size to {queue_size}: max size is {self.queue_maxsize}" )
+        
+        self.__queue_size = queue_size
 
+
+    def setQueueMaxSize( self, queue_maxsize: int ) -> None :
+        """ Set the signal queue max size. Beware that the current queue elements are lost
+        
+        Parameters
+        ----------
+        queue_size: int
+            The new queue size value. 0 means no size
+        """
+        self.__queue = None
+        self.__queue = MemsArray.Queue( maxsize=queue_maxsize )
 
     def run( self, *args, **kwargs ) :
         """ The main run method that run the antenna """
@@ -1040,7 +1065,7 @@ class MemsArray:
                     data = np.concatenate(( data, status ), axis=1 )
 
                 # post them in the internal queue as float32 array
-                self.signal_q.put(
+                self.queue.put(
                     self._run_process_data_float32( 
                         data, 
                         h5_recording = self.h5_recording
@@ -1078,7 +1103,7 @@ class MemsArray:
         """ next iteration over the antenna data """
         
         try:
-            data = self.signal_q.get( timeout=DEFAULT_QUEUE_TIMEOUT )
+            data = self.queue.get( timeout=DEFAULT_QUEUE_TIMEOUT )
             self.__it += 1
             return data
         

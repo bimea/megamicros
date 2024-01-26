@@ -599,7 +599,7 @@ class MemsArrayDB( base.MemsArray ):
                     # However, the queue introduces a latency that can become problematic.
                     # If the user accepts the loss of data, it is possible to limit the size of the queue.
                     # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
-                    self.signal_q.put( self.__run_process_data( chunk ) )
+                    self.queue.put( self.__run_process_data( chunk ) )
                     transfer_index += 1
                     if self.running == False:
                         log.info( " .Running stopped: normal thread termination" )

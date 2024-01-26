@@ -566,7 +566,7 @@ class MemsArrayH5( base.MemsArray ):
 
                                     # Transfer buffer
                                     transfert_start_time = time()
-                                    self.signal_q.put( self.__run_process_data( transfer_buffer[:,dataset_index_ptr:dataset_index_ptr+self.frame_length] ) )                            
+                                    self.queue.put( self.__run_process_data( transfer_buffer[:,dataset_index_ptr:dataset_index_ptr+self.frame_length] ) )                            
                                     dataset_index_ptr += self.frame_length
                                     transfer_index += 1
 
@@ -595,7 +595,7 @@ class MemsArrayH5( base.MemsArray ):
                                         
                                         # Transfer buffer
                                         transfert_start_time = time()
-                                        self.signal_q.put( self.__run_process_data( buffer ) )
+                                        self.queue.put( self.__run_process_data( buffer ) )
                                         transfer_index += 1
 
                                         dataset_index_ptr = new_dataset_first_samples_number
@@ -612,7 +612,7 @@ class MemsArrayH5( base.MemsArray ):
 
                                         # Transfer buffer
                                         transfert_start_time = time()
-                                        self.signal_q.put( self.__run_process_data( buffer ) )
+                                        self.queue.put( self.__run_process_data( buffer ) )
                                         transfer_index += 1
 
                                         file_endeed = True

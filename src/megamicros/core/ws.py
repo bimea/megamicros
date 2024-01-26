@@ -631,7 +631,7 @@ class MemsArrayWS( base.MemsArray ):
 
                         # For fft data (complex64 bytes type)
                         if self.datatype == base.MemsArray.Datatype.fft:
-                            self.signal_q.put(
+                            self.queue.put(
                                 self._run_process_data_complex64( 
                                     signal_buffer,
                                     h5_recording = self.h5_recording and not self.__h5_pass_through
@@ -640,7 +640,7 @@ class MemsArrayWS( base.MemsArray ):
 
                         # For all others data supposing they are bytes int32 type              
                         else:
-                            self.signal_q.put(
+                            self.queue.put(
                                 self._run_process_data_bint32( 
                                     signal_buffer,
                                     h5_recording = self.h5_recording and not self.__h5_pass_through
