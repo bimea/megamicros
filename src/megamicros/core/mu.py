@@ -652,7 +652,8 @@ class Megamicros( base.MemsArray ):
         log.info( f"  > Frame length in samples number: {self.frame_length} samples")
         log.info( f"  > Buffer length in samples number: {self.usb_buffer_length} samples ({self.usb_buffer_length*1000/self.sampling_frequency} ms duration)" )			
         log.info( f"  > Buffer length in 32 bits words number: {self.usb_buffer_length}x{self.channels_number}={self.usb_buffer_words_length} ({self.usb_buffer_words_length*MU_TRANSFER_DATAWORDS_SIZE} bytes)" )
-        log.info( f"  > starting from external triggering: {'True' if self.start_trigg_status else 'False'}" )
+        log.info( f"  > Buffer duration: {self.usb_buffer_duration} s" )
+        log.info( f"  > Starting from external triggering: {'True' if self.start_trigg_status else 'False'}" )
         log.info( f"  > Local H5 recording {'on' if self.h5_recording else 'off'}" )
 
         # Check if the USB device is connected and free
@@ -943,10 +944,10 @@ class Megamicros( base.MemsArray ):
 
             log.info( f' .End of acquisition' )
             log.info( f'  > Performed {self.__transfer_index} transfer(s), received {self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE} bytes' )
-            log.info( f'  > Equivalent recording time: {self.__transfer_index * self.usb_buffer_duration} s' )
-            log.info( f'  > Transfer rate: {self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE / self.__transfer_index / self.usb_buffer_duration / 1024 / 1024} MB/s' )
-            log.info( f'  > Elapsed time: {elapsed_time} s')
-            log.info( f'  > Mean completion time: {mean_completion_time} s')
+            log.info( f'  > Equivalent recording time: {(self.__transfer_index * self.usb_buffer_duration):.2f} s' )
+            log.info( f'  > Transfer rate: {(self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE / self.__transfer_index / self.usb_buffer_duration / 1024 / 1024):.2f} MB/s' )
+            log.info( f'  > Elapsed time: {elapsed_time:.2f} s')
+            log.info( f'  > Mean completion time: {mean_completion_time*1000:.4f} ms')
 
         except Exception as e:
             log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )

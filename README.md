@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.71
+
+* Add the megamicros base library for Megamicros device monitoring
+
 ### 2.0.70
 
 * Fix bug in dataset concerning bad reshape when samples are shorter than split size
