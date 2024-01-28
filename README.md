@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.72
+
+* Add download of H5 files as wav files du dbAi
+
 ### 2.0.71
 
 * Add the megamicros base library for Megamicros device monitoring
