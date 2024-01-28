@@ -42,7 +42,7 @@ from rest_framework.pagination import PageNumberPagination
 from .models import Config, Domain, Campaign, Device, Directory, Tagcat, Tag, SourceFile, Context, Label, FileContexting, FileLabeling, Dataset
 from .serializers import ConfigSerializer, DomainSerializer, CampaignSerializer, DeviceSerializer, DirectorySerializer
 from .serializers import DirectoryFileSerializer, SourceDirectoryCheckSerializer, SourceDirectoryReviseSerializer, TagcatSerializer, TagSerializer
-from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadSamplesSerializer, SourceFileUploadAudioSerializer
+from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadAsWavSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadSamplesSerializer, SourceFileUploadAudioSerializer
 from .serializers import ContextSerializer, LabelSerializer, FileLabelingSerializer
 from .serializers import DatasetSerializer, DatasetUploadSerializer, DatasetUploadMetaSerializer, SourceFileSegmentationSerializer
 from .tools import StandardResultsSetPagination, LargeResultsSetPagination
@@ -191,7 +191,7 @@ class SourceFileViewSet( viewsets.ModelViewSet ):
     filterset_fields = ['filename', 'type', 'datetime', 'directory', 'labels', 'contexts', 'tags']
 
     @action( detail=True, methods=['get'] )
-    def upload( self, request, pk=None ):
+    def download( self, request, pk=None ):
         file = self.get_object()
         try:
             serializer = SourceFileUploadSerializer( file=file )
@@ -199,6 +199,20 @@ class SourceFileViewSet( viewsets.ModelViewSet ):
             return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
 
         return serializer.data
+    
+    @action( detail=True, methods=['get'] )
+    def download_as_wav( self, request, pk=None ):
+        """ Download all signal as wav file (channels 1 and 6)
+        
+        Endpoint: /sourcefile/<file_id>/download_as_wav/
+        """
+        file = self.get_object()
+        try:
+            serializer = SourceFileUploadAudioSerializer( file=file, start=0., stop=-1, left=1, right=6 )
+        except Exception as e:
+            return Response( { 'status': 'error', 'code': 0, 'message': str( e ) } )
+        return serializer.data
+
 
     @action( detail=True, methods=['get'], url_path=r'segment/(?P<algo_name>energy|power|q50)' )
     def segment( self, request, algo_name=None, pk=None ):

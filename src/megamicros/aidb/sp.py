@@ -1007,7 +1007,7 @@ def genwav_from_range_muh5file( filename: str, start: float, stop: float, channe
     ----------
     * filename (str): the muh5 file name with absolute path
     * start: initial time (in seconds)
-    * stop: end time (in seconds)
+    * stop: end time (in seconds). If stop is equal to -1 the end of the signal is considered
     * channels (list): channels to extract 
     * return: range signal in np.float32 array format
     """
@@ -1055,7 +1055,12 @@ def genwav_from_range_muh5file( filename: str, start: float, stop: float, channe
         Control range values
         """
         sample_t0 = int( start * sampling_frequency )
-        sample_tf = int( stop * sampling_frequency )
+        if stop == -1:
+            stop = duration
+            sample_tf = samples_number-1
+        else:   
+            sample_tf = int( stop * sampling_frequency )
+
         requested_samples_number = sample_tf - sample_t0 + 1 
         if sample_t0 >= samples_number:
             raise Exception( f"Uncoherent starting position: start time <{start}s> exceed signal duration ({samples_number*sampling_frequency}s)")
