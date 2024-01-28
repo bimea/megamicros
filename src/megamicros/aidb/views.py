@@ -42,7 +42,7 @@ from rest_framework.pagination import PageNumberPagination
 from .models import Config, Domain, Campaign, Device, Directory, Tagcat, Tag, SourceFile, Context, Label, FileContexting, FileLabeling, Dataset
 from .serializers import ConfigSerializer, DomainSerializer, CampaignSerializer, DeviceSerializer, DirectorySerializer
 from .serializers import DirectoryFileSerializer, SourceDirectoryCheckSerializer, SourceDirectoryReviseSerializer, TagcatSerializer, TagSerializer
-from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadAsWavSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadSamplesSerializer, SourceFileUploadAudioSerializer
+from .serializers import SourceFileSerializer, SourceFileUploadSerializer, SourceFileUploadEnergySerializer, SourceFileUploadRangeSerializer, SourceFileUploadSamplesSerializer, SourceFileUploadAudioSerializer
 from .serializers import ContextSerializer, LabelSerializer, FileLabelingSerializer
 from .serializers import DatasetSerializer, DatasetUploadSerializer, DatasetUploadMetaSerializer, SourceFileSegmentationSerializer
 from .tools import StandardResultsSetPagination, LargeResultsSetPagination

@@ -83,7 +83,7 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
-### 2.0.72
+### 2.0.72 to 2.0.73
 
 * Add download of H5 files as wav files du dbAi
 
