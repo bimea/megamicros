@@ -223,7 +223,7 @@ class AidbSession( RestDBSession ):
 
 
     def loadSourcefile( self, id: int ):
-        """ Upload a sound file from database 
+        """ Download a sound file from database 
 
         Parameters
         ----------
@@ -244,6 +244,33 @@ class AidbSession( RestDBSession ):
         
         return response
  
+    def downloadSourcefile( self, id: int, as_wav: bool=False ) -> bytes:
+        """ Download a sound file from database 
+
+        Parameters
+        ----------
+        id: int
+            sourcefile DB identifier
+        as_wav: bool
+            if True, the file is converted to wav format
+        
+        Return
+        ------
+        response: bytes
+            muh5 or wav file content
+        """
+
+        try:
+            if as_wav:
+                response = self.get( f'/sourcefile/{id}/download_as_wav' ).content
+            else:
+                response = self.get( f'/sourcefile/{id}/download/' ).content
+
+        except MuDbException as e:
+            log.info( f" .{e}" )
+            return {}
+        
+        return response
 
 # =============================================================================
 # Generics
