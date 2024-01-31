@@ -5,4 +5,4 @@
 
 python3 -m build --sdist
 python3 -m build --wheel
-python setup.py sdist upload -r biimea
+python setup.py sdist upload -r bimea

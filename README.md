@@ -83,6 +83,11 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.74
+
+* Add 'real_time' option in MesmArrayH5 for playing H5 files
+* There is still a bug to fix wen 'real_time=True': the delay which is imposed for real time respect leads to problem in the queue management
+
 ### 2.0.72 to 2.0.73
 
 * Add download of H5 files as wav files du dbAi

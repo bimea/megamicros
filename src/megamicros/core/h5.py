@@ -72,6 +72,7 @@ class MemsArrayH5( base.MemsArray ):
     __transfer_index: int = 0
     __dataset_index: int = 0
     __dataset_index_ptr: int = 0
+    __real_time: bool = True            # Whether or not file is played in real time or not
 
     # H5 file properties
     __file_timestamp: float = None
@@ -104,6 +105,13 @@ class MemsArrayH5( base.MemsArray ):
         Get the start time choosen by user to start H5 file peocessing
         """
         return self.__start_time
+    
+    @property
+    def real_time( self ) -> int:
+        """
+        Get the start time choosen by user to start H5 file peocessing
+        """
+        return self.__real_time
 
     @property
     def loop( self ) -> bool:
@@ -171,6 +179,17 @@ class MemsArrayH5( base.MemsArray ):
         """
         self.__start_time = start_time
 
+    def setRealTime( self ):
+        """
+        Set real time ON
+        """
+        self.__real_time = True
+
+    def unsetRealTime( self ):
+        """
+        Set real time OFF
+        """
+        self.__real_time = False
 
     def setFiles( self, filename: str ) -> None:
         """
@@ -351,7 +370,7 @@ class MemsArrayH5( base.MemsArray ):
      
         if self.duration is None:
             raise MuException( f"No running duration set" )
-        
+
         if self.datatype is base.MemsArray.Datatype.unknown:
             raise MuException( f"No datatype set" )
         
@@ -365,6 +384,34 @@ class MemsArrayH5( base.MemsArray ):
         if self.counter_skip and not self.counter:
             log.warning( f"`counter_skip` is set to True but `counter` is not available" )
 
+
+    def _set_settings( self, args, kwargs ) -> None :
+        """ Set settings for MemsArrayH5 objects 
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        args: array
+            named arguments of the run function
+        """
+
+        # Check direct args
+        if len( args ) != 0:
+            raise MuH5Exception( "Direct arguments are not accepted" )
+        
+        try:  
+            log.info( f" .Install MemsArrayH5 settings" )
+
+            if 'real_time' in kwargs:
+                self.setRealTime() if kwargs['real_time'] else self.unsetRealTime()
+
+            if 'start_time' in kwargs:
+                self.setStartTime( kwargs['start_time'] )
+            
+        except Exception as e:
+            raise MuH5Exception( f"Run failed on settings: {e}")
+        
 
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
@@ -407,8 +454,8 @@ class MemsArrayH5( base.MemsArray ):
         # Start running
         self.setRunningFlag( True )
 
-        # Start the timer if a limited execution time is requested 
-        if self.duration > 0:
+        # Start the timer if a limited execution time is requested and real time is ON
+        if self.duration > 0 and self.real_time:
             self._thread_timer = threading.Timer( self.duration, self._run_endding )
             self._thread_timer_flag = True
             self._thread_timer.start()
@@ -469,8 +516,9 @@ class MemsArrayH5( base.MemsArray ):
                             self.__dataset_length = meta['dataset_length']
 
                             # Verbose
-                            log.info( f" .{self.file_duration}s ({(self.file_duration/60):.02}min) of data in H5 file" )
+                            log.info( f" .{self.file_duration}s ({(self.file_duration/60):.2f}min) of data in H5 file" )
                             log.info( f" .Starting time: {self.start_time}s" )
+                            log.info( f" .Real time: {'ON' if self.real_time else 'OFF'}" )
                             log.info( f" .Whether counter is available: {meta['counter'] and not meta['counter_skip']}" )
                             log.info( f" .{len( self.available_mems )} available mems" )
                             log.info( f" .{self.mems_number} activated microphones" )
@@ -485,7 +533,6 @@ class MemsArrayH5( base.MemsArray ):
                             log.info( f" .Datatype: {str( self.datatype )}" )
                             log.info( f" .Frame length in samples number: {self.frame_length} ({self.frame_length*1000/self.sampling_frequency} ms duration)" )			
                             log.info( f" .Frame length in 32 bits words number: {self.frame_length}x{self.channels_number}={self.frame_length*self.channels_number} words ({self.frame_length*self.channels_number*4} Bytes)" )
-                            log.info( f" .Starting time: {self.start_time * meta['duration'] / 100}s ({self.start_time}% of file)" )
                             if meta['compression']:
                                 log.info( f" .Compression mode: ON" )
                             else:
@@ -495,18 +542,23 @@ class MemsArrayH5( base.MemsArray ):
                             transfer_index = 0                                          # transfer buffer counting
                             dataset_index: int = 0                                      # current dataset
                             dataset_index_ptr: int = 0                                  # current index in current dataset 
-                            start_time = self.start_time * meta['duration'] / 100       # starting time in seconds
 
-                            if start_time > 0:
+                            if self.start_time > 0:
                                 # Start from requested starting time
-                                if start_time > meta['duration']:
-                                    raise MuException( f"Cannot read file at {start_time}s star time. File duration ({meta['duration']}) is too short" )
-
-                                dataset_index = int( ( start_time * self.sampling_frequency ) // meta['dataset_length'] )
-                                dataset_index_ptr = int( ( start_time * self.sampling_frequency ) % meta['dataset_length'] )
+                                if self.start_time > meta['duration']:
+                                    raise MuException( f"Cannot read file at {self.start_time}s start time. File duration ({meta['duration']}) is too short" )
+                                
+                                if not self.real_time and self.start_time + self.duration > meta['duration']:
+                                    raise MuException( f"Cannot read file at {self.start_time}s start time on {self.duration}s duration: File duration ({meta['duration']}) is too short" )
+                                
+                                dataset_index = int( ( self.start_time * self.sampling_frequency ) // meta['dataset_length'] )
+                                dataset_index_ptr = int( ( self.start_time * self.sampling_frequency ) % meta['dataset_length'] )
 
                             else:
                                 # Start from beginning
+                                if not self.real_time and self.duration > meta['duration']:
+                                    raise MuException( f"Cannot read file on {self.duration}s duration: File duration ({meta['duration']}) is too short" )
+
                                 dataset_index = 0
                                 dataset_index_ptr = 0
 
@@ -557,11 +609,25 @@ class MemsArrayH5( base.MemsArray ):
                             frame_duration = self.frame_length / self.sampling_frequency
                             processing_delay = frame_duration * H5_PROCESSING_DELAY_RATE
                             file_endeed: bool = False
+
+                            # Must control the loop if real time is OFF (there is no more timer)
+                            if not self.real_time:
+                                max_transfer_index = int( self.duration * self.sampling_frequency / self.frame_length )
+                                log.info( f" .Real time OFF: max transfers number set to : {max_transfer_index} transfers ({(max_transfer_index*self.frame_length/self.sampling_frequency):.2f} s equivalent signal duration)" )
+                            else:
+                                max_transfer_index = 0
+
                             while not file_endeed and self.running == True:
+                                # Check if we have to stop if real time if OFF:
+                                if not self.real_time and transfer_index >= max_transfer_index:
+                                    log.info( f" .Real time OFF: stop playing current file {self.__current_filename}" )
+                                    self.setRunningFlag( False )
+                                    break
+
                                 # There is enough data in current dataset: process to transfert
                                 if dataset_index_ptr + self.frame_length <= self.__dataset_length:
                                     # Wait for real time operation
-                                    if ( time() - transfert_start_time ) < frame_duration - processing_delay:
+                                    if self.real_time and ( time() - transfert_start_time ) < frame_duration - processing_delay:
                                         sleep( frame_duration-time()+transfert_start_time-processing_delay )
 
                                     # Transfer buffer
@@ -590,7 +656,7 @@ class MemsArrayH5( base.MemsArray ):
                                         buffer = np.append( buffer, transfer_buffer[:,:new_dataset_first_samples_number], axis=1 )
 
                                         # Wait for real time synchro
-                                        if ( time() - transfert_start_time ) < frame_duration - processing_delay:
+                                        if self.real_time and  ( time() - transfert_start_time ) < frame_duration - processing_delay:
                                             sleep( frame_duration-time()+transfert_start_time - processing_delay )
                                         
                                         # Transfer buffer
@@ -607,7 +673,7 @@ class MemsArrayH5( base.MemsArray ):
                                         buffer = np.append( buffer, np.zeros( (channels_number, self.frame_length - self.__dataset_length + dataset_index_ptr), dtype=np.int32), axis=1 )
                                         
                                         # Wait for real time synchro
-                                        if time() - transfert_start_time < frame_duration - processing_delay:
+                                        if self.real_time and time() - transfert_start_time < frame_duration - processing_delay:
                                             sleep( frame_duration-time()+transfert_start_time - processing_delay )
 
                                         # Transfer buffer
@@ -637,9 +703,12 @@ class MemsArrayH5( base.MemsArray ):
         elapsed_time = time() - initial_time
 
         if self.duration == 0:
-            log.info( f" .Elapsed time: {elapsed_time} s")
+            log.info( f" .Elapsed time: {elapsed_time:.2f} s")
         else:
-            log.info( f" .Elapsed time: {elapsed_time}s (expected duration was: {self.duration} s)")
+            if self.real_time:
+                log.info( f" .Elapsed time: {elapsed_time:.2f} s (expected duration was: {self.duration} s)")
+            else:
+                log.info( f" .Elapsed time: {elapsed_time:.2f} s")
 
         log.info( f" .Proceeded to {transfer_index} transfers" )
         log.info( " .Run completed" )

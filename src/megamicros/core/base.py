@@ -1100,7 +1100,12 @@ class MemsArray:
 
 
     def __next__( self ) -> np.ndarray|StopIteration :
-        """ next iteration over the antenna data """
+        """ next iteration over the antenna data 
+        
+        CAUTION:
+        --------
+        When used with MesArrayH5 in real time mode, the queue can be empty while recording is still running because of the delay which simulate the playing time.
+        """
         
         try:
             data = self.queue.get( timeout=DEFAULT_QUEUE_TIMEOUT )
