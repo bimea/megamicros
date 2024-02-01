@@ -1,4 +1,4 @@
-# i-sympa
+# i-sympa: logiciel de synthèse de salles
 # -*- coding: utf-8 -*-
 # import required libraries
 #%%###########################################################################
