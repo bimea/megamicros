@@ -1,8 +1,4 @@
 build
-mkdocs 
-mkdocs-material
-mkdocstrings[python]
-plantuml_markdown
 numpy
 scipy
 matplotlib
