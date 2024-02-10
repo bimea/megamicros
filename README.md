@@ -83,6 +83,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.0.75
+
+  * Remove docs form this repository. Documentation is now available on its on repository (megamicros-doc)
+
 ### 2.0.74
 
 * Add 'real_time' option in MesmArrayH5 for playing H5 files
