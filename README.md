@@ -81,6 +81,13 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
   [09:50:16] Serving on http://127.0.0.1:8000/
 ```
 
+## Dev considerations
+
+### Extracting current real time index when playing audio using then html.audio balise
+
+* [Audio file aligned with graph](https://community.plotly.com/t/audio-file-aligned-with-graph/60994/3)
+
+
 ## Releases
 
 ### 2.0.75
