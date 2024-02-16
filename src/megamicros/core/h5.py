@@ -353,7 +353,7 @@ class MemsArrayH5( base.MemsArray ):
                     self.__dataset_number = meta['dataset_number']
                     self.__dataset_duration = meta['dataset_duration']
                     self.__dataset_length = meta['dataset_length']
- 
+
                 else:
                     raise MuH5Exception( f"{self.files[0]} does not appear to be a MuH5 file: cannot find the 'muh5' H5 group" )
 
@@ -458,6 +458,84 @@ class MemsArrayH5( base.MemsArray ):
         except Exception as e:
             raise MuH5Exception( f"Run failed on settings: {e}")
         
+
+    def get( self, channels:list|tuple = (0,) ) -> any:
+        """ Get H5 signal in one shot
+
+        Parameters
+        ----------
+        channels: list|tuple|np.array
+            list of channels to get
+        return: np.array
+            the signal as a numpy array
+        """
+
+        if type( channels ) is np.array:
+            channels = list( channels )
+
+        # Run over H5 files
+        for index, file in enumerate( self.files ):
+            self.__current_filename = file
+            log.info( f" .Processing {self.__current_filename} H5 file... " )
+
+            try:
+                with h5py.File( self.__current_filename, 'r' ) as self.__current_file:
+
+                    if 'muh5' in self.__current_file:
+                        group = self.__current_file['muh5']
+                        meta = dict( zip( group.attrs.keys(), group.attrs.values() ) )
+
+                        # Force datatype settings to that of H5 file because we do not provide yet a way to change it 
+                        self.setDatatype( meta['datatype'] )
+                        samples_number = self.dataset_length * self.dataset_number
+
+                        # Verbose
+                        log.info( f" .{self.file_duration}s ({(self.file_duration/60):.2f}min) of data in H5 file" )
+                        log.info( f" .Whether counter is available: {self.counter and not self.counter_skip}" )
+                        log.info( f" .{len( self.available_mems )} available mems" )
+                        log.info( f" .{len( self.available_analogs )} available analogic channels" )
+                        log.info( f" .Requested channels: {channels}" )
+                        log.info( f" .Total available channels number is {self.available_channels_number}" )
+                        log.info( f" .Total actual channels number is {self.channels_number}" )
+                        log.info( f" .Datatype: {str( self.datatype )}" )
+                        if meta['compression']:
+                            log.info( f" .Compression mode: ON" )
+                        else:
+                            log.info( f" .compression mode: OFF" )
+
+                        # Checks
+                        if len( channels ) > self.channels_number:
+                            raise MuH5Exception( f"Error: requested {len( channels )} channels but only {self.channels_number} are available" )
+
+                        if max( channels ) >= self.channels_number:
+                            raise MuH5Exception( f"Error: requested channel {max( channels )} is out of range" )
+                        
+                        # Set the mask for mems and analogs selecting
+                        mask = list( np.isin( self.available_mems, channels ) )
+                        masking = len( mask ) != self.channels_number
+
+                        data = np.zeros( (len( channels ), samples_number), dtype=np.int32 )
+                        for dataset_index in range( self.dataset_number ):
+                            dataset = self.__current_file['muh5/' + str( dataset_index ) + '/sig']
+                            if masking:
+                                data[:,dataset_index*self.dataset_length:(dataset_index+1)*self.dataset_length] = np.array( dataset[:] )[mask,:]
+                            else:
+                                data[:,dataset_index*self.dataset_length:(dataset_index+1)*self.dataset_length] = np.array( dataset[:] )
+                        
+        
+            except Exception as e:
+                log.error( f"get failed on Exception ({type(e).__name__}): {e}" )
+                raise e
+            except :
+                log.error( f"get failed on unexpected unknown Exception ({type(e).__name__}): {e}" )
+                raise e
+
+        return data
+
+
+
+
+
 
     def run( self, *args, **kwargs ) :
         """ The main run method that run the remote antenna """
