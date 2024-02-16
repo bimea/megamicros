@@ -169,6 +169,12 @@ class MemsArrayH5( base.MemsArray ):
         """
         return self.__file_comment
 
+    @property
+    def annotations( self ) -> dict:
+        """ 
+        Get the H5 file annotations
+        """
+        return self._annotations()
 
     def setStartTime( self, start_time: int ):
         """
@@ -327,7 +333,7 @@ class MemsArrayH5( base.MemsArray ):
         # Open the first H5 file in list and set settings from this file
         try:
             if self.files == None or len( self.files ) == 0:
-                raise MuH5Exception( f"No H5 file(s) loaded. Bad object initialization" ) 
+                raise MuH5Exception( f"No H5 file(s) loaded. Failed to create object" ) 
             
             # get meta data
             with h5py.File( self.files[0], 'r' ) as file:
@@ -353,6 +359,46 @@ class MemsArrayH5( base.MemsArray ):
 
         except Exception as e:
             raise MuH5Exception( f"Failed to get meta info from {self.files[0]} H5 file ({type(e).__name__}): {e}" )
+
+
+    def _annotations( self ):
+        """ Check if annotations are available on H5 file and set them if any
+        
+        Return 
+        ------
+        annotations: dict
+            annotations dictionary with label_id, labeling_id, datetime_start, datetime_end
+        """
+
+        # Check if annotations are available
+        annotations: dict = {}
+        with h5py.File( self.files[0], 'r' ) as file:
+            if 'annotations/labels' in file:
+                log.info( f"found annotations/labels in file" )
+            group = file['muh5']
+            log.info( f"found MuH5 group" )
+            if 'annotations/labels' in group:
+                log.info( f"found annotations/labels in MuH5 group" )
+            if 'annotations/labels' in group and group['annotations/labels'].attrs['count'] > 0:
+                annot_group = group['annotations/labels']
+                count = annot_group.attrs['count']
+                log.info( f" .Found {count} annotations in {self.files[0]} MµH5 file with format {annot_group.attrs['format']}" )
+                annotations:dict = {
+                    'label_id': np.zeros( count, dtype=np.int32 ),
+                    'labeling_id': np.zeros( count, dtype=np.int32 ),
+                    'sample_start': np.zeros( count, dtype=np.int32 ),
+                    'sample_end': np.zeros( count, dtype=np.int32 )
+                }
+
+                for index in range( count ):
+                    annot = annot_group[str( index )]
+                    annotations['label_id'][index] = annot[0]
+                    annotations['labeling_id'][index] = annot[1]
+                    annotations['sample_start'][index] = annot[2]
+                    annotations['sample_end'][index] = annot[3]
+
+        return annotations
+
 
 
     def _check_settings( self ) -> None :
