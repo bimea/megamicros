@@ -59,8 +59,10 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
 import numpy as np
-from megamicros.log import log
-from megamicros.exception import MuException
+
+from megamicros_tools.exception import MuException
+from megamicros_tools.log import log
+
 
 SOUND_SPEED = 340.29
 

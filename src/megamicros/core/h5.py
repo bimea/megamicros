@@ -36,9 +36,9 @@ import numpy as np
 import threading
 import h5py
 
-from megamicros.log import log
-from megamicros.exception import MuException
-import megamicros.core.base as base
+from megamicros_tools.log import log
+from megamicros_tools.exception import MuException
+from .base import MemsArray, DEFAULT_FRAME_LENGTH
 
 H5_PROCESSING_DELAY_RATE				= 4/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
 
@@ -55,7 +55,7 @@ class MuH5Exception( MuException ):
 # The MemsArrayH5 base class
 # =============================================================================
 
-class MemsArrayH5( base.MemsArray ):
+class MemsArrayH5( MemsArray ):
     """ MEMs array class with input stream comming from a MuH5 file.
 
     MuH5 file is a H5 file that follows the special Megamicros format
@@ -417,12 +417,12 @@ class MemsArrayH5( base.MemsArray ):
         if self.duration is None:
             raise MuException( f"No running duration set" )
 
-        if self.datatype is base.MemsArray.Datatype.unknown:
+        if self.datatype is MemsArray.Datatype.unknown:
             raise MuException( f"No datatype set" )
         
         if self.frame_length is None:
             log.info( f" .Frame length not set -> set to default" )
-            self.setFrameLength( base.DEFAULT_FRAME_LENGTH )
+            self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
         # Here we are
         log.info( f" .Pre-execution checks for MemsArrayH5 object" )

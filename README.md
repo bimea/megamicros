@@ -90,6 +90,13 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.0
+
+* Remove the aidb application from the package in favor of the megamicros-aidb new package
+* Remove the aiboard application from the package in favor of the megamicros-aiboard new package
+* megamicros-tools becomes a dependency of megamicros
+* Remove log, mqtt, muh5, exception, previously moved in megamicros-tools 
+
 ### 2.0.75
 
   * Remove docs form this repository. Documentation is now available on its on repository (megamicros-doc)

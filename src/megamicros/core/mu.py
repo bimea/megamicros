@@ -1,7 +1,7 @@
 # megamicros.core.mu.py base class for antenna connected to a remote antenna server
 #
 # Copyright (c) 2024 Sorbonne Université
-# Author: bruno.gas@sorbonne-universite.fr
+# Author: bruno.gas@bimea.io
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,9 +39,9 @@ import threading
 import time
 from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 
-from megamicros.log import log
-from megamicros.exception import MuException
-import megamicros.core.base as base
+from megamicros_tools.log import log
+from megamicros_tools.exception import MuException
+from .base import MemsArray, DEFAULT_SAMPLING_FREQUENCY, DEFAULT_FRAME_LENGTH
 
 
 # Mu32 USB-2 properties
@@ -100,7 +100,7 @@ USB_RECIPIENT_DEVICE			        = 0x00
 USB_REQUEST_TYPE_VENDOR			        = 0x40
 USB_ENDPOINT_OUT				        = 0x00
 USB_DEFAULT_BUFFERS_NUMBER		        = 8
-USB_DEFAULT_BUFFER_LENGTH		        = base.DEFAULT_FRAME_LENGTH         # Default buffer length in samples number: same as frame length
+USB_DEFAULT_BUFFER_LENGTH		        = DEFAULT_FRAME_LENGTH         # Default buffer length in samples number: same as frame length
 
 
 # MegaMicro hardware commands
@@ -161,7 +161,7 @@ class MuUsbException( MuException ):
 # =============================================================================
 
 
-class Megamicros( base.MemsArray ):
+class Megamicros( MemsArray ):
     """ MEMs array class with input stream connected to a remote megamicros server.
 
     """
@@ -237,7 +237,7 @@ class Megamicros( base.MemsArray ):
     __usb_handle: usb1.USBDeviceHandle | None= None
     __usb_buffer_length: int = USB_DEFAULT_BUFFER_LENGTH
     __usb_buffers_number: int = USB_DEFAULT_BUFFERS_NUMBER
-    __usb_buffer_duration: float = USB_DEFAULT_BUFFER_LENGTH / base.DEFAULT_SAMPLING_FREQUENCY
+    __usb_buffer_duration: float = USB_DEFAULT_BUFFER_LENGTH / DEFAULT_SAMPLING_FREQUENCY
     __usb_buffer_words_length: int = 0
     __usb_transfer_index: int = 0
     __fpga_counter_state: int = 0

@@ -38,10 +38,10 @@ import h5py
 from enum import Enum
 from threading import Thread, Timer
 
-from megamicros.log import log
-from megamicros.exception import MuException
-from megamicros.aidb.query import AidbSession
-from megamicros.data import MuAudio
+from megamicros_tools.log import log
+from megamicros_tools.exception import MuException
+from megamicros_tools.data import MuAudio
+
 
 
 DEFAULT_FRAME_LENGTH                = 256

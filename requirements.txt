@@ -1,16 +1,9 @@
-build
+--index-url https://pypi.bimea.io
 numpy
 scipy
 matplotlib
 libusb1
-h5py
 pyaudio
 websockets
-paho_mqtt
 ffmpeg
-opencv-python
-jupyterlab
-pyqt6 
-pyqtgraph
-dash
-dash-bootstrap-components
+megamicros-tools

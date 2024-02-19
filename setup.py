@@ -3,7 +3,11 @@
 See:
 https://packaging.python.org/guides/distributing-packages-using-setuptools/
 https://github.com/pypa/sampleproject
+
+Dependencies:
+    pip install build
 """
+
 import os.path
 
 # Always prefer setuptools over distutils
@@ -157,14 +161,13 @@ setup(
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
     # Optional
     install_requires=[
-        "libusb1",
         "numpy",
         "scipy",
         "matplotlib",
         "pyaudio",
-        "h5py",
+        "libusb1",
         "websockets",
-        "opencv-python"
+        "megamicros-tools"
     ],
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
@@ -188,7 +191,6 @@ setup(
     entry_points={  # Optional
         "console_scripts": [
             "megamicros-version = megamicros.apps.version:main",
-            "megamicros-aiboard = megamicros.apps.aiboard:main"
         ],
     },
     # List additional URLs that are relevant to your project as a dict.
@@ -201,7 +203,7 @@ setup(
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
     project_urls={  # Optional
-        "Documentation": "https://readthedoc.biimea.io",
+        "Documentation": "https://readthedoc.bimea.io",
         "Source": "https://github.com/bimea/megamicros/",
     },
 

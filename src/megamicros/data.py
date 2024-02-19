@@ -29,8 +29,9 @@ import os
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.io import wavfile
-from megamicros.exception import MuException
-from megamicros.log import log
+
+from megamicros_tools.exception import MuException
+from megamicros_tools.log import log
 
 DEFAULT_LIMIT_VALUE = 10
 FILETYPE_H5 = 1

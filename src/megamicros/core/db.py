@@ -34,10 +34,11 @@ import threading
 import requests
 from time import sleep, time
 
-from megamicros.log import log
-from megamicros.exception import MuException
-from megamicros.aidb.query import AidbSession
-import megamicros.core.base as base
+from megamicros_tools.log import log
+from megamicros_tools.exception import MuException
+from megamicros_aidb.query import AidbSession
+from .base import MemsArray, DEFAULT_FRAME_LENGTH
+
 
 DEFAULT_DB_PORT                         = 9002
 DB_PROCESSING_DELAY_RATE				= 2/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)
@@ -55,7 +56,7 @@ class MuDBException( MuException ):
 # The MemsArrayDB base class
 # =============================================================================
 
-class MemsArrayDB( base.MemsArray ):
+class MemsArrayDB( MemsArray ):
     """ MEMs array class with input stream connected to a remote database.
 
     """
@@ -357,12 +358,12 @@ class MemsArrayDB( base.MemsArray ):
         if self.duration is None:
             raise MuException( f"No running duration set" )
         
-        if self.datatype is base.MemsArray.Datatype.unknown:
+        if self.datatype is MemsArray.Datatype.unknown:
             raise MuException( f"No datatype set" )
         
         if self.frame_length is None:
             log.info( f" .Frame length not set -> set to default" )
-            self.setFrameLength( base.DEFAULT_FRAME_LENGTH )
+            self.setFrameLength( DEFAULT_FRAME_LENGTH )
 
         if self.__start == None:
             log.info( f" .Start time not set -> set to 0" )
@@ -404,7 +405,7 @@ class MemsArrayDB( base.MemsArray ):
             log.info( f" .Counter skipping not set -> set to False" )
             self.unsetCounterSkip()       
         
-        if self.datatype is base.MemsArray.Datatype.unknown:
+        if self.datatype is MemsArray.Datatype.unknown:
             raise MuException( f"No datatype set" )
         
         if self.start_sample is None:

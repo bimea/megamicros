@@ -36,9 +36,9 @@ import asyncio
 import threading
 import time
 
-from megamicros.log import log
-from megamicros.exception import MuException
-import megamicros.core.base as base
+from megamicros_tools.log import log
+from megamicros_tools.exception import MuException
+from .base import MemsArray, DEFAULT_FRAME_LENGTH
 
 
 DEFAULT_MBS_SERVER_ADDRESS      = 'localhost'
@@ -67,7 +67,7 @@ class MuWSException( MuException ):
 # =============================================================================
 
 
-class MemsArrayWS( base.MemsArray ):
+class MemsArrayWS( MemsArray ):
     """ MEMs array class with input stream connected to a remote megamicros server.
 
     """
@@ -457,9 +457,9 @@ class MemsArrayWS( base.MemsArray ):
                 # send settings to server
                 # Note that 'clockdiv', and 'mems_init_wait' should be set by the remote server since they are Megamicros parameters 
                 # Also notice that the 'int32/float32/fft' datatypes are the only avaible datatypes on MBS server 
-                if self.datatype==base.MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32:
+                if self.datatype==MemsArray.Datatype.int32 or self.datatype==base.MemsArray.Datatype.bint32:
                     server_datatype = 'int32'
-                elif self.datatype==base.MemsArray.Datatype.fft:
+                elif self.datatype==MemsArray.Datatype.fft:
                     server_datatype = 'fft'
                 else:
                     server_datatype = 'float32'
@@ -630,7 +630,7 @@ class MemsArrayWS( base.MemsArray ):
                         # In this case, once the size is reached, each new entry induces the deletion of the oldest one.
 
                         # For fft data (complex64 bytes type)
-                        if self.datatype == base.MemsArray.Datatype.fft:
+                        if self.datatype == MemsArray.Datatype.fft:
                             self.queue.put(
                                 self._run_process_data_complex64( 
                                     signal_buffer,

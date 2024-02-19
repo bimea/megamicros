@@ -25,8 +25,8 @@
 Define beamformer class for beamforming
 """
 import numpy as np
-from .log import log
-from .exception import MuException
+
+from megamicros_tools.log import log
 from .antenna import Antenna
 
 DEFAULT_FRAME_LENGTH = 256
