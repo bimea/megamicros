@@ -87,7 +87,6 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 * [Audio file aligned with graph](https://community.plotly.com/t/audio-file-aligned-with-graph/60994/3)
 
-
 ## Releases
 
 ### 2.1.0
@@ -95,11 +94,13 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 * Remove the aidb application from the package in favor of the megamicros-aidb new package
 * Remove the aiboard application from the package in favor of the megamicros-aiboard new package
 * megamicros-tools becomes a dependency of megamicros
-* Remove log, mqtt, muh5, exception, previously moved in megamicros-tools 
+* Remove log, mqtt, muh5, exception, previously moved in megamicros-tools
+  * Please use in your code `from megamicros_tools.log import log` instead of `from megamicros.log import log`
+  * Same with `exception`, `mqtt` and `muh5`.
 
 ### 2.0.75
 
-  * Remove docs form this repository. Documentation is now available on its on repository (megamicros-doc)
+* Remove docs form this repository. Documentation is now available on its on repository (megamicros-doc)
 
 ### 2.0.74
 
