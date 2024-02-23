@@ -469,6 +469,9 @@ class MemsArray:
             if 'mems_sensibility' in kwargs:
                 self.setSensibility( kwargs['mems_sensibility'] )
 
+            if 'mems_position' in kwargs:
+                self.setMemsPosition( kwargs['mems_position'] )
+                
             if 'job' in kwargs:
                 self.setJob( kwargs['job'] )
 
@@ -767,7 +770,7 @@ class MemsArray:
 
         # Check unlocated microphones with location set to (0, 0, 0)
         unlocated_mems = []
-        for i, mem in enumerate( range( mems_position ) ):
+        for i, mem in enumerate( mems_position ):
             if np.all( mem==0 ) ==  True:
                 unlocated_mems.append( i )
         if len( unlocated_mems ) > 0:
@@ -1054,14 +1057,14 @@ class MemsArray:
                 # generates random data
                 if self.counter is None or ( self.counter == False or ( self.counter == True and self.counter_skip==True ) ):
                     # send data without counter state
-                    data = np.random.rand( self.frame_length, self.mems_number ) * 2 - 1
+                    data = ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ).astype( np.float32 )
                 else:
                     # add counter values
                     counter = np.array( [[i for i in range(self.frame_length)]] ).T + self.__it * self.frame_length
-                    data = np.concatenate( ( counter, ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 )
+                    data = ( np.concatenate( ( counter, ( np.random.rand( self.frame_length, self.mems_number ) * 2 - 1 ) ), axis=1 ) ).astype( np.float32 )
                 if self.status is not None and self.status == True:
                     # add status values
-                    status =np.zeros( ( self.frame_length, 1 ) )
+                    status =np.zeros( ( self.frame_length, 1 ), dtype=np.float32 )
                     data = np.concatenate(( data, status ), axis=1 )
 
                 # post them in the internal queue as float32 array
@@ -1147,11 +1150,9 @@ class MemsArray:
             output data in the format required by the user
         """
 
-        print( f'self.sensibility = {self.sensibility}' )
         # convert to int32 if requested
         if self.datatype == self.Datatype.bint32 or self.datatype == self.Datatype.int32:
             data = np.frombuffer( data, dtype=np.float32 )
-            print( f'data = {data}' )
             data = ( data / self.sensibility ).astype( np.int32 )
 
         # Save in H5 format if requested

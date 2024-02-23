@@ -167,7 +167,8 @@ setup(
         "pyaudio",
         "libusb1",
         "websockets",
-        "megamicros-tools"
+        "megamicros-tools",
+        "megamicros-aidb"
     ],
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"

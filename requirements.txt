@@ -7,3 +7,4 @@ pyaudio
 websockets
 ffmpeg
 megamicros-tools
+megamicros-aidb
