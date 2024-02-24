@@ -435,10 +435,6 @@ class Megamicros( MemsArray ):
 
         Parameters
         ----------
-        host: str
-            The remote host address
-        port: int, optional
-            The remote port (default is 9002)
         """
 
         # Init base class
@@ -484,8 +480,6 @@ class Megamicros( MemsArray ):
 
         except Exception as e:
             raise MuUsbException( f"Init settings failed: {e}")
-
-
 
 
     def __check_device( self ):

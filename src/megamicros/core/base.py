@@ -148,7 +148,7 @@ class MemsArray:
     class Queue( queue.Queue ):
         """ Thread safe queue adapted to the MemsArray class 
         
-        Original comportment is that insertion blocks once maxsize is reached, until queue items are consumed.
+        Original comportment is that of blocks insertion once maxsize is reached, until queue items are consumed.
         This implementation pop up the last element of the queue if maxsize is reached.
         """
 
@@ -388,7 +388,7 @@ class MemsArray:
 
     @property
     def queue_size( self ) -> int:
-        """ Get the max length of the queue """
+        """ Get the actual length of the queue """
         return self.__queue_size
 
     @property
@@ -405,7 +405,7 @@ class MemsArray:
     #def __init__( self, available_mems_number:int|None=None, mems_position:np.ndarray|None|None=None, unit: str|None=None ):
     def __init__( self, *args, **kwargs ):
 
-        """Create an antenna object
+        """ Create an antenna object
 
         Parameters:
         -----------
@@ -946,7 +946,7 @@ class MemsArray:
 
 
     def setQueueSize( self, queue_size: int=0 ) -> None :
-        """ Set the signal queue size. Queue size allow to skip transfers if it is overloaded.
+        """ Set the signal queue size. Queue size allows to skip transfers if it is overloaded.
         
         Default value is 0 which mean that there is no size limit
         
@@ -962,7 +962,7 @@ class MemsArray:
 
 
     def setQueueMaxSize( self, queue_maxsize: int ) -> None :
-        """ Set the signal queue max size. Beware that the current queue elements are lost
+        """ Set the signal queue max size. Beware that this method build a new queue so that the current queue elements are lost
         
         Parameters
         ----------
@@ -1033,6 +1033,17 @@ class MemsArray:
         else:
             log.warning( "Failed to stop: No current thread running" )
 
+
+    def clear( self ) -> None:
+        """ Clear the queue """
+
+        if self.__queue is None:
+            raise MuException( "No queue to clear" )
+        else:
+            log.info( " .Clearing the queue" )
+            while not self.__queue.empty():
+                self.__queue.get()
+            
 
     def _run_endding( self ) -> None:
         """ Timer callback for run stopping """
@@ -1118,6 +1129,14 @@ class MemsArray:
         except queue.Empty:
             raise StopIteration
 
+
+    def __len__( self) -> int : 
+        """ Get the number of elemnts in the queue """
+
+        if self.queue is None:
+            return 0
+        else:
+            return self.__queue.qsize()
 
 
     def _run_process_data_complex64( self, data: bytes, h5_recording: bool=False ) -> any :
