@@ -756,6 +756,9 @@ class MemsArray:
             3D array of MEMs position (shape = `(mems_number, 3)`)
         """
 
+        if type( mems_position ) is list:
+            mems_position = np.array( mems_position )
+
         if mems_position.shape[1] != 3:
             raise MuException( f"Array dimensions are not correct: shape is {mems_position.shape} but should be (mems_number, 3)" )
 

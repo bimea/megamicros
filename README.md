@@ -89,6 +89,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.1 - 2.1.2
+
+* Minor modifications
+
 ### 2.1.0
 
 * Remove the aidb application from the package in favor of the megamicros-aidb new package
