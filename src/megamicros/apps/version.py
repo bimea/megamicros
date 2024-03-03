@@ -1,4 +1,4 @@
-# megamicros.version.py logging messages process for MegaMicros libraries
+# megamicros.version.py is a simple program that prints the welcome message and the version of the program.
 #
 # Copyright (c) 2023 Sorbonne Université
 # Author: bruno.gas@sorbonne-universite.fr
@@ -22,24 +22,14 @@
 # THE SOFTWARE.
 
 
-"""
-apps/version.py
-
-Print the megamicros installed version
-
-@author: bruno.gas@sorbonne-universite.fr
-
-Documentation
--------------
-MegaMicros documentation is available on https://readthedoc.biimea.io
-"""
 
 from megamicros import __version__
+from megamicros.apps import welcome_msg
 
 def main():
-    print( __version__ )
+    print( welcome_msg )
+    print( f"megamicros {__version__}" )
 
 
 if __name__ == "__main__":
 	main()
-	

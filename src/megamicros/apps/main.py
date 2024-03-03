@@ -1,0 +1,97 @@
+# megamicros.apps.megamicros.py is the command line interface for megamicros.
+#
+# Copyright (c) 2024 Bimea
+# Author: bruno.gas@bimea.io
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+
+import sys
+sys.path.append( 'src' )
+
+import argparse
+
+from megamicros import __version__
+from megamicros.apps import welcome_msg
+from megamicros_tools.log import log
+from megamicros_tools.exception import MuException
+from megamicros.core.mu import Megamicros
+
+
+
+def arg_parse() -> tuple:
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument( "-v", "--version", help=f"show megamicros installed version", action='store_true' )
+    parser.add_argument( "--verbose", help=f"set verbose mode on", action='store_true' )
+    parser.add_argument( "--check-usb", help=f"check usb device", action='store_true' )
+    parser.add_argument( "--check-device", help=f"check megamicros device", action='store_true' )
+
+    return parser.parse_args()
+
+
+
+def main():
+
+    args = arg_parse()
+
+    if args.version:
+        print( f"megamicros {__version__}" )
+        return
+    
+    if args.verbose:
+        log.setLevel( "INFO" )
+    else:
+        log.setLevel( "ERROR" )
+
+    # Print welcome message
+    print( welcome_msg )
+    print( f"megamicros {__version__}" )
+
+    if args.check_usb:
+        print( "Checking USB..." )
+        try:
+            devices = Megamicros.check_device()
+            print( f"Found following device {devices['usb_vendor_id']:04x}:{devices['usb_vendor_product']:04x} characteristics:")
+            print( f"  - system_type: {devices['system_type']}" )
+            print( f"  - usb_vendor_id: {devices['usb_vendor_id']:04x}" )
+            print( f"  - usb_vendor_product: {devices['usb_vendor_product']:04x}" )
+            print( f"  - usb_bus_address: {devices['usb_bus_address']}" )
+            print( f"  - pluggable_mems_number: {devices['pluggable_beams_number']*8}" )
+            print( f"  - pluggable_analogs_number: {devices['pluggable_analogs_number']}" )
+
+        except MuException as e:
+            print( f"Failed: {e}")
+
+    elif args.check_device:
+        print( "Checking Megamicros device..." )
+        try:
+            available_mems, available_analogs = Megamicros.selfest()
+            print( f"Found Megamicros device:")
+            print( f"  - {len(available_mems)} available MEMs found")
+            print( f"  - {len(available_analogs)} available analogs found")
+            print( f"  - MEMs: {available_mems}" )
+            print( f"  - Analogs: {available_analogs}" )
+
+        except MuException as e:
+            print( f"Failed: {e}")
+
+
+if __name__ == "__main__":
+	main()

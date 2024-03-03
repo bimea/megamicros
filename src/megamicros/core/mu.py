@@ -29,7 +29,6 @@ Documentation
 MegaMicros documentation is available on https:#readthedoc.biimea.io
 """
 
-
 import numpy as np
 import enum
 import usb1
@@ -37,6 +36,7 @@ import libusb1
 import json
 import threading
 import time
+import platform
 from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 
 from megamicros_tools.log import log
@@ -569,12 +569,14 @@ class Megamicros( MemsArray ):
 
             # Print device characteristics
             log.info( f" .Found following device {self.__usb_vendor_id:04x}:{self.__usb_vendor_product:04x} characteristics :" )
+            log.info( f"  > OS System: {platform.system()}" )
             log.info( f"  > Bus number: {usb_device.getBusNumber()}" )
             log.info( f"  > Ports number: {usb_device.getPortNumber()}" )
             log.info( f"  > Device address: {usb_device.getDeviceAddress()} ({usb_device.getDeviceAddress():04x})" )
-            log.info( f"  > Device name: {usb_device.getProduct()}" )
-            log.info( f"  > Manufacturer: {usb_device.getManufacturer()}" )
-            log.info( f"  > Serial number: {usb_device.getSerialNumber()}" )
+            if platform.system() != 'Windows':
+                log.info( f"  > Device name: {usb_device.getProduct()}" )
+                log.info( f"  > Manufacturer: {usb_device.getManufacturer()}" )
+                log.info( f"  > Serial number: {usb_device.getSerialNumber()}" )
 
             deviceSpeed =  usb_device.getDeviceSpeed()
             if deviceSpeed  == libusb1.LIBUSB_SPEED_LOW:
@@ -1376,3 +1378,152 @@ class Megamicros( MemsArray ):
         self.__usb_handle = None
 
         return mems_power, analogs_power
+    
+
+
+    def check_device():
+        """ Check USB devices connected to the host and
+
+        This is a static methgod that do not populate class properties
+        Throw an exception if no meegamicros device is found
+        """
+
+        log.info(' .Checking usb devices...')
+
+        with usb1.USBContext() as context:
+
+            system_type = Megamicros.SystemType.unknown
+            for usb_device in context.getDeviceIterator( skip_on_error=True ):
+                device_vendor_id = usb_device.getVendorID()
+                device_product_id = usb_device.getProductID()
+                if device_vendor_id == MU32_USB2_VENDOR_ID and device_product_id == MU32_USB2_VENDOR_PRODUCT:
+                    log.info(' .Found Megamicros [Mu32-USB2] device')
+                    system_type = Megamicros.SystemType.mu32usb2
+                    usb_vendor_id = device_vendor_id
+                    usb_vendor_product = device_product_id
+                    usb_bus_address = MU32_USB2_BUS_ADDRESS
+                    pluggable_beams_number = MU32_USB2_PLUGGABLE_BEAMS_NUMBER
+                    pluggable_analogs_number = MU32_USB2_PLUGGABLE_ANALOGS_NUMBER
+                    break
+                elif device_vendor_id == MU32_USB3_VENDOR_ID and device_product_id == MU32_USB3_VENDOR_PRODUCT:
+                    log.info(' .Found Megamicros [Mu32] device')
+                    system_type = Megamicros.SystemType.mu32
+                    usb_vendor_id = device_vendor_id
+                    usb_vendor_product = device_product_id
+                    usb_bus_address = MU32_USB3_BUS_ADDRESS
+                    pluggable_beams_number = MU32_USB3_PLUGGABLE_BEAMS_NUMBER
+                    pluggable_analogs_number = MU32_USB3_PLUGGABLE_ANALOGS_NUMBER
+                    break
+                elif device_vendor_id == MU128_USB2_VENDOR_ID and device_product_id == MU128_USB2_VENDOR_PRODUCT:
+                    log.info(' .Found Megamicros [Mu128] device')
+                    system_type = Megamicros.SystemType.mu128
+                    usb_vendor_id = device_vendor_id
+                    usb_vendor_product = device_product_id
+                    usb_bus_address = MU128_USB2_BUS_ADDRESS
+                    pluggable_beams_number = MU128_USB2_PLUGGABLE_BEAMS_NUMBER
+                    pluggable_analogs_number = MU128_USB2_PLUGGABLE_ANALOGS_NUMBER
+                    break
+                elif device_vendor_id == MU256_USB3_VENDOR_ID and device_product_id == MU256_USB3_VENDOR_PRODUCT:
+                    log.info(' .Found Megamicros [Mu256] device')
+                    system_type = Megamicros.SystemType.mu256
+                    usb_vendor_id = device_vendor_id
+                    usb_vendor_product = device_product_id
+                    usb_bus_address = MU256_USB3_BUS_ADDRESS
+                    pluggable_beams_number = MU256_USB3_PLUGGABLE_BEAMS_NUMBER
+                    pluggable_analogs_number = MU256_USB3_PLUGGABLE_ANALOGS_NUMBER
+                    break
+                elif device_vendor_id == MU1024_USB3_VENDOR_ID and device_product_id == MU1024_USB3_VENDOR_PRODUCT:
+                    log.info(' .Found Megamicros [Mu1024] device')
+                    system_type = Megamicros.SystemType.mu1024
+                    usb_vendor_id = device_vendor_id
+                    usb_vendor_product = device_product_id
+                    usb_bus_address = MU1024_USB3_BUS_ADDRESS
+                    pluggable_beams_number = MU1024_USB3_PLUGGABLE_BEAMS_NUMBER
+                    pluggable_analogs_number = MU1024_USB3_PLUGGABLE_ANALOGS_NUMBER
+                    break
+                elif device_vendor_id == MU_CYPRESS_VENDOR_ID and device_product_id == MU_CYPRESS_VENDOR_PRODUCT:
+                    log.warning( f"Found Cypress device. If USB device is not present you may face to USB connection problem. Please disconnect or run usb soft disconnecting program." )
+
+            if system_type == Megamicros.SystemType.unknown:
+                raise MuUsbException( 'No Megamicros device found' )
+
+            # Try to connect to the device
+            handle = context.openByVendorIDAndProductID( 
+                usb_vendor_id, 
+                usb_vendor_product,
+                skip_on_error=True,
+            )
+
+            if handle is None:
+                raise MuUsbException( 'Failed to connect to USB device: the device may be disconnected or user not allowed to access' )
+            else:
+                log.info( f' .Connected on USB device {usb_vendor_id:04x}:{usb_vendor_product:04x}' )
+
+            # try to claim the device (even if nothing to do, just trying to see if the device is free)
+            try:
+                with handle.claimInterface( 0 ):
+                    pass
+            except Exception as e:
+                raise MuUsbException( f'USB device buzy: cannot claim: {e}' )
+
+            # Print device characteristics
+            log.info( f" .Found following device {usb_vendor_id:04x}:{usb_vendor_product:04x} characteristics :" )
+            log.info( f"  > OS System: {platform.system()}" )
+            log.info( f"  > Bus number: {usb_device.getBusNumber()}" )
+            log.info( f"  > Ports number: {usb_device.getPortNumber()}" )
+            log.info( f"  > Device address: {usb_device.getDeviceAddress()} ({usb_device.getDeviceAddress():04x})" )
+            if platform.system() != 'Windows':
+                log.info( f"  > Device name: {usb_device.getProduct()}" )
+                log.info( f"  > Manufacturer: {usb_device.getManufacturer()}" )
+                log.info( f"  > Serial number: {usb_device.getSerialNumber()}" )
+
+            deviceSpeed =  usb_device.getDeviceSpeed()
+            if deviceSpeed  == libusb1.LIBUSB_SPEED_LOW:
+                log.info( f"  > Device speed:  [LOW SPEED] (The OS doesn\'t report or know the device speed)" )
+            elif deviceSpeed == libusb1.LIBUSB_SPEED_FULL:
+                log.info( f"  > Device speed:  [FULL SPEED] (The device is operating at low speed (1.5MBit/s))" )
+            elif deviceSpeed == libusb1.LIBUSB_SPEED_HIGH:
+                log.info( f"  > Device speed:  [HIGH SPEED] (The device is operating at full speed (12MBit/s))" )
+            elif deviceSpeed == libusb1.LIBUSB_SPEED_SUPER:
+                log.info( f"  > Device speed:  [SUPER SPEED] (The device is operating at high speed (480MBit/s))" )
+            elif deviceSpeed == libusb1.LIBUSB_SPEED_SUPER_PLUS:
+                log.info( f"  > Device speed:  [SUPER PLUS SPEED] (The device is operating at super speed (5000MBit/s))" )
+            elif deviceSpeed == libusb1.LIBUSB_SPEED_UNKNOWN:
+                log.info( f"  > Device speed:  [LIBUSB_SPEED_UNKNOWN] (The device is operating at unknown speed)" )
+            else:
+                log.info( f"  > Device speed:  [?] (The device is operating at unknown speed)" )
+
+
+            # free the USB device
+            handle = None
+
+        return {
+            'system_type': system_type,
+            'usb_vendor_id': usb_vendor_id,
+            'usb_vendor_product': usb_vendor_product,
+            'usb_bus_address': usb_bus_address,
+            'pluggable_beams_number': pluggable_beams_number,
+            'pluggable_analogs_number': pluggable_analogs_number
+        }
+
+
+    def selfest():
+        """ Check megamicros devices connected to the host and perform autotest
+
+        This is a static method that run a minimalist megamicros antenna for seltesting
+        Throw an exception if no megamicros device is found or if seltest failed
+
+        Return
+        ------
+        mems_power: np.array
+            The MEMs power numpy array
+        analogs_power: array
+            The analogs power numpy array
+        """
+
+        log.info(' .Checking megamicros device...')
+
+        antenna = Megamicros()
+
+        return antenna.available_mems, antenna.available_analogs
+

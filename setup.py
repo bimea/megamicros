@@ -191,6 +191,7 @@ setup(
     # executes the function `main` from this package when invoked:
     entry_points={  # Optional
         "console_scripts": [
+            "megamicros = megamicros.apps.main:main",
             "megamicros-version = megamicros.apps.version:main",
         ],
     },

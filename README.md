@@ -89,6 +89,14 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.5 - 2.1.6
+
+* Fix compatibility problems with libusb under windows
+
+### 2.1.3 - 2.1.4
+
+* Add the `megamicros` program
+
 ### 2.1.1 - 2.1.2
 
 * Minor modifications
