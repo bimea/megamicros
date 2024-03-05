@@ -1004,7 +1004,7 @@ class Megamicros( MemsArray ):
         data = create_string_buffer( 16 )
         try:
             ndata = self.__usb_handle._controlTransfer(
-                recipient_device | type_vendor | endpoint_out, 
+                recipient_device | type_vendor | endpoint_out,
                 request, 
                 0,
                 0, 
