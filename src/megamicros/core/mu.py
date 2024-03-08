@@ -1350,8 +1350,29 @@ class Megamicros( MemsArray ):
         except Exception as e:
             raise MuUsbException( f"Selftest failed: {e}" )
 
-        # Compute mean energy        
+        # Check data length
         data = np.frombuffer( data, dtype=np.int32 )
+        if len( data ) != data_length * channels_number:
+            # Windows platform failed on this test (Zadig driver issue ?)
+            # Note that Zadig driver is based on libusb 0.1 porting for Windows while Python libusb is based on libusb 1.0
+            if platform.system() == 'Windows':
+                log.warning( f"Received {len(data)} data bytes instead of {data_length * channels_number} ({data_length} samples)" )
+                if len( data ) > data_length * channels_number:
+                    log.warning( f"Windows platform detected --> Data length will be adjusted to {data_length} samples." )
+                    data = data[:data_length * channels_number]
+                else:
+                    new_data_length = len( data ) // channels_number
+                    log.warning( f"Windows platform detected --> Data length will be adjusted to {new_data_length*channels_number} ({new_data_length} samples)." )
+                    if len( data ) % channels_number == 0:
+                        log.warning( f"Removed exactly {data_length - new_data_length} samples of {channels_number} channels each." )
+                    else:
+                        log.warning( f"Removed {data_length * channels_number - len( data )} bytes than cannot be expressed as multiples of channels or samples number." )
+                    data = data[:new_data_length * channels_number]
+                    data_length = new_data_length
+            else:
+                raise MuUsbException( f"Received {len(data)} data bytes instead of {data_length * channels_number}" )
+
+        # Compute mean energy        
         data = data.reshape( ( channels_number, data_length ), order='F' )
 
         channels_power = np.sum( data**2, axis=1 ) / data_length

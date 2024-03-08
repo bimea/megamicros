@@ -89,9 +89,9 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
-### 2.1.5 - 2.1.6
+### 2.1.5 - 2.1.7
 
-* Fix compatibility problems with libusb under windows
+* Fix compatibility problems with libusb (Zadig) under windows
 
 ### 2.1.3 - 2.1.4
 
