@@ -120,7 +120,6 @@ MU_CMD_FPGA_1					= 0xB1										# Send a 1 byte command to FPGA
 MU_CMD_FPGA_2					= 0xB2										# Send a 2 byte command to FPGA
 MU_CMD_FPGA_3					= 0xB3										# Send a 3 byte command to FPGA
 MU_CMD_FPGA_4					= 0xB4										# Send a 4 byte command to FPGA
-MU_CMD_DATATYPE					= b'\x09'									# Set datatype
 
 # MemgaMicro hardware code values																	
 MU_CODE_DATATYPE_INT32			= b'\x00'									# Int32 datatype code
