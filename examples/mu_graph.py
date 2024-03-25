@@ -15,6 +15,14 @@ This program comes with ABSOLUTELY NO WARRANTY; for details see the source code\
 This is free software, and you are welcome to redistribute it\n \
 under certain conditions; see the source code for details.\n' + '-'*20
 
+# you need pyqtgraph:
+# > pip install pyqtgraph
+# > pip install pyqt6
+
+# If you are runing within a local copy of the repository, you should run from the example directory:
+# > python mu_graph.py -h
+
+
 DEFAULT_DURATION = 1
 FRAME_LENGTH = 512
 DEFAULT_MEMS_NUMBER = 1
