@@ -53,6 +53,8 @@ def main():
         counter_skip=False, 
         status=False,
         buffer_length=FRAME_LENGTH,
+        queue_maxsize=32,
+        queue_size=1,
     )
 
     # Start and set the timer period in milliseconds
