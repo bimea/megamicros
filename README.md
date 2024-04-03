@@ -89,6 +89,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.10
+
+* Add system_type property to Mµ antenna systems
+
 ### 2.1.5 - 2.1.9
 
 * Fix compatibility problems with libusb (Zadig) under windows

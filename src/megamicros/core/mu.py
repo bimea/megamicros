@@ -243,6 +243,10 @@ class Megamicros( MemsArray ):
     __fpga_previous_counter_state: int = 0
 
     @property
+    def system_type( self ) -> SystemType:
+        return self.__system_type
+
+    @property
     def pluggable_beams_number( self ) -> int:
         return self.__pluggable_beams_number
 
