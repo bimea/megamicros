@@ -243,6 +243,10 @@ class Megamicros( MemsArray ):
     __fpga_previous_counter_state: int = 0
 
     @property
+    def system_type( self ) -> SystemType:
+        return self.__system_type
+
+    @property
     def start_trigg_status( self ) -> int:
         return self.__start_trigg_status
 
