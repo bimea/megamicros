@@ -243,6 +243,14 @@ class Megamicros( MemsArray ):
     __fpga_previous_counter_state: int = 0
 
     @property
+    def pluggable_beams_number( self ) -> int:
+        return self.__pluggable_beams_number
+
+    @property
+    def pluggable_analogs_number( self ) -> int:
+        return self.__pluggable_analogs_number
+    
+    @property
     def start_trigg_status( self ) -> int:
         return self.__start_trigg_status
 
@@ -359,19 +367,14 @@ class Megamicros( MemsArray ):
         # Set buffer duration estimation
         self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
 
-    def setCounter( self, counter: bool ) -> None :
+    def setCounter( self ) -> None :
         """ Activate counter
 
         Overload the parent method for adding the actual buffer length according the channels number
-        
-        Parameters:
-        -----------
-        counter : bool
-            True for activating the counter
         """
 
         # Set parent property
-        super().setCounter( counter )
+        super().setCounter()
 
         # Set buffer duration estimation
         self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
@@ -380,11 +383,6 @@ class Megamicros( MemsArray ):
         """ Deactivate counter
 
         Overload the parent method for adding the actual buffer length according the channels number
-        
-        Parameters:
-        -----------
-        counter : bool
-            True for activating the counter
         """
 
         # Set parent property
@@ -393,19 +391,14 @@ class Megamicros( MemsArray ):
         # Set buffer duration estimation
         self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
 
-    def setStatus( self, status: bool ) -> None :
+    def setStatus( self ) -> None :
         """ Activate status
 
         Overload the parent method for adding the actual buffer length according the channels number
-        
-        Parameters:
-        -----------
-        status : bool
-            True for activating the status
         """
 
         # Set parent property
-        super().setStatus( status )
+        super().setStatus()
 
         # Set buffer duration estimation
         self.__usb_buffer_words_length = self.usb_buffer_length * self.channels_number
@@ -445,6 +438,13 @@ class Megamicros( MemsArray ):
 
         # Check USB megamicros device
         self.__check_device()
+
+        # Prevent recursive call when __self_test is called on Windows platform
+        # On windows platform '__self_test' creates a new Megamicros object which call '__self_test' again
+        if 'no_check' in kwargs and kwargs['no_check'] == True:
+            self.setAvailableMems( [ i for i in range( self.pluggable_beams_number * MU_BEAM_MEMS_NUMBER ) ] )
+            self.setAvailableAnalogs( [ i for i in range( self.pluggable_analogs_number) ] )
+            return
 
         # Autotest for getting antenna properties
         mems_power, analogs_power = self.__selftest()
@@ -1302,6 +1302,55 @@ class Megamicros( MemsArray ):
             The analogs power numpy array
         """
 
+        # Compute MEMs energy using the bulk transfer method because the bulkRead methgod does not work on Windows
+        if platform.system() == 'Windows':
+
+            log.info( f" .detected windows OS: using bulk transfer method for selftest..." )
+            antenna = Megamicros( no_check=True )
+            mems_number = self.__pluggable_beams_number * MU_BEAM_MEMS_NUMBER
+            analogs_number = self.__pluggable_analogs_number
+            channels_number = mems_number + analogs_number + 2
+            antenna.run(      
+                mems=[i for i in range(mems_number)],
+                analogs=[i for i in range(analogs_number)],
+                duration=1,
+                sampling_frequency=50000,
+                counter = True,
+                counter_skip=False, 
+                status=True,
+                buffer_length=256,
+            )
+
+            # Get signals
+            signals = np.ndarray( (antenna.channels_number, 0 ) )
+            for data in antenna:
+                signals = np.concatenate( ( signals, data ), axis=1 )
+
+            signal_length = signals.shape[1]
+
+            power = np.sum( signals**2, axis=1 ) / signal_length
+            mems_power = power[1:mems_number+1]
+            if analogs_number > 0:
+                analogs_power = power[mems_number+1:mems_number+analogs_number+1]
+            else:
+                analogs_power = np.array([])
+
+            log.info( f" .Autotest results:" )
+            log.info( f"  > equivalent recording time is: {signal_length / antenna.sampling_frequency} " )
+            log.info( f"  > Received {signal_length*channels_number*4} data bytes: {signal_length} samples on {channels_number} channels")
+            log.info( f"  > detected {len( np.where( mems_power > 0 )[0] )} active MEMs: {np.where( mems_power > 0 )[0]}" )
+            if analogs_number > 0:
+                log.info( f"  > detected {len( np.where( analogs_power > 0 )[0] )} active analogs: {np.where( analogs_power > 0 )[0]}" )
+            else:
+                log.info( f"  > detected no active analogs" )
+            log.info( f"  > detected counter channel with values from {int(signals[0][0])} to {int(signals[0][-1])}" )
+            log.info( f"  > estimated data lost: {int(signals[0][-1] - signals[0][0] + 1 - signal_length)} samples" )
+            log.info( f"  > detected status channel with values {int(signals[channels_number-1][0])} <-> {int(signals[channels_number-1][-1])}" )
+            log.info( f" .Selftest endded successfully" )
+
+            return mems_power, analogs_power
+
+        # Performs bulkRead on other platforms
         if self.__system_type == self.SystemType.unknown:
             raise MuUsbException( 'Cannot perform selftest: USB device not connected' )
         
