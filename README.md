@@ -89,6 +89,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.11
+
+* Fix the issue of H5 file bad recording
+
 ### 2.1.10
 
 * Add system_type property to Mµ antenna systems

@@ -790,20 +790,28 @@ class Megamicros( MemsArray ):
 
         data = np.reshape( data, ( self.usb_buffer_length, self.channels_number ) ).T
 
+        # Push data and save in H5 file if requested
+        self.queue.put(
+            self._run_process_data_int32( 
+                data,
+                h5_recording = self.h5_recording
+            )
+        )
+
         # Remove counter signal if requested by user
-        if self.counter and self.counter_skip:
-            data = data[1:,:]
+        # if self.counter and self.counter_skip:
+        #    data = data[1:,:]
 
         # Call user callback processing function if any.
         # Not yet implementd..
         # ...
 
         # Queue size is limited and filled -> delete older element before queuing new:  
-        if self.queue_size > 0 and self.queue.qsize() >= self.queue_size:
-            self.queue.get()
+        #if self.queue_size > 0 and self.queue.qsize() >= self.queue_size:
+        #    self.queue.get()
 
         # Push data and timestamp in the object signal queue
-        self.queue.put( data )
+        #self.queue.put( data )
 
         # Resubmit transfer once data is processed and while recording mode is on
         if( self.running ):

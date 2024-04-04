@@ -203,6 +203,7 @@ class MemsArray:
     __running: bool = False
 
     # H5 attributes
+    __h5_filename: str = ''
     __h5_recording: bool = DEFAULT_H5_RECORDING
     __h5_rootdir: str = DEFAULT_H5_DIRECTORY
     __h5_dataset_duration: int = DEFAULT_H5_SEQUENCE_DURATION
@@ -250,6 +251,11 @@ class MemsArray:
     def h5_recording( self ) -> bool:
         """ Get the H5 recording flag """
         return self.__h5_recording
+
+    @property
+    def h5_filename( self ) -> str:
+        """ Get the H5 default filename if set by the user (default is auto generated)"""
+        return self.__h5_filename
 
     @property
     def h5_rootdir( self ) -> str:
@@ -498,6 +504,9 @@ class MemsArray:
             if 'frame_length' in kwargs:
                 self.setFrameLength( kwargs['frame_length'] )
 
+            if 'h5_filename' in kwargs:
+                self.setH5Filename( kwargs['h5_filename'] )
+
             if 'h5_recording' in kwargs:
                 self.setH5Recording() if kwargs['h5_recording'] else self.unsetH5Recording()
 
@@ -592,6 +601,10 @@ class MemsArray:
             raise MuException( f"Unknown requested job '{self.job}'" )
         else:
             self.__job = job
+
+    def setH5Filename( self, filename ) -> None:
+        """ Set the H5 filename """
+        self.__h5_filename = filename
 
     def unsetH5Recording( self ) -> None :
         """ Set the H5 recording off """
@@ -1281,6 +1294,52 @@ class MemsArray:
             data = np.ndarray.tobytes( data )
 
         return data
+    
+    def _run_process_data_int32( self, data: bytes, h5_recording: bool=False ) -> any :
+        """ Process data in the right format before sending it to the internal queue.
+        Data are also saved in H5 file if requested.
+        
+        Parameter
+        ---------
+        data: np.ndarray
+            input data. Format is int32 as numpy 2D array (frame_length x channels_number x frame_length)
+        Return: bytes|np.ndarray
+            output data in the format required by the user
+        """
+
+        # Save in H5 format if requested
+        if h5_recording and self.__h5_started :
+            try:
+                # If the counter is ON but skipping is ON, it means that incoming data include counter state.
+                # Remove the counter state from data  
+                if self.counter and self.counter_skip:
+                    data = data[1:,:]
+
+                # save at the time it was at the transfer starting
+                self.__h5_write_mems( data, time.time() - self.frame_duration )
+
+            except Exception as e:
+                raise MuException( f"H5 writing process failed: {e}. Stop running." )
+                
+
+        # User wants data as numpy array of int32 -> nothing to do
+        if self.datatype == self.Datatype.int32:
+            pass
+
+        # User wants data as binary buffer of int32
+        elif self.datatype == self.Datatype.bint32:
+            data = np.ndarray.tobytes( data )
+
+        # User wants data as numpy array of float32 
+        elif self.datatype == self.Datatype.float32:
+            data = data.astype(np.float32) * self.sensibility
+
+        # User wants data as binary buffer of float32
+        else:
+            data = data.astype(np.float32) * self.sensibility
+            data = np.ndarray.tobytes( data )
+
+        return data
 
 
     def h5_start( self ):
@@ -1355,7 +1414,7 @@ class MemsArray:
 
     def __h5_init_file( self ):
         """
-        Define the H5 file name (form is muh5-YYYYMMDD-hhmmss.h5), and open it in create/write mode
+        Define the H5 file name (form is muh5-YYYYMMDD-hhmmss.h5) if no file name given, and open it in create/write mode
         Set the H5 file internal structure by setting the 'muh5' root group attributes
         Dataset are stored as 2-dimensional np.ndarray with shape (mems_number, samples_number)
         """
@@ -1365,7 +1424,10 @@ class MemsArray:
         timestamp0 = date.timestamp()
         date0str = datetime.strftime(date, '%Y-%m-%d %H:%M:%S.%f')
         abs_path = ospath.abspath( self.h5_rootdir )
-        filename = ospath.join( abs_path, 'mu5h-' + f"{date.year}{date.month:02}{date.day:02}-{date.hour:02}{date.minute:02}{date.second:02}" + '.h5' )
+        if self.__h5_filename is None or self.__h5_filename == '':
+            filename = ospath.join( abs_path, 'mu5h-' + f"{date.year}{date.month:02}{date.day:02}-{date.hour:02}{date.minute:02}{date.second:02}" + '.h5' )
+        else:
+            filename = ospath.join( abs_path, self.__h5_filename )
 
         # open file in write mode
         self.__h5_current_file = h5py.File( filename, "w" )

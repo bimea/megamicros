@@ -102,14 +102,14 @@ class MemsArrayH5( MemsArray ):
     @property
     def start_time( self ) -> int:
         """
-        Get the start time choosen by user to start H5 file peocessing
+        Get the start time choosen by user to start H5 file processing
         """
         return self.__start_time
     
     @property
     def real_time( self ) -> int:
         """
-        Get the start time choosen by user to start H5 file peocessing
+        Check whether the H5 file is played in realtime or not
         """
         return self.__real_time
 
@@ -531,10 +531,6 @@ class MemsArrayH5( MemsArray ):
                 raise e
 
         return data
-
-
-
-
 
 
     def run( self, *args, **kwargs ) :
