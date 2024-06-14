@@ -49,7 +49,7 @@ from megamicros import __version__
 from megamicros.apps import welcome_msg
 
 DEFAULT_MQTT_HOST = 'mqtt.bimea.tech'
-DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-1/status'
+DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-2/status'
 
 def arg_parse() -> dict:
 
@@ -104,13 +104,18 @@ def on_message( client, userdata, msg):
     ax.scatter( mems_position[:,0], mems_position[:,1], mems_position[:,2] )
     ax.scatter( locations_position[:,0], locations_position[:,1], locations_position[:,2] )
     ax = fig.add_subplot( 132, projection='3d' )
-    ax.scatter( mems_position[:,0], mems_position[:,1], mems_position[:,2] )
+
+    ax.set_xlabel( 'X' )
+    ax.set_ylabel( 'Y' )
+    ax.scatter( mems_position[:,0], mems_position[:,1], mems_position[:,2], c=np.arange(32) )
     fig.show()
     car = input( 'Press any key to continue' )
 
     plt.figure()
     BFE = np.reshape( BFE, (50, 50) )
-    plt.imshow( BFE, origin='lower')
+    plt.xlabel('width')
+    plt.ylabel('height')
+    plt.imshow( BFE, origin='lower', aspect='equal')
     plt.show()
     print(BFE)
     car = input( 'Press any key to continue' )
