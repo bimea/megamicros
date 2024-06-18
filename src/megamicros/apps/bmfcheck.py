@@ -49,7 +49,7 @@ from megamicros import __version__
 from megamicros.apps import welcome_msg
 
 DEFAULT_MQTT_HOST = 'mqtt.bimea.tech'
-DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-2/status'
+DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-1/status'
 
 def arg_parse() -> dict:
 
@@ -193,13 +193,13 @@ def on_message( client, userdata, msg):
         fig2.show()
 
         # Print matrix distances
-        fig3 = plt.figure()
-        print( "D=", D)
-        print( "D.shape=", np.shape(D) )
-        print( "Distance min: ", np.min( D ) )
-        print( "Distance max: ", np.max( D ) )
-        plt.pcolormesh( D )
-        fig3.show()
+        #fig3 = plt.figure()
+        #print( "D=", D)
+        #print( "D.shape=", np.shape(D) )
+        #print( "Distance min: ", np.min( D ) )
+        #print( "Distance max: ", np.max( D ) )
+        #plt.pcolormesh( D )
+        #fig3.show()
 
         input( 'Press any key to continue' )
 
