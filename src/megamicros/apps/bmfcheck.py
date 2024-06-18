@@ -49,7 +49,7 @@ from megamicros import __version__
 from megamicros.apps import welcome_msg
 
 DEFAULT_MQTT_HOST = 'mqtt.bimea.tech'
-DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-1/status'
+DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-2/status'
 
 def arg_parse() -> dict:
 
@@ -83,15 +83,62 @@ def arg_parse() -> dict:
 
 def on_message( client, userdata, msg):
     
+    log.info( f" .Received message on topic {msg.topic}" )
     message = json.loads( msg.payload.decode() )
 
     report = None
     if 'content' in message and 'report' in message['content']:
         report = json.loads( message['content'] )['report']
     else:
+        log.info( f" .No `report` entry in message: waiting for next message...")
         return
     
-    if report['app'] == 'bmfcheck':
+    log.info( f" .Received [{report['app']}] report" )
+    if report['app'] == 'check':
+        try:
+            available_mems_number = report['available_mems_number']
+            available_mems = report['available_mems']
+            counter_first = report['counter_first']
+            counter_last = report['counter_last']
+            samples_number_counted = report['samples_read']
+            transfers_number = report['transfers_number']
+            counter = report['counter']
+            elapsed_time = report['elapsed_time']
+            mean_completion_time = report['mean_completion_time']
+            limit_completion_time = report['limit_completion_time']
+            energy = report['energy']
+            max_energy_index = report['max_energy_index']
+        except KeyError as e:
+            log.error( f"While reading report: KeyError: {e}" )
+            log.info( f" .Stop reporting" )
+            return
+
+        print( "-"*20)
+        print( f"Report for [{report['app']}] IOT server application:" )
+        print( f" > available_mems_number: {available_mems_number}" )
+        print( f" > available_mems: {available_mems}" )
+        print( f" > counter_first: {counter_first}" )
+        print( f" > counter_last: {counter_last}" )
+        print( f" > samples_number_counted: {samples_number_counted}" )
+        print( f" > transfers_number: {transfers_number}" )
+        print( f" > elapsed_time: {elapsed_time/1000} ms" )
+        print( f" > mean_completion_time: {mean_completion_time} µs" )
+        print( f" > limit_completion_time: {limit_completion_time/1000} ms" )
+        print( f" > min energy: {np.max(np.array( energy ))}" )
+        print( f" > max energy: {np.min(np.array( energy ))}" )
+        print( f" > max_energy_index: {max_energy_index}" )
+        print( "-"*20)
+        log.info( f" .End of report" )
+
+        fig = plt.figure()
+        ax = fig.add_subplot( 111 )
+        ax.bar( np.arange( available_mems_number ), energy )
+        fig.show()
+        input( 'Press any key to continue' )
+        fig.clear()
+        plt.close()
+
+    elif report['app'] == 'bmfcheck':
 
         BFE = np.array( report['BFE'] )
         mems_position =np.array( report['mems_position'] )
@@ -284,28 +331,34 @@ def on_message( client, userdata, msg):
 
         plt.close( 'all' )
 
+    log.log( 15, f"Received message {msg.topic}: {message}" )
 
 def main():
-        
+
+    log.setLevel( "INFO" )
     args = arg_parse()
 
     print( welcome_msg )
 
     # Connect to MQTT broker
+    log.info( f" .Connecting to MQTT broker {args['host']}...")
     client = mqtt.MqttClient( host=args['host'], name='bmfcheck' )
     if not client.is_connected():
         log.error( "Failed to connect to MQTT broker" )
+        log.info( " .Exiting..." )
         exit(1)
+    log.info( f" .Connected to MQTT broker {args['host']}" )
 
     # Subscribe to MQTT topic
     client.subscribe( args['topic'] )
-    log.info( f"Subscribed to topic {args['topic']}" )
+    log.info( f" .Subscribed to topic {args['topic']}" )
 
     # run callback function
     try:
         client.run( args['topic'], on_message )
     except KeyboardInterrupt:
-        print( "\nExiting..." )
+        print( "\n" )
+        log.info( f" .Received KeyboardInterrupt. Gracefully exiting..." )
         exit(0)
 
 
