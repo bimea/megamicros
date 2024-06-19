@@ -49,7 +49,7 @@ from megamicros import __version__
 from megamicros.apps import welcome_msg
 
 DEFAULT_MQTT_HOST = 'mqtt.bimea.tech'
-DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-2/status'
+DEFAULT_MQTT_SUB_TOPIC = 'romille/mater/1/device/mu32/poc2-1/status'
 
 def arg_parse() -> dict:
 
