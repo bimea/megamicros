@@ -56,7 +56,7 @@ MU32_USB3_VENDOR_ID			            = 0xFE27                # Mu32 Usb-3 vendor Id
 MU32_USB3_VENDOR_PRODUCT	            = 0xAC03                # Mu32 Usb-3 vendor product
 MU32_USB3_BUS_ADDRESS		            = 0x81                  # Usb bus address (seen 0x82 in some python libraries but the doc says 0x81...)
 MU32_USB3_PLUGGABLE_BEAMS_NUMBER        = 4						# Max number of pluggable beams 
-MU32_USB3_PLUGGABLE_ANALOGS_NUMBER      = 0                     # Max number of connectable annalogs
+MU32_USB3_PLUGGABLE_ANALOGS_NUMBER      = 2                     # Max number of connectable annalogs
 
 # Mu128 USB-2 properties
 MU128_USB2_VENDOR_ID		            = 0xFE27                # Mu128 Usb-2 vendor Id

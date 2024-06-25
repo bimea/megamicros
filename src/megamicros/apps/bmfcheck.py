@@ -240,11 +240,10 @@ def on_message( client, userdata, msg):
 
         input( 'Press any key to continue' )
 
-    elif report['app'] == 'h5bmfrun':
+    elif report['app'] == 'h5bfe':
 
         # Get data from server
         BFE = np.array( report['BFE'] )
-        max_energy_index = report['max_energy_index']
         mems_number = report['mems_number']
         mems_position =np.array( report['mems_position'] )
         locations_position = np.array( report['locations_position'] )
@@ -254,6 +253,9 @@ def on_message( client, userdata, msg):
         n_y = report['n_depth']
         sampling_frequency = report['sampling_frequency']
         frame_length = report['frame_length']
+        dynamic = report['dynamic']
+        mean_energy = report['mean_energy']
+        # energy_profile = report['energy_profile']
 
         # show antenna and locations
         fig = plt.figure()
@@ -295,6 +297,17 @@ def on_message( client, userdata, msg):
         ax.set_ylabel( 'y [m]' )
         ax.invert_yaxis()
         fig2.show()
+
+        fig3 = plt.figure()
+        ax = fig3.add_subplot(211)
+        ax.plot( dynamic )
+        ax.set_xlabel( 'time [ms]' )
+        ax.set_ylabel( 'dynamic [DJ]' )
+        ax2 = fig3.add_subplot(212)
+        ax2.plot( mean_energy )
+        ax2.set_xlabel( 'time [ms]' )
+        ax2.set_ylabel( 'energy [J]' )
+        fig3.show()
 
         input( 'Press any key to continue' )
 

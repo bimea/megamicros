@@ -23,7 +23,7 @@ under certain conditions; see the source code for details.\n' + '-'*20
 # > python mu_graph.py -h
 
 
-DEFAULT_DURATION = 1
+DEFAULT_DURATION = 0
 FRAME_LENGTH = 512
 DEFAULT_MEMS_NUMBER = 1
 DEFAULT_SAMPLING_FREQUENCY = 50000
@@ -38,6 +38,10 @@ def main():
     mems = [i for i in range(mems_number)]
     antenna.setAvailableMems( mems )
 
+    analogs = [0, 1]
+    antenna.setAvailableAnalogs( analogs )
+    analogs_number = len( analogs )
+
     # init PyQtgraph
     win = pg.GraphicsLayoutWidget(show=True, title="Plotting database signals")
     win.resize(1000,600)
@@ -46,15 +50,16 @@ def main():
     graph = win.addPlot(title="Microphones")
     graph.setYRange(-5,5, padding=0, update = False)
     curves = []
-    for s in range( mems_number ):
+    for s in range( mems_number + analogs_number ):
         curves.append( graph.plot(pen='y' ) )
 
     # Set the Qt timer
     timer = QtCore.QTimer()
-    timer.timeout.connect( lambda: plot_on_the_fly( antenna, curves ) )
+    timer.timeout.connect( lambda: plot_on_the_fly_analogs( antenna, curves ) )
 
     antenna.run( 
         mems=mems,						                        # activated mems
+        analogs=analogs,						                      # activated analogs
         duration=duration,
         sampling_frequency=sampling_frequency,					# sampling frequency
         counter = False,
@@ -95,6 +100,26 @@ def plot_on_the_fly( antenna: Megamicros, curves ):
     for s in range( antenna.mems_number ):
         curves[s].setData( t, ( data[s,:] * antenna.sensibility ) + s - antenna.mems_number/2 )
 
+
+def plot_on_the_fly_analogs( antenna: Megamicros, curves ):
+    """ Get last queued signal and plot it
+
+    Parameters
+    ----------
+    antenna: MemsArrayWS
+        The remote antenna
+    curves: 
+        PyQtGraph curves
+    """
+
+    try:
+        data = antenna.queue.get( block=True, timeout=1 )
+    except Empty:
+        return
+
+    t = np.arange( np.size( data, 1 ) )/antenna.sampling_frequency
+    for s in range( antenna.channels_number ):
+        curves[s].setData( t, ( data[s,:] * antenna.sensibility ) + s - antenna.channels_number/2 )
 
 
 def arg_parse() -> tuple:
