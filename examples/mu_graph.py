@@ -38,7 +38,7 @@ def main():
     mems = [i for i in range(mems_number)]
     antenna.setAvailableMems( mems )
 
-    analogs = [0, 1]
+    analogs = [0, 1, 2, 3]
     antenna.setAvailableAnalogs( analogs )
     analogs_number = len( analogs )
 
