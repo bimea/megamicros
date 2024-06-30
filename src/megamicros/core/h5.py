@@ -534,7 +534,7 @@ class MemsArrayH5( MemsArray ):
 
 
     def run( self, *args, **kwargs ) :
-        """ The main run method that run the remote antenna """
+        """ The main run method that runs the remote antenna """
 
         if len( args ) > 0:
             raise MuH5Exception( f"Run() method does not accept direct arguments" )
