@@ -72,6 +72,118 @@ class MuBmfException( MuException ):
 
 
 class Beamformer:
+    """ Abstract base class for beamformers """
+
+    __mems_position: np.ndarray                         # 3D MEMs absolute positions in meters
+    __locations: np.ndarray                             # 3D absolute positions of locations in the space where the beamforming is computed
+    __sampling_frequency: float                         # Input sampling frequency
+    __frame_length: int                                 # Input frame length in samples
+
+    @property
+    def mems_position( self ) -> np.ndarray:
+        """ Get 3D absolute MEMS positions """
+
+        return self.__mems_position
+
+    @property
+    def locations( self ) -> np.ndarray:
+        """ Get 3D absolute location's positions """
+        
+        return self.__locations
+
+    @property
+    def sampling_frequency( self ) -> float:
+        """ Sampling frequency """
+        
+        return self.__sampling_frequency
+    
+    @property
+    def frame_length( self ) -> int:
+        """ Sampling frequency """
+        
+        return self.__frame_length
+    
+
+    def setMemsPosition( self, mems_position: np.ndarray ) -> None:
+        """ Set the 3D absolute MEMs positions """
+
+        if np.shape( mems_position )[1] != 3:
+            raise MuBmfException( f"bad dimensions ({np.shape( mems_position )}). Mems positions should be a 3D data array (shape=(mems_number, 3))" )
+        
+        log.info( f' .Set beamformer on a {np.shape( mems_position )[0]} MEMs antenna' )
+
+        self.__mems_position = mems_position
+
+
+    def setLocations( self, locations: np.ndarray ) -> None:
+        """ Set the 3D absolute MEMs positions """
+
+        if np.shape( locations )[1] != 3:
+            raise MuBmfException( f"bad dimensions ({np.shape( locations )}). `Locations` should be a 3D data array (shape=(mems_number, 3))" )
+        
+        log.info( f' .Set {np.shape( locations )[0]} beamforming locations' )
+
+        self.__locations = locations
+
+
+    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
+
+        self.setMemsPosition( mems_position )
+        self.__sampling_frequency = sampling_frequency
+        self.setLocations( locations )
+        self.__frame_length = frame_length
+
+
+class BeamformerFDAS( Beamformer ):
+
+    __fmin: float
+    __fmax: float
+
+    __D: np.ndarray                             # Inter mems/locations distance matrix
+    __H: np.ndarray                             # beamforming matrix
+    __BFE: np.ndarray                           # Beamforming energy
+    __BFSpec: np.ndarray                        # Complex spectrum computed on all beams (locations_number x frequencies_number)
+    # __fft: McFFT
+    
+
+    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int, fmin: float = None, fmax: float = None ):
+        super().__init__( mems_position, locations, sampling_frequency, frame_length )
+
+        self.__fmin = fmin
+        self.__fmax = fmax
+
+        locations_number = np.shape( self.__locations )[0]
+        mems_number = np.shape( self.__mems_position )[0]
+        fft_win_size = self.__frame_length
+
+        # time axis in seconds
+        t = np.arange( fft_win_size )/self.__sampling_frequency
+
+        # frequency axis in Hz
+        f = np.fft.rfftfreq( fft_win_size, 1/self.__sampling_frequency )
+
+        # frequencies number
+        freq_number = np.fft.rfftfreq( fft_win_size, 1/self.sampling_frequency ).size
+
+        # Init distance matrix
+        log.info( f" .Build distances matrix D ({locations_number} x {mems_number})" ) 
+        self._D = np.ndarray( (locations_number, mems_number), dtype=float )
+        for s in range( locations_number ):
+            for m in range( mems_number ):
+                self._D[s, m] = np.linalg.norm( np.array( self.__mems_position[m] ) - self.__locations[s] )
+
+        # Allocate and build the H complex transfer function matrix (preformed channels)
+        log.info( f" .Build preformed channels matrix H ({freq_number} x {locations_number} x {mems_number})" ) 
+        self._H = np.outer( f, self._D ).reshape( freq_number, locations_number, mems_number )/SOUND_SPEED
+        self._H = np.exp( 1j*2*np.pi*self._H )
+
+        # ....
+        # >>>>>>>>>>>>>>>>>
+
+
+ 
+
+class Beamformer0:
     """ Base class for beamformers"""
 
     # bmf properties
@@ -94,15 +206,7 @@ class Beamformer:
     __bw_range_end: int | None                  = None  # Bandwidth end frequency range 
     __bw_length: int | None                     = None  # Bandwidth length in samples number
 
-    def setMemsPosition( self, mems_position: np.ndarray ) -> None:
 
-        if np.shape( mems_position )[1] != 3:
-            raise MuBmfException( f"bad dimensions ({np.shape( mems_position )}). Mems positions should be a 3D data array (shape=(mems_number, 3))" )
-        
-        log.info( f' .Set beamformer on a {np.shape( mems_position )[0]} MEMs antenna' )
-
-        self.__mems_position = mems_position
-        self.__mems_number = mems_position.shape[0]
 
 
     def setSamplingFrequency( self, sr: float ) -> None:
