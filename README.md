@@ -89,6 +89,10 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.12
+
+* Fix `get()` method error when getting signals from H5 file
+
 ### 2.1.11
 
 * Fix the issue of H5 file bad recording

@@ -459,8 +459,103 @@ class MemsArrayH5( MemsArray ):
             raise MuH5Exception( f"Run failed on settings: {e}")
         
 
-    def get( self, channels:list|tuple = (0,) ) -> any:
-        """ Get H5 signal in one shot
+    def get( self ) -> any:
+        """ Get selected channels from H5 file in one shot
+
+        Parameters
+        ----------
+        channels: list|tuple|np.array
+            list of channels to get
+        return: np.array
+            the signal as a numpy array
+        """
+
+        # Run over H5 files
+        for index, file in enumerate( self.files ):
+            self.__current_filename = file
+            log.info( f" .Processing {self.__current_filename} H5 file... " )
+
+            try:
+                with h5py.File( self.__current_filename, 'r' ) as self.__current_file:
+
+                    if 'muh5' in self.__current_file:
+                        group = self.__current_file['muh5']
+                        meta = dict( zip( group.attrs.keys(), group.attrs.values() ) )
+
+                        # Force datatype settings to that of H5 file because we do not provide yet a way to change it 
+                        self.setDatatype( meta['datatype'] )
+                        samples_number = self.dataset_length * self.dataset_number
+
+                        # Verbose
+                        log.info( f" .{self.file_duration}s ({(self.file_duration/60):.2f}min) of data in H5 file" )
+                        log.info( f" .Whether counter is available: {self.counter}" )
+                        log.info( f" .{len( self.available_mems )} available mems" )
+                        log.info( f" .{len( self.available_analogs )} available analogic channels" )
+                        log.info( f" .Total available channels number is {self.available_channels_number}" )
+                        log.info( f" .Total actual channels number is {self.channels_number}" )
+                        log.info( f" .Sampling frequency: {self.sampling_frequency} Hz" )
+                        log.info( f" .Active MEMs: {self.mems}" )
+                        log.info( f" .Active analogic channels: {self.analogs}" )
+                        log.info( f" .Whether counter is active: {self.counter and not self.counter_skip}" )
+
+                        log.info( f" .Datatype: {str( self.datatype )}" )
+                        if meta['compression']:
+                            log.info( f" .Compression mode: ON" )
+                        else:
+                            log.info( f" .compression mode: OFF" )
+                        
+                        # Set the mask for mems and analogs selecting
+                        # - mask: the binary mask for selected channels to get
+                        # - masking: True if somme channels are masked, False for complete copy
+                        # - channels_number: selected microphones + selected analogs + counter if available
+                        mask = list( np.isin( self.available_mems, self.mems ) )
+
+                        # Add analog channels if any
+                        if self.available_analogs_number > 0 and self.analogs_number > 0:
+                            mask = mask + list( np.isin( self.available_analogs, self.analogs ) )
+
+                        # Add or remove counter if counter is in H5 file 
+                        if self.counter:
+                            # User does not want to get counter
+                            if self.counter_skip:
+                                mask = [False] + mask
+                            # User want to get counter values
+                            else:
+                                mask = [True] + mask
+
+                        # Add or remove status if status is in H5 file
+                        if 'status' in meta and meta['status'] == True:
+                            # User want the status channel
+                            if self.status:
+                                mask = mask + [True]
+                            else:
+                            # He doesn't
+                                mask = mask + [False]
+
+                        # Total channels number and masking flag
+                        channels_number = sum( mask )
+                        masking = channels_number != len(mask)
+
+                        data = np.zeros( (channels_number, samples_number), dtype=np.int32 )
+                        for dataset_index in range( self.dataset_number ):
+                            dataset = self.__current_file['muh5/' + str( dataset_index ) + '/sig']
+                            if masking:
+                                data[:,dataset_index*self.dataset_length:(dataset_index+1)*self.dataset_length] = np.array( dataset[:] )[mask,:]
+                            else:
+                                data[:,dataset_index*self.dataset_length:(dataset_index+1)*self.dataset_length] = np.array( dataset[:] )                        
+        
+            except Exception as e:
+                log.error( f"get failed on Exception ({type(e).__name__}): {e}" )
+                raise e
+            except :
+                log.error( f"get failed on unexpected unknown Exception ({type(e).__name__}): {e}" )
+                raise e
+
+        return data
+
+
+    def get_old( self, channels:list|tuple = (0,) ) -> any:
+        """ Get channels from H5 file in one shot
 
         Parameters
         ----------
@@ -509,7 +604,7 @@ class MemsArrayH5( MemsArray ):
 
                         if max( channels ) >= self.channels_number:
                             raise MuH5Exception( f"Error: requested channel {max( channels )} is out of range" )
-                        
+
                         # Set the mask for mems and analogs selecting
                         mask = list( np.isin( self.available_mems, channels ) )
                         masking = len( mask ) != self.channels_number
@@ -531,7 +626,7 @@ class MemsArrayH5( MemsArray ):
                 raise e
 
         return data
-
+    
 
     def run( self, *args, **kwargs ) :
         """ The main run method that runs the remote antenna """
