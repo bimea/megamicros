@@ -23,10 +23,41 @@
 
 """Define beamformer classes for beamforming
 
+Usage
+-----
+import megamicros.bmf
+
+Attributes
+----------
+
+__mems_position: np.ndarray()
+    3D MEMs positions from the antenna center
+    
+__sampling_frequency: float
+    Sampling frequency
+
+__area: np.ndarray | tuple
+    working space size
+
+__area_quantization: float
+    locations number per meters (space frequency)
+
+__area_position: np.ndarray
+    position of the area center from the antenna center (default is (0, 0, 0))
+
+__window_size: int
+    samples number for FFT estimation
+
+__band_width: tuple
+    frequencies interval for beamforming expressed in relative frequencies (1 means fe/2).
+    Default is [0, 1]
+    
+
 Documentation
 -------------
 MegaMicros documentation is available on https://readthedoc.biimea.io
 """
+
 
 import numpy as np
 
@@ -40,169 +71,7 @@ class MuBmfException( MuException ):
     """ Exception for beamformers """
     pass
 
-
 class Beamformer:
-    """ Abstract base class for beamformers """
-
-    __mems_position: np.ndarray                         # 3D MEMs absolute positions in meters
-    __locations: np.ndarray                             # 3D absolute positions of locations in the space where the beamforming is computed
-    __sampling_frequency: float                         # Input sampling frequency
-    __frame_length: int                                 # Input frame length in samples
-
-    @property
-    def mems_position( self ) -> np.ndarray:
-        """ Get 3D absolute MEMS positions """
-
-        return self.__mems_position
-
-    @property
-    def locations( self ) -> np.ndarray:
-        """ Get 3D absolute location's positions """
-        
-        return self.__locations
-
-    @property
-    def sampling_frequency( self ) -> float:
-        """ Sampling frequency """
-        
-        return self.__sampling_frequency
-    
-    @property
-    def frame_length( self ) -> int:
-        """ Sampling frequency """
-        
-        return self.__frame_length
-    
-    @property
-    def mems_number( self ) -> int:
-        """ MEMs number according the mems_position array """
-        
-        return np.shape( self.__mems_position )[0]
-    
-
-    def setMemsPosition( self, mems_position: np.ndarray ) -> None:
-        """ Set the 3D absolute MEMs positions """
-
-        if np.shape( mems_position )[1] != 3:
-            raise MuBmfException( f"bad dimensions ({np.shape( mems_position )}). Mems positions should be a 3D data array (shape=(mems_number, 3))" )
-        
-        log.info( f' .Set beamformer on a {np.shape( mems_position )[0]} MEMs antenna' )
-
-        self.__mems_position = mems_position
-
-
-    def setLocations( self, locations: np.ndarray ) -> None:
-        """ Set the 3D absolute MEMs positions """
-
-        if np.shape( locations )[1] != 3:
-            raise MuBmfException( f"bad dimensions ({np.shape( locations )}). `Locations` should be a 3D data array (shape=(mems_number, 3))" )
-        
-        log.info( f' .Set {np.shape( locations )[0]} beamforming locations' )
-
-        self.__locations = locations
-
-
-    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
-
-        self.setMemsPosition( mems_position )
-        self.__sampling_frequency = sampling_frequency
-        self.setLocations( locations )
-        self.__frame_length = frame_length
-
-
-class BeamformerFDAS( Beamformer ):
-    """ Frequency Domain Delay and Sum Beamforming Algorithm """
-
-    __fmin: float
-    __fmax: float
-    __fft_window_size: int                      # FFT window size    
-
-    __mems_number: int                          # MEMs number according the mems_position array
-    __band_width: tuple = [0, 1]                # Normalized frequencies bandwidth
-    __bw_range_start: int                       # Bandwidth start frequency range
-    __bw_range_end: int                         # Bandwidth end frequency range 
-    __bw_length: int                            # Bandwidth length in samples number
-
-    __D: np.ndarray                             # Inter mems/locations distance matrix
-    __H: np.ndarray                             # beamforming matrix
-    __BFE: np.ndarray                           # Beamforming energy
-    __BFSpec: np.ndarray                        # Complex spectrum computed on all beams (locations_number x frequencies_number)
-    # __fft: McFFT
-    
-
-    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
-        super().__init__( mems_position, locations, sampling_frequency, frame_length )
-
-        locations_number = np.shape( self.locations )[0]
-        self.__fft_window_size = self.frame_length
-
-        # time axis in seconds
-        t = np.arange( self.__fft_window_size )/self.sampling_frequency
-
-        # frequency axis in Hz
-        f = np.fft.rfftfreq( self.__fft_window_size, 1/self.sampling_frequency )
-
-        # frequencies number
-        freq_number = f.size
-
-        # frequency step
-        frequency_step = self.sampling_frequency / freq_number / 2
-
-        # bandwidth range
-        self.__bw_range_start = int( self.sampling_frequency * self.__band_width[0] / frequency_step / 2 )
-        self.__bw_range_end = int( self.sampling_frequency * self.__band_width[1] / frequency_step / 2 ) - 1
-        self.__bw_length = self.__bw_range_end - self.__bw_range_start + 1
-
-        # print info
-        log.info( f" .BeamformerFDAS Initilization:" )
-        log.info( f"  > Found antenna with {self.mems_number} MEMs microphones" )
-        log.info( f"  > FFT window size is {self.__fft_window_size} samples" )
-        log.info( f"  > Time range: [0, {t[-1]}] s" )
-        log.info( f"  > Sampling frequency: {self.sampling_frequency} Hz" )
-        log.info( f"  > Frequency range: [0, {f[-1]}] Hz ({freq_number} beams)" )
-        log.info( f"  > frequency step: {frequency_step:.2f} Hz" )
-
-        # Init distance matrix
-        log.info( f" .Build distances matrix D ({locations_number} x {self.mems_number})" ) 
-        self.__D = np.ndarray( (locations_number, self.mems_number), dtype=float )
-        for s in range( locations_number ):
-            for m in range( self.mems_number ):
-                self.__D[s, m] = np.linalg.norm( np.array( self.mems_position[m] ) - self.locations[s] )
-
-        # Allocate and build the H complex transfer function matrix (preformed channels)
-        log.info( f" .Build preformed channels matrix H ({freq_number} x {locations_number} x {self.mems_number})" ) 
-        self.__H = np.outer( f, self.__D ).reshape( freq_number, locations_number, self.mems_number )/SOUND_SPEED
-        self.__H = np.exp( 1j*2*np.pi*self.__H )
-
-
-    def compute( self, signal: np.ndarray ) -> np.ndarray:
-        """ Process beamforming on input signals
-        
-        If the signal length is smaller than the `__fft_window_size` parameter, the input is cropped. 
-        If it is larger, the input signal is padded with zeros
-        
-        Parameters
-        ----------
-        signal: np.ndarray
-            the MEMs signal line wise (samples_number X mems_number)
-
-        Return
-        ------
-        BFE: np.ndarray
-            The beamformed energy channels (location_number x 1)
-        """
-        
-        Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
-        SpecH = Spec[:, None, :] * self.__H
-        BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-        BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__bw_range_start:self.__bw_range_end+1,:], 0 ) / self.__bw_length
-
-        return BFE
-
-
- 
-
-class Beamformer0:
     """ Base class for beamformers"""
 
     # bmf properties
