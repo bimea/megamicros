@@ -80,48 +80,85 @@ class Beamformer:
         return np.shape( self.__mems_position )[0]
     
 
-    def setMemsPosition( self, mems_position: np.ndarray ) -> None:
+    def setMemsPosition( self, mems_position: np.ndarray|list|tuple ) -> None:
         """ Set the 3D absolute MEMs positions """
 
-        if np.shape( mems_position )[1] != 3:
-            raise MuBmfException( f"bad dimensions ({np.shape( mems_position )}). Mems positions should be a 3D data array (shape=(mems_number, 3))" )
-        
-        log.info( f' .Set beamformer on a {np.shape( mems_position )[0]} MEMs antenna' )
+        if type( mems_position is list or type( mems_position is tuple ) ):
+            mems_position = np.array( mems_position )
 
+        if len( mems_position.shape ) != 2:
+            raise MuException( f"Cannot set MEMs positions: MEMs positions must be a 2D array (MEMs_number x 3) but found {mems_position.shape}" )
+        
+        if mems_position.shape[1] != 3:
+            raise MuException( f"Cannot set MEMs positions: MEMs positions must be a 3D array (MEMs_number x 3) but found {mems_position.shape}" )
+        
+        log.info( f" .Set beamformer on a {np.shape( mems_position )[0]} MEMs antenna" )
         self.__mems_position = mems_position
 
 
-    def setLocations( self, locations: np.ndarray ) -> None:
-        """ Set the 3D absolute MEMs positions """
+    def setLocations( self, locations: np.ndarray|list|tuple ) -> None:
+        """ Set the space locations where to compute the BMF """
 
-        if np.shape( locations )[1] != 3:
-            raise MuBmfException( f"bad dimensions ({np.shape( locations )}). `Locations` should be a 3D data array (shape=(mems_number, 3))" )
+        if type( locations is list or type( locations is tuple ) ):
+            locations = np.array( locations )
+
+        if len( locations.shape ) != 2:
+            raise MuException( f"Cannot set space locations: space locations must be a 2D array (locations_number x 3) but found {locations.shape}" )
         
-        log.info( f' .Set {np.shape( locations )[0]} beamforming locations' )
-
+        if locations.shape[1] != 3:
+            raise MuException( f"Cannot set space locations: space locations must be a 3D array (MEMs_number x 3) but found {locations.shape}" )
+        
+        log.info( f" .Set {np.shape( locations )[0]} beamforming locations" )
         self.__locations = locations
 
 
-    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
+    def setSamplingFrequency( self, sampling_frequency: float ) -> None :
+        """ Set the sampling frequency of input signals """
 
-        self.setMemsPosition( mems_position )
+        log.info( f" .Set beamformer sampling frequency to {sampling_frequency} Hz" )
         self.__sampling_frequency = sampling_frequency
-        self.setLocations( locations )
+
+
+    def setFrameLength( self, frame_length: float ) -> None :
+        """ Set the input data buffer length in samples number """
+
+        log.info( f" .Set beamformer frame length to {frame_length} Hz" )
         self.__frame_length = frame_length
 
 
-class BeamformerFDAS( Beamformer ):
-    """ Frequency Domain Delay and Sum Beamforming Algorithm """
+    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
+        """ Create a new beamformer instance 
+        
+        Parameters
+        ----------
+        mems_positions: np.ndarray
+            The MEMs positions as a 2D array (MEMs_number x 3)
+        locations: np.ndarray
+            The space locations where to compute the BMF
+        sampling_frequency: float
+            The sampling frequency of input signals
+        frame_length: int
+            The frame length in samples number
+        """
 
-    __fmin: float
-    __fmax: float
-    __fft_window_size: int                      # FFT window size    
+        self.setMemsPosition( mems_position )
+        self.setSamplingFrequency( sampling_frequency )
+        self.setLocations( locations )
+        self.setFrameLength( frame_length )
+
+
+class BeamformerFDAS( Beamformer ):
+    """ Frequency Domain Delay and Sum Beamformer Algorithm """
+
+    __fft_low_cut_off: float                    # FFT low cut off frequency
+    __fft_high_cut_off: float                   # FFT high cut off frequency
+    __fft_window_size: int                      # FFT window size in samples number
 
     __mems_number: int                          # MEMs number according the mems_position array
     __band_width: tuple = [0, 1]                # Normalized frequencies bandwidth
-    __bw_range_start: int                       # Bandwidth start frequency range
-    __bw_range_end: int                         # Bandwidth end frequency range 
-    __bw_length: int                            # Bandwidth length in samples number
+    __fft_low_cut_off_index: int                # Bandwidth start frequency range idex
+    __fft_high_cut_off_index: int               # Bandwidth end frequency range index
+    __band_width_length: int                    # Bandwidth length in samples number
 
     __D: np.ndarray                             # Inter mems/locations distance matrix
     __H: np.ndarray                             # beamforming matrix
@@ -129,12 +166,39 @@ class BeamformerFDAS( Beamformer ):
     __BFSpec: np.ndarray                        # Complex spectrum computed on all beams (locations_number x frequencies_number)
     # __fft: McFFT
     
+    @property
+    def BFE( self ) -> int:
+        """ Bemforming energy array """
+
+        return self.__BFE
+
+
+    def getBeamformingEnergy( self ) -> np.ndarray:
+        """ Get the beamforming energy array """
+
+        return self.__BFE
+
+
+    def setFFtWindowSize( self, fft_window_size):
+        """ Set the FFT window size in samples number 
+        
+        Note that it is not required the FFT window size is the same as frame length. But only same size is allowed for now
+        """
+        if fft_window_size != self.frame_length:
+            raise MuBmfException( f"Cannot set FFT window size to {fft_window_size} samples. Should be same as frame length ({self.frame_length} samples)" )
+
+        log.info( f" .Set beamformer FFT window size to {fft_window_size} samples" )
+        self.__fft_window_size = fft_window_size
+
 
     def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
+        """ Create a new Frequency Domain Adaptive Beamformer by delay and sum method instance 
+        """
+        
         super().__init__( mems_position, locations, sampling_frequency, frame_length )
 
         locations_number = np.shape( self.locations )[0]
-        self.__fft_window_size = self.frame_length
+        self.setFFtWindowSize( self.frame_length )
 
         # time axis in seconds
         t = np.arange( self.__fft_window_size )/self.sampling_frequency
@@ -149,9 +213,11 @@ class BeamformerFDAS( Beamformer ):
         frequency_step = self.sampling_frequency / freq_number / 2
 
         # bandwidth range
-        self.__bw_range_start = int( self.sampling_frequency * self.__band_width[0] / frequency_step / 2 )
-        self.__bw_range_end = int( self.sampling_frequency * self.__band_width[1] / frequency_step / 2 ) - 1
-        self.__bw_length = self.__bw_range_end - self.__bw_range_start + 1
+        self.__fft_low_cut_off_index = int( self.sampling_frequency * self.__band_width[0] / frequency_step / 2 )
+        self.__fft_high_cut_off_index = int( self.sampling_frequency * self.__band_width[1] / frequency_step / 2 ) - 1
+        self.__band_width_length = self.__fft_high_cut_off_index - self.__fft_low_cut_off_index + 1
+        self.__fft_low_cut_off = self.__fft_low_cut_off_index * frequency_step
+        self.__fft_high_cut_off = (self.__fft_high_cut_off_index+1) * frequency_step
 
         # print info
         log.info( f" .BeamformerFDAS Initilization:" )
@@ -161,6 +227,8 @@ class BeamformerFDAS( Beamformer ):
         log.info( f"  > Sampling frequency: {self.sampling_frequency} Hz" )
         log.info( f"  > Frequency range: [0, {f[-1]}] Hz ({freq_number} beams)" )
         log.info( f"  > frequency step: {frequency_step:.2f} Hz" )
+        log.info( f"  > frequency bandwidth: [{self.__fft_low_cut_off:.2f}, {self.__fft_high_cut_off:.2f}] Hz" )
+        log.info( f"  > frequency bandwidth indexes: [{self.__fft_low_cut_off_index}, {self.__fft_high_cut_off_index}] ( {self.__band_width_length} spectral ray)" )
 
         # Init distance matrix
         log.info( f" .Build distances matrix D ({locations_number} x {self.mems_number})" ) 
@@ -195,12 +263,11 @@ class BeamformerFDAS( Beamformer ):
         Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
         SpecH = Spec[:, None, :] * self.__H
         BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-        BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__bw_range_start:self.__bw_range_end+1,:], 0 ) / self.__bw_length
+        self.__BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index+1,:], 0 ) / self.__band_width_length
 
-        return BFE
+        return self.__BFE
 
 
- 
 
 class Beamformer0:
     """ Base class for beamformers"""
