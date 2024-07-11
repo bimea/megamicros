@@ -459,7 +459,7 @@ class MemsArrayH5( MemsArray ):
             raise MuH5Exception( f"Run failed on settings: {e}")
         
 
-    def get( self ) -> any:
+    def get( self ) -> np.array:
         """ Get selected channels from H5 file in one shot
 
         Parameters

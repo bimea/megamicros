@@ -317,7 +317,7 @@ class MemsArray:
         return self.__running
     
     @property
-    def sensibility( self ) -> bool:
+    def sensibility( self ) -> float:
         """ Get the MEMs sensibility factor. 
         
         Default sensibility is set to Megamicros MEMs sensibility (-26dBFS for 104 dB that is 3.17 Pa) 

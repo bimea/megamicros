@@ -264,6 +264,10 @@ def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_
 
     # Save sound
     log.info( f' .Generate sound wav file...' )
+    log.info( f' .Sound sampling frequency: {sampling_frequency} Hz' )
+    log.info( f' .Sound length: {len(sound)} samples' )
+    log.info( f' .Samples format: {sound.dtype}' )
+                                            
     wavfile.write ( f"./tmp/audio.wav", sampling_frequency, sound )
 
     # merge video and sound
