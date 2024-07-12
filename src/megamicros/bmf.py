@@ -150,6 +150,7 @@ class Beamformer:
 class BeamformerFDAS( Beamformer ):
     """ Frequency Domain Delay and Sum Beamformer Algorithm """
 
+    __f_axis: np.ndarray                        # Frequency axis in Hertz
     __fft_low_cut_off: float                    # FFT low cut off frequency
     __fft_high_cut_off: float                   # FFT high cut off frequency
     __fft_window_size: int                      # FFT window size in samples number
@@ -168,10 +169,21 @@ class BeamformerFDAS( Beamformer ):
     
     @property
     def BFE( self ) -> int:
-        """ Bemforming energy array """
+        """ Beamforming energy array """
 
         return self.__BFE
+    
+    @property
+    def D( self ) -> int:
+        """ Distances matrix """
 
+        return self.__D
+
+    @property
+    def H( self ) -> int:
+        """ Beamforming matrix """
+
+        return self.__H
 
     def getBeamformingEnergy( self ) -> np.ndarray:
         """ Get the beamforming energy array """
@@ -204,10 +216,10 @@ class BeamformerFDAS( Beamformer ):
         t = np.arange( self.__fft_window_size )/self.sampling_frequency
 
         # frequency axis in Hz
-        f = np.fft.rfftfreq( self.__fft_window_size, 1/self.sampling_frequency )
+        self.__f_axis = np.fft.rfftfreq( self.__fft_window_size, 1/self.sampling_frequency )
 
         # frequencies number
-        freq_number = f.size
+        freq_number = self.__f_axis.size
 
         # frequency step
         frequency_step = self.sampling_frequency / freq_number / 2
@@ -225,7 +237,7 @@ class BeamformerFDAS( Beamformer ):
         log.info( f"  > FFT window size is {self.__fft_window_size} samples" )
         log.info( f"  > Time range: [0, {t[-1]}] s" )
         log.info( f"  > Sampling frequency: {self.sampling_frequency} Hz" )
-        log.info( f"  > Frequency range: [0, {f[-1]}] Hz ({freq_number} beams)" )
+        log.info( f"  > Frequency range: [0, { self.__f_axis[-1]}] Hz ({freq_number} beams)" )
         log.info( f"  > frequency step: {frequency_step:.2f} Hz" )
         log.info( f"  > frequency bandwidth: [{self.__fft_low_cut_off:.2f}, {self.__fft_high_cut_off:.2f}] Hz" )
         log.info( f"  > frequency bandwidth indexes: [{self.__fft_low_cut_off_index}, {self.__fft_high_cut_off_index}] ( {self.__band_width_length} spectral ray)" )
@@ -239,11 +251,11 @@ class BeamformerFDAS( Beamformer ):
 
         # Allocate and build the H complex transfer function matrix (preformed channels)
         log.info( f" .Build preformed channels matrix H ({freq_number} x {locations_number} x {self.mems_number})" ) 
-        self.__H = np.outer( f, self.__D ).reshape( freq_number, locations_number, self.mems_number )/SOUND_SPEED
+        self.__H = np.outer(  self.__f_axis, self.__D ).reshape( freq_number, locations_number, self.mems_number )/SOUND_SPEED
         self.__H = np.exp( 1j*2*np.pi*self.__H )
 
 
-    def compute( self, signal: np.ndarray ) -> np.ndarray:
+    def compute( self, signal: np.ndarray, type='full' ) -> np.ndarray:
         """ Process beamforming on input signals
         
         If the signal length is smaller than the `__fft_window_size` parameter, the input is cropped. 
@@ -259,359 +271,137 @@ class BeamformerFDAS( Beamformer ):
         BFE: np.ndarray
             The beamformed energy channels (location_number x 1)
         """
-        
-        Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
-        SpecH = Spec[:, None, :] * self.__H
-        BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-        self.__BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index+1,:], 0 ) / self.__band_width_length
 
-        return self.__BFE
+        # Control input size
+        #if signal.shape[0] > self.__fft_window_size:
+        #    log.warning( f" .bmf > Input signal is longer than FFT width: it will be truncated" )
+        #    self._in = signal[:self.__fft_window_size,:]
+        #elif signal.shape[0] < self.__fft_window_size:
+        #    log.warning( f" .bmf > Input signal is shorter than FFT width: it will be zero-padded" )
+        #    self._in = np.pad( signal, ( ( 0,self.__fft_window_size-signal.shape[0]), (0,0) ) )
 
+        # Process beamforming on input signal involving all frequencies
+        if type == 'full':
+            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
+            SpecH = Spec[:, None, :] * self.__H
+            BFSpec = np.sum( SpecH, -1 ) / self.mems_number
+            self.__BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index+1,:], 0 ) / self.__band_width_length
 
+            return self.__BFE, None, None
 
-class Beamformer0:
-    """ Base class for beamformers"""
+        # compute beamforming on frequency with max energy
+        elif type == "max":
+            # compute spectrum on all channels            
+            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
-    # bmf properties
-    __mems_position: np.ndarray | None          = None  # 3D MEMs positions from the antenna center
-    __area_quantization: np.ndarray | None      = None  # locations number per meters (space frequency)
-    __area: np.ndarray | None                   = None
-    __area_position: np.ndarray                 = np.array([[0, 0, 0]])
-    __sampling_frequency: float | None          = None
-    __fft_win_size: int | None                  = None
-    __band_width: tuple                         = [0, 1]
+            # find the max energy on first MEMs microphone
+            #freq_max_index = np.argmax( np.abs( Spec[:,0] )**2 )
+            freq_max_index = np.argmax( np.mean( np.abs( Spec ), axis=1 ) )
 
-    # for internal purpose
-    __freq_number: int                                  # spectral bands number
-    __loc_number: int                                   # Total space locations number
-    __locations: np.ndarray | None              = None
-    __D: np.ndarray | None                      = None  # Distance matrix between area locations and microphones
-    __H: np.ndarray | None                      = None  # Beamformer matrix
-    __mems_number: int | None                   = None  # MEMs number according the mems_position array
-    __bw_range_start: int | None                = None  # Bandwidth start frequency range
-    __bw_range_end: int | None                  = None  # Bandwidth end frequency range 
-    __bw_length: int | None                     = None  # Bandwidth length in samples number
+            # compute bmf on the selected frequency
+            SpecH = Spec[freq_max_index, None, :] * self.__H[freq_max_index,:,:]
+            BFSpec = np.sum( SpecH, -1 ) / self.mems_number
 
-
-
-
-    def setSamplingFrequency( self, sr: float ) -> None:
-        
-        log.info( f' .Set beamformer sampling rate on {sr} Hz' )
-        self.__sampling_frequency = sr
+            self.__BFE = np.abs( BFSpec )**2 / BFSpec.size
+            selected_frequency = self.__f_axis[freq_max_index]
+            band_width = None
+            return self.__BFE, selected_frequency, band_width
 
 
-    def setFftWindowSize( self, ws: int ) -> None:
-        
-        log.info( f' .Set beamformer FFT window size to {ws} samples' )
-        self.__fft_win_size = ws
 
+# >>>>>>>>>>>>>>>>>>>>
 
-    def setAreaQuantization( self, sq: np.ndarray | tuple ) -> None:
-        
-        if type( sq ) is tuple or type( sq ) is list:
-            if len( sq ) != 3:
-                raise MuBmfException( f"Incorrect quantization dimensions ({len( sq )}). Should be 3 (sq_x, sq_y, sq_z)" )
-            else:
-                self.__area_quantization = np.array( [sq] )
-        elif np.shape( sq ) != (1,3):
-            raise MuBmfException( f"Incorrect array dimensions ({np.shape( sq )}). Should be (1, 3)" )
-        else:
-            self.__area_quantization = sq
+        # compute beamforming on the mean energy frequency
+        elif type == "mean":
+            # compute spectrum on all channels            
+            Spec = np.fft.rfft( self._in, axis=0 )
+
+            # find the mean energy frequency on channel 0
+            Spec0 = np.abs( Spec[:,0] )**2
+            Spec0_density = Spec0 / np.sum( Spec0 )
+            freq_mean = np.sum(  self.__f_axis * Spec0_density )
+
+            # find the nearest frequency in the FFT axis
+            freq_mean_index = np.searchsorted( self.__f_axis, freq_mean )
+
+            # Check if the previous index or the found index is the closest to the value
+            if freq_mean_index > 0:
+                if np.abs(self.__f_axis[freq_mean_index-1] - freq_mean) < np.abs(self.__f_axis[freq_mean_index] - freq_mean):
+                    freq_mean_index = freq_mean_index - 1
             
-        log.info( f' .Set beamformer space quantization to {sq} locations/meter' )
+            # compute bmf on the selected frequency
+            SpecH = Spec[freq_mean_index, None, :] * self.__H[freq_mean_index,:,:]
+            BFSpec = np.sum( SpecH, -1 ) / self.mems_number
+            self._out = np.abs( BFSpec )**2 / BFSpec.size
+            selected_frequency = self.__f_axis[freq_mean_index]
+            band_width = None
 
 
-    def setBandWidth( self, bandwidth: tuple, unit: str="normalized" ) -> None:
-        """
-        Set the frequency bandwidth for beamforming computing
+        # compute beamforming on frequencies around the mean energy frequency bounded by standard deviation
+        elif type == "gauss":
+            # compute spectrum on all channels            
+            Spec = np.fft.rfft( self._in, axis=0 )
 
-        Parameters:
-        -----------
-        bw: tuple
-            The 2 values tuple that set the bandwidth ([fmin, fmax]) expressed in frequency or in normalized values
+            # find the mean energy frequency on channel 0
+            Spec0 = np.abs( Spec[:,0] )**2
+            Spec0_density = Spec0 / np.sum( Spec0 )
+            freq_mean = np.sum(  self.__f_axis * Spec0_density )
+            std_dev = np.sqrt( np.sum( (self.__f_axis - freq_mean)**2 * Spec0_density ) ) / 2
 
-        unit: str
-            The unit used: `normalized` ([0, 1/3]) or `frequency` ([0,2000])  
-        """
+            # find the nearest frequency in the FFT axis
+            freq_mean_index = np.searchsorted( self.__f_axis, freq_mean )
 
-        if len( bandwidth ) != 2:
-            raise MuBmfException( f"Bad bandwidth tuple dimension ({len(bandwidth)}). Should be 2 " )
+            # Check if the previous index or the found index is the closest to the value
+            if freq_mean_index > 0:
+                if np.abs(self.__f_axis[freq_mean_index-1] - freq_mean) < np.abs(self.__f_axis[freq_mean_index] - freq_mean):
+                    freq_mean_index = freq_mean_index - 1
 
-        if unit == "frequency" and self.__sampling_frequency is None:
-            raise MuBmfException( "Cannot understand bandwidth in frequency as long as sampling frequency is not defined. Please define it or use the `normalized` unit" )
+            # Find bandwith correponding to standard deviation
+            Df = self.__f_axis[1] - self.__f_axis[0]
+            std_dev_nindex = int( std_dev / Df )
 
-        if unit == "normalized":
-            self.__band_width = bandwidth
-        else:
-            self.__band_width = tuple( np.array( bandwidth )/(self.__sampling_frequency/2) ) 
-
-        log.info( f' .Set beamformer band width to {self.__band_width}' )
-
-
-    def setArea( self, ss: np.ndarray|tuple ) -> None:
-        """ Set the beamformer working space dimensions 
-        
-        Note that the working space has nothing to do with the room space. 
-        The working space is the area where the beamformer perfoms the source localization.
-        Its definition is relative to the antenna center. 
-        Use the `Beamformer.moveAntenna()` method to stop centering of the working space.
-        """
-        
-        if type( ss ) is tuple or type( ss ) is list:
-            if len( ss ) != 3:
-                raise MuBmfException( f"Incorrect space dimensions ({len( ss )}). Should be 3 (dx, dy, dz)" )
-            else:
-                self.__area = np.array( [ss] )
-        elif np.shape( ss ) != (1,3):
-            raise MuBmfException( f"Incorrect array dimensions ({np.shape( ss )}). Should be (1, 3)" )
-        else:
-            self.__area = ss
+            freq_min_index = max( freq_mean_index - std_dev_nindex, 0 )
+            freq_max_index = min( freq_mean_index + std_dev_nindex, self.__f_number )
             
-        log.info( f' .Set beamformer space size to {ss} meters' )
-        
-
-    def getLocations( self ) -> np.ndarray:
-        """ Get the locations matrix
-        
-        The locations matrix is a 3D array of 3D points coverring the beamformer working space
-        """
-
-        if self.__locations is None:
-            raise MuBmfException( f"No locations found. The beamformer seems not initialized. Please use the `Beamformer.init()` method before." )
-
-        return self.__locations 
+            # compute bmf on the selected frequency
+            SpecH = Spec[freq_min_index:freq_max_index, None, :] * self.__H[freq_min_index:freq_max_index,:,:]
+            BFSpec = np.sum( SpecH, -1 ) / self.mems_number
+            self._out = np.sum( np.abs( BFSpec )**2, 0 ) / BFSpec.size
+            selected_frequency = self.__f_axis[freq_mean_index]
+            band_width = std_dev
 
 
-    def getLocationsNumber( self ) -> tuple:
-        """ Get the locations number among x, y and z axis
-        
-        The locations matrix is a 3D array of 3D points coverring the beamformer working space
-        """
+        # Find the location that best matches the phase distribution at the frequency for which energy is max
+        elif type == "omp":
+            from omp import omp, Result
 
-        if self.__locations is None:
-            raise MuBmfException( f"No locations found. The beamformer seems not initialized. Please use the `Beamformer.init()` method before." )
+            # compute spectrum on all channels            
+            Spec = np.fft.rfft( self._in, axis=0 )
 
-        # locations number
-        loc_number_x = int( self.__area[0,0] * self.__area_quantization[0,0] )
-        loc_number_y = int( self.__area[0,1] * self.__area_quantization[0,1] )
-        loc_number_z = int( self.__area[0,2] * self.__area_quantization[0,2] )
+            # init result vector
+            omp_fo = np.zeros( self.locations_number )
 
-        return [loc_number_x, loc_number_y, loc_number_z] 
-    
+            # frequency index carrying max energy
+            freq_max_index = np.argmax( np.mean( np.abs( Spec ), axis=1 ) )
 
-    def getMems( self ) -> np.ndarray:
-        """ Get the array of positions of all antenna MEMs 
-        
-        Throw an exception if MEMs are not defined
+            # Set dictionnary as the set of all phases complex multiplicators at the i_f0 frequency 
+            Dico = self.__H[freq_max_index,:,:].T
 
-        Return
-        ------
-        mems_position: np.ndarray
-            array of MEMs 3D position
+            # Compute the first decomposition coef given by matching pursuit 
+            result: Result = omp( Dico, Spec[freq_max_index,:], maxit=1, verbose=False )
 
-        """
+            # Get coef in the location vector (that could be reshaped as (nx, ny))  
+            omp_fo = result.coef + 1e-12
+            self._out = omp_fo
 
-        if self.__mems_position is None:
-            raise MuBmfException( f"No MEMs position defined. Please use `Beamformer.setMemsPosition()` before" )
-        
-        return self.__mems_position
+            selected_frequency = self.__f_axis[freq_max_index]
+            band_width = None
 
 
-    def getMemsNumber( self ) -> int:
-        """ Get the antenna MEMs number according the dimension of the MEMs positions array """
-
-        if self.__mems_position is None:
-            return 0
-        else:
-            return self.__mems_position.shape[0]
-        
-
-    def moveArea( self, delta: np.ndarray | tuple ) -> np.ndarray:
-        """ Move the area center from the antenna center 
-        
-        Parameters:
-        -----------
-        delta: np.ndarray | tuple
-            3D array or tuple that gives the moving vector value.
-            New position is the current area position added to the delta vector
-        """
-
-        if type( delta ) is tuple or type( delta ) is list:
-            if len( delta ) != 3:
-                raise MuBmfException( f"Incorrect array or tuple dimensions ({len( delta )}). Should be 3 (dx, dy, dz)" )
-            else:
-                log.info( f" .Move area from {self.__area_position[0]} to {(self.__area_position+np.array( [delta] ))[0]}" )
-                self.__area_position += np.array( [delta] )
-                if self._check( verbose=False ):
-                    self._build_locations()
-
-        elif np.shape( delta ) != (1,3):
-            raise MuBmfException( f"Incorrect array dimensions ({np.shape( delta )}). Should be (1, 3)" )
-        
-        else:
-            log.info( f" .Move area from {self.__area_position[0]} to {(self.__area_position+delta)[0]}" )
-            self.__area_position += delta
-            if self._check( verbose=False ):
-                self._build_locations()
+        return self._out, selected_frequency, band_width
 
 
 
-    def __init__( self, mems_position: np.ndarray|None=None, sampling_frequency: float|None=None, window_size:int|None=None, area:float|None=None, area_quantization:float|None=None ):
-
-        if mems_position is not None:
-            self.setMemsPosition( mems_position )
-        if sampling_frequency is not None:
-            self.setSamplingFrequency( sampling_frequency )
-        if window_size is not None:
-            self.setFftWindowSize( window_size )
-        if area is not None:
-            self.setArea( area )
-        if area_quantization is not None:
-            self.setAreaQuantization( area_quantization )
-
-    def _check( self, verbose=True ) -> bool:
-
-        if verbose:
-            log.info( f' .Checking beamformer parameters...' )
-        result: bool = True
-        if self.__mems_position is None:
-            log.info( f' > MEMs position should be set.' )
-            result = False
-        if self.__area_quantization is None:
-            log.info( f' > Space quantization should be set.' )
-            result = False
-        if self.__area is None:
-            log.info( f' > Space size should be set.' )
-            result = False
-        if self.__sampling_frequency is None:
-            log.info( f' > Sampling should be set.' )
-            result = False
-        if self.__fft_win_size is None:
-            log.info( f' > FFT window size not set.' )
-            result = False
-
-        if verbose:
-            log.info( f' .[Ready]' )
-
-        return result
-
-
-    def _build_locations( self ) -> None:
-
-        # check for parameters
-        if not self._check():
-            raise MuBmfException( f'Some parameters are not set. Cannot build locations matrix of the working space' )
-        
-        # space size
-        dimx = self.__area[0,0]
-        dimy = self.__area[0,1]
-        dimz = self.__area[0,2]
-
-        # locations number
-        loc_number_x = int( dimx * self.__area_quantization[0,0] )
-        loc_number_y = int( dimy * self.__area_quantization[0,1] )
-        loc_number_z = int( dimz * self.__area_quantization[0,2] )
-
-        self.__loc_number = loc_number_x * loc_number_y * loc_number_z
-
-        # width, depth, height quantizations in meters
-        dx: float = 1/self.__area_quantization[0,0]
-        dy: float = 1/self.__area_quantization[0,1]
-        dz: float = 1/self.__area_quantization[0,2]
-
-        log.info( f" .Found {self.__loc_number} locations ({loc_number_x} x {loc_number_y} x {loc_number_z})")
-        log.info( f" .Space quantum size is ({dx:.2f} x {dy:.2f} x {dz:.2f}) meters")
-
-        self.__locations = np.ndarray( ( loc_number_x*loc_number_y*loc_number_z, 3 ) )
-        for x in range( loc_number_x ):
-            for y in range( loc_number_y):
-                for z in range( loc_number_z):
-                    i = x * loc_number_y * loc_number_z + y * loc_number_z + z
-                    self.__locations[i] = np.array( [x*dx+dx/2-dimx/2, y*dy+dy/2-dimy/2, z*dz+dz/2-dimz/2] ) + self.__area_position
-
-
-
-    def init( self ) -> None:
-        
-        """ Init beamformer. All parameters should be set before 
-        
-        Check antenna parameters, then build the distance matrix
-        """
-
-        # check for parameters
-        if not self._check():
-            raise MuBmfException( f'Some parameters are not set. Cannot perform beamforming' )
-
-        # time axis in seconds
-        t = np.arange( self.__fft_win_size )/self.__sampling_frequency
-
-        # frequency axis in Hz
-        f = np.fft.rfftfreq( self.__fft_win_size, 1/self.__sampling_frequency )
-
-        # frequencies number
-        self.__freq_number = np.fft.rfftfreq( self.__fft_win_size, 1/self.__sampling_frequency ).size
-
-        # frequency step
-        frequency_step = self.__sampling_frequency / self.__freq_number / 2
-
-        # bandwidth range
-        self.__bw_range_start = int( self.__sampling_frequency * self.__band_width[0] / frequency_step / 2 )
-        self.__bw_range_end = int( self.__sampling_frequency * self.__band_width[1] / frequency_step / 2 ) - 1
-        self.__bw_length = self.__bw_range_end - self.__bw_range_start + 1
-
-        # print info
-        log.info( f" .Beamformer2D Initilization:" )
-        log.info( f"  > Found antenna with {self.__mems_number} MEMs microphones" )
-        log.info( f"  > FFT window size is {self.__fft_win_size} samples" )
-        log.info( f"  > Time range: [0, {t[-1]}] s" )
-        log.info( f"  > Sampling frequency: {self.__sampling_frequency} Hz" )
-        log.info( f"  > Frequency range: [0, {f[-1]}] Hz ({self.__freq_number} beams)" )
-        log.info( f"  > frequency step: {frequency_step:.2f} Hz" )
-        log.info( f"  > Space quantization: {self.__area_quantization} locations/meter" )
-        log.info( f"  > Beamforming frequency bandwidth: {self.__band_width} ({self.__bw_length} samples, [{self.__bw_range_start}, {self.__bw_range_end}])" )
-        log.info( f"  > Beamforming bandwidth starting at: {(self.__bw_range_start * frequency_step):.2f} Hz" )
-        log.info( f"  > Beamforming bandwidth endding at: {((self.__bw_range_end+1)* frequency_step):.2f} Hz" )
-
-        # Build the locations 3D (centered) coordinates
-        self._build_locations()
-        
-        # Init distance matrix
-        log.info( f" .Build distances matrix D ({self.__loc_number} x {self.__mems_number})" ) 
-        self._D = np.ndarray( (self.__loc_number, self.__mems_number), dtype=float )
-        for s in range( self.__loc_number ):
-            for m in range( self.__mems_number ):
-                self._D[s, m] = np.linalg.norm( np.array( self.__mems_position[m] ) - self.__locations[s] )
-
-        # Allocate and build the H complex transfer function matrix (preformed channels)
-        log.info( f" .Build preformed channels matrix H ({self.__freq_number} x {self.__loc_number} x {self.__mems_number})" ) 
-        self._H = np.outer( f, self._D ).reshape( self.__freq_number, self.__loc_number, self.__mems_number )/SOUND_SPEED
-        self._H = np.exp( 1j*2*np.pi*self._H )
-        
-
-    def beamform( self, signal: np.ndarray ) -> np.ndarray:
-        """ Process beamforming on input signals
-        
-        If the signal length is smaller than the `__fft_win_size` parameter, the input is cropped. 
-        If it is larger, the input signal is padded with zeros
-        
-        Parameters
-        ----------
-        signal: np.ndarray
-            the MEMs signal line wise (samples_number X mems_number)
-
-        Return
-        ------
-        BFE: np.ndarray
-            The beamformed energy channels (location_number x 1)
-        """
-        
-        Spec = np.fft.rfft( signal, n=self.__fft_win_size, axis=0 )
-        SpecH = Spec[:, None, :] * self._H
-        BFSpec = np.sum( SpecH, -1 ) / self.__mems_number
-        BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__bw_range_start:self.__bw_range_end+1,:], 0 ) / self.__bw_length
-
-        return BFE
 
 """
 antenna= {'positions': np.array(
