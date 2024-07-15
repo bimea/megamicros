@@ -30,8 +30,9 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 
 import numpy as np
 
-from megamicros_tools.exception import MuException
-from megamicros_tools.log import log
+from megamicros.exception import MuException
+from megamicros.log import log
+from megamicros.tools.acoustics.omp import omp, Result
 
 
 SOUND_SPEED = 340.29
@@ -78,6 +79,12 @@ class Beamformer:
         """ MEMs number according the mems_position array """
         
         return np.shape( self.__mems_position )[0]
+    
+    @property
+    def locations_number( self ) -> int:
+        """ Locations number according the locations array """
+        
+        return np.shape( self.__locations )[0]
     
 
     def setMemsPosition( self, mems_position: np.ndarray|list|tuple ) -> None:
@@ -307,14 +314,10 @@ class BeamformerFDAS( Beamformer ):
             band_width = None
             return self.__BFE, selected_frequency, band_width
 
-
-
-# >>>>>>>>>>>>>>>>>>>>
-
         # compute beamforming on the mean energy frequency
         elif type == "mean":
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( self._in, axis=0 )
+            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # find the mean energy frequency on channel 0
             Spec0 = np.abs( Spec[:,0] )**2
@@ -324,7 +327,7 @@ class BeamformerFDAS( Beamformer ):
             # find the nearest frequency in the FFT axis
             freq_mean_index = np.searchsorted( self.__f_axis, freq_mean )
 
-            # Check if the previous index or the found index is the closest to the value
+            # Get the nearest frequency index
             if freq_mean_index > 0:
                 if np.abs(self.__f_axis[freq_mean_index-1] - freq_mean) < np.abs(self.__f_axis[freq_mean_index] - freq_mean):
                     freq_mean_index = freq_mean_index - 1
@@ -332,7 +335,7 @@ class BeamformerFDAS( Beamformer ):
             # compute bmf on the selected frequency
             SpecH = Spec[freq_mean_index, None, :] * self.__H[freq_mean_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-            self._out = np.abs( BFSpec )**2 / BFSpec.size
+            self.__BFE = np.abs( BFSpec )**2 / BFSpec.size
             selected_frequency = self.__f_axis[freq_mean_index]
             band_width = None
 
@@ -340,7 +343,7 @@ class BeamformerFDAS( Beamformer ):
         # compute beamforming on frequencies around the mean energy frequency bounded by standard deviation
         elif type == "gauss":
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( self._in, axis=0 )
+            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # find the mean energy frequency on channel 0
             Spec0 = np.abs( Spec[:,0] )**2
@@ -351,7 +354,7 @@ class BeamformerFDAS( Beamformer ):
             # find the nearest frequency in the FFT axis
             freq_mean_index = np.searchsorted( self.__f_axis, freq_mean )
 
-            # Check if the previous index or the found index is the closest to the value
+            # Get the nearest frequency index
             if freq_mean_index > 0:
                 if np.abs(self.__f_axis[freq_mean_index-1] - freq_mean) < np.abs(self.__f_axis[freq_mean_index] - freq_mean):
                     freq_mean_index = freq_mean_index - 1
@@ -361,22 +364,20 @@ class BeamformerFDAS( Beamformer ):
             std_dev_nindex = int( std_dev / Df )
 
             freq_min_index = max( freq_mean_index - std_dev_nindex, 0 )
-            freq_max_index = min( freq_mean_index + std_dev_nindex, self.__f_number )
+            freq_max_index = min( freq_mean_index + std_dev_nindex, self.__f_axis.size )
             
             # compute bmf on the selected frequency
             SpecH = Spec[freq_min_index:freq_max_index, None, :] * self.__H[freq_min_index:freq_max_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-            self._out = np.sum( np.abs( BFSpec )**2, 0 ) / BFSpec.size
+            self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / BFSpec.size
             selected_frequency = self.__f_axis[freq_mean_index]
             band_width = std_dev
 
 
         # Find the location that best matches the phase distribution at the frequency for which energy is max
         elif type == "omp":
-            from omp import omp, Result
-
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( self._in, axis=0 )
+            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # init result vector
             omp_fo = np.zeros( self.locations_number )
@@ -392,47 +393,12 @@ class BeamformerFDAS( Beamformer ):
 
             # Get coef in the location vector (that could be reshaped as (nx, ny))  
             omp_fo = result.coef + 1e-12
-            self._out = omp_fo
+            self.__BFE = omp_fo
 
             selected_frequency = self.__f_axis[freq_max_index]
             band_width = None
 
 
-        return self._out, selected_frequency, band_width
+        return self.__BFE, selected_frequency, band_width
 
-
-
-
-"""
-antenna= {'positions': np.array(
-[[-0.2261063,  -0.2217998,   0.        ],
-[-0.2231343,  -0.16230868,  0.        ],
-[-0.23502814,  0.01106646,  0.        ],
-[-0.23505722,  0.07143718,  0.        ],
-[-0.23869585,  0.13492614,  0.        ],
-[-0.241065,    0.19720244,  0.        ],
-[-0.20675762,  0.23860315,  0.        ],
-[-0.14724884,  0.23868911,  0.        ],
-[-0.08815056,  0.23800337,  0.        ],
-[-0.02524838,  0.23605316,  0.        ],
-[ 0.03711273,  0.23184893,  0.        ],
-[ 0.09778664,  0.22929929,  0.        ],
-[ 0.20982932,  0.21545461,  0.        ],
-[ 0.25022585,  0.17556075,  0.        ],
-[ 0.24945468,  0.11548598,  0.        ],
-[ 0.2482488,   0.05719138,  0.        ],
-[ 0.25352816,  0.00069583,  0.        ],
-[ 0.25355045, -0.17305451,  0.        ],
-[ 0.26728441, -0.23428049,  0.        ],
-[ 0.23313417, -0.27617064,  0.        ],
-[ 0.16906521, -0.27623144,  0.        ],
-[-0.01177931, -0.2639107,   0.        ],
-[-0.0767392,  -0.26609785,  0.        ],
-[-0.13061677, -0.26229372,  0.        ],
-[-0.18359293, -0.25536996,  0.        ]] ),
-'mems':[0,1,4,5,6,7,8,9,10,11,12,13,15,16,17,18,19,22,23,24,25,28,29,30,31],
-'available_mems': [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]
-}
-np.save( 'Antenna-square-JetsonNano-0001.npy', antenna )
-"""
 

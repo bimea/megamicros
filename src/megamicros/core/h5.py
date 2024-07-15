@@ -36,8 +36,8 @@ import numpy as np
 import threading
 import h5py
 
-from megamicros_tools.log import log
-from megamicros_tools.exception import MuException
+from megamicros.log import log
+from megamicros.exception import MuException
 from .base import MemsArray, DEFAULT_FRAME_LENGTH
 
 H5_PROCESSING_DELAY_RATE				= 4/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)

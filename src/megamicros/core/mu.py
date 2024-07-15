@@ -39,8 +39,8 @@ import time
 import platform
 from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 
-from megamicros_tools.log import log
-from megamicros_tools.exception import MuException
+from megamicros.log import log
+from megamicros.exception import MuException
 from .base import MemsArray, DEFAULT_SAMPLING_FREQUENCY, DEFAULT_FRAME_LENGTH
 
 

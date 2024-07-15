@@ -33,8 +33,8 @@ import numpy as np
 import threading
 from time import sleep, time
 
-from megamicros_tools.log import log
-from megamicros_tools.exception import MuException
+from megamicros.log import log
+from megamicros.exception import MuException
 from .base import MemsArray, DEFAULT_FRAME_LENGTH
 
 DB_PROCESSING_DELAY_RATE				= 2/10						# computing delay rate relative to transfer buffer duration (adjusted for real time operation)

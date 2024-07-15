@@ -38,9 +38,9 @@ import h5py
 from enum import Enum
 from threading import Thread, Timer
 
-from megamicros_tools.log import log
-from megamicros_tools.exception import MuException
-from megamicros_tools.data import MuAudio
+from megamicros.log import log
+from megamicros.exception import MuException
+from megamicros.data import MuAudio
 
 
 

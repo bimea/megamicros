@@ -26,8 +26,8 @@ Define antenna class for beamforming
 """
 
 import numpy as np
-from megamicros_tools.exception import MuException
-from megamicros_tools.log import log
+from megamicros.exception import MuException
+from megamicros.log import log
 
 DEFAULT_FRAME_LENGTH = 256
 SOUND_SPEED = 340.29

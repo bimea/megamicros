@@ -36,8 +36,8 @@ import asyncio
 import threading
 import time
 
-from megamicros_tools.log import log
-from megamicros_tools.exception import MuException
+from megamicros.log import log
+from megamicros.exception import MuException
 from .base import MemsArray, DEFAULT_FRAME_LENGTH
 
 

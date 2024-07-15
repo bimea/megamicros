@@ -30,8 +30,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy.io import wavfile
 
-from megamicros_tools.exception import MuException
-from megamicros_tools.log import log
+from megamicros.exception import MuException
+from megamicros.log import log
 
 DEFAULT_LIMIT_VALUE = 10
 FILETYPE_H5 = 1
@@ -209,7 +209,7 @@ class MuAudio( MuData ):
         self.__frame_number = int( np.shape(self.__raw)[1] / self.__frame_size )
 
 
-def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_frequency: float, norm=str|None, extent=None, cleanup=True ):
+def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_frequency: float, norm=str|None, extent=None, directory=None, cleanup=True ):
     """
     Generate a film by adding audio to image sequence.
     Images files are build in a ./tmp local directory and removed if `cleanup` is set du True
@@ -229,35 +229,40 @@ def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_
     extend: floats (left, right, bottom, top), optional
         The bounding box in data coordinates that the image will fill.
         The image is stretched individually along x and y to fill the box.
+    directory: str, optional
+        directory where to save the movie
     cleanup: bool, optional
         clean temporary directory
     """
     
+    if directory is None:
+        directory = '.'
+
     # Can work with int type for sampling_frequency
     sampling_frequency = int( sampling_frequency )
 
     # Create tmp directory
-    log.info( f' .Create ./tmp directory...' )
-    os.system( 'mkdir -p ./tmp && rm -Rf ./tmp/*' )
+    log.info( f' .Create {directory}/tmp directory...' )
+    os.system( f'mkdir -p {directory}/tmp && rm -Rf {directory}/tmp/*' )
 
     # Create video from images 
     if norm == None:
         log.info( f' .Generate images as png files without normalization...' )
         for i, img in enumerate( imgs ):
             plt.imshow( img, origin='lower', extent=extent)
-            plt.savefig( f"./tmp/file{i:02d}.png" )
+            plt.savefig( f"{directory}/tmp/file{i:02d}.png" )
     elif norm == 'energy':
         log.info( f' .Generate images as png files with sequence energy normalization...' )
         log.info( f' .Found min/max images values in sequence: [{np.amin(imgs)}, {np.amax(imgs) }]' )
         for i, img in enumerate( imgs ):
             plt.imshow( img, vmin=np.amin(imgs), vmax=np.amax(imgs), origin='lower', extent=extent )
-            plt.savefig( f"./tmp/file{i:02d}.png" )
+            plt.savefig( f"{directory}/tmp/file{i:02d}.png" )
     else:
         raise MuException( f"Unknown normalization method: '{norm}'.")
 
     # write video
     log.info( f' .Generate video from png files...' )
-    cmd = f"cd ./tmp && ffmpeg -v error -r {rate} -i file%02d.png -vcodec mpeg4 -y video.mp4"
+    cmd = f"cd {directory}/tmp && ffmpeg -v error -r {rate} -i file%02d.png -vcodec mpeg4 -y video.mp4"
     error = os.system( cmd )
     if error:
         raise MuException( "failed to write mp4 video file from png images..." )
@@ -268,11 +273,11 @@ def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_
     log.info( f' .Sound length: {len(sound)} samples' )
     log.info( f' .Samples format: {sound.dtype}' )
                                             
-    wavfile.write ( f"./tmp/audio.wav", sampling_frequency, sound )
+    wavfile.write ( f"{directory}/tmp/audio.wav", sampling_frequency, sound )
 
     # merge video and sound
     log.info( f' .Merge audio with video and make mp4 movie file...' )
-    cmd = f"cd ./tmp && ffmpeg -v error -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -shortest movie.mp4"
+    cmd = f"cd {directory}/tmp && ffmpeg -v error -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -shortest movie.mp4"
     error = os.system( cmd )
     if error:
         raise MuException( "failed to write mp4 movie file..." )
@@ -282,6 +287,6 @@ def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_
     # Remove png files
     if cleanup:
         log.info( f' .Remove temporary png files...' )
-        cmd = f"cd ./tmp && rm *.png"
+        cmd = f"cd {directory}/tmp && rm *.png"
         if os.system( cmd ):
             raise MuException( "failed to cleanup temporary directory" )
