@@ -172,31 +172,41 @@ class BeamformerFDAS( Beamformer ):
     __H: np.ndarray                             # beamforming matrix
     __BFE: np.ndarray                           # Beamforming energy
     __BFSpec: np.ndarray                        # Complex spectrum computed on all beams (locations_number x frequencies_number)
-    # __fft: McFFT
+    __FFT: np.ndarray                           # Complex spectrum computed on all channels (channels_number x frequencies_number)
     
     @property
-    def BFE( self ) -> int:
+    def BFE( self ) -> np.ndarray:
         """ Beamforming energy array """
 
         return self.__BFE
     
     @property
-    def D( self ) -> int:
+    def D( self ) -> np.ndarray:
         """ Distances matrix """
 
         return self.__D
 
     @property
-    def H( self ) -> int:
+    def H( self ) -> np.ndarray:
         """ Beamforming matrix """
 
         return self.__H
+    
+    @property
+    def FFT( self ) -> np.ndarray:
+        """ FFT matrix """
+
+        return self.__FFT
 
     def getBeamformingEnergy( self ) -> np.ndarray:
         """ Get the beamforming energy array """
 
         return self.__BFE
 
+    def getFrequenciesAxis( self ) -> np.ndarray:
+        """ Get the frequencies axis """
+
+        return self.__f_axis
 
     def setFFtWindowSize( self, fft_window_size):
         """ Set the FFT window size in samples number 
@@ -261,6 +271,8 @@ class BeamformerFDAS( Beamformer ):
         self.__H = np.outer(  self.__f_axis, self.__D ).reshape( freq_number, locations_number, self.mems_number )/SOUND_SPEED
         self.__H = np.exp( 1j*2*np.pi*self.__H )
 
+        self.__FFT = None
+
 
     def compute( self, signal: np.ndarray, type='full' ) -> np.ndarray:
         """ Process beamforming on input signals
@@ -289,8 +301,8 @@ class BeamformerFDAS( Beamformer ):
 
         # Process beamforming on input signal involving all frequencies
         if type == 'full':
-            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
-            SpecH = Spec[:, None, :] * self.__H
+            self.__FFT = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
+            SpecH = self.__FFT[:, None, :] * self.__H
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
             self.__BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index+1,:], 0 ) / self.__band_width_length
 
@@ -299,14 +311,14 @@ class BeamformerFDAS( Beamformer ):
         # compute beamforming on frequency with max energy
         elif type == "max":
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
+            self.__FFT = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # find the max energy on first MEMs microphone
             #freq_max_index = np.argmax( np.abs( Spec[:,0] )**2 )
-            freq_max_index = np.argmax( np.mean( np.abs( Spec ), axis=1 ) )
+            freq_max_index = np.argmax( np.mean( np.abs( self.__FFT ), axis=1 ) )
 
             # compute bmf on the selected frequency
-            SpecH = Spec[freq_max_index, None, :] * self.__H[freq_max_index,:,:]
+            SpecH = self.__FFT[freq_max_index, None, :] * self.__H[freq_max_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
 
             self.__BFE = np.abs( BFSpec )**2 / BFSpec.size
@@ -317,10 +329,10 @@ class BeamformerFDAS( Beamformer ):
         # compute beamforming on the mean energy frequency
         elif type == "mean":
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
+            self.__FFT = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # find the mean energy frequency on channel 0
-            Spec0 = np.abs( Spec[:,0] )**2
+            Spec0 = np.abs( self.__FFT[:,0] )**2
             Spec0_density = Spec0 / np.sum( Spec0 )
             freq_mean = np.sum(  self.__f_axis * Spec0_density )
 
@@ -333,7 +345,7 @@ class BeamformerFDAS( Beamformer ):
                     freq_mean_index = freq_mean_index - 1
             
             # compute bmf on the selected frequency
-            SpecH = Spec[freq_mean_index, None, :] * self.__H[freq_mean_index,:,:]
+            SpecH = self.__FFT[freq_mean_index, None, :] * self.__H[freq_mean_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
             self.__BFE = np.abs( BFSpec )**2 / BFSpec.size
             selected_frequency = self.__f_axis[freq_mean_index]
@@ -343,10 +355,10 @@ class BeamformerFDAS( Beamformer ):
         # compute beamforming on frequencies around the mean energy frequency bounded by standard deviation
         elif type == "gauss":
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
+            self.__FFT = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # find the mean energy frequency on channel 0
-            Spec0 = np.abs( Spec[:,0] )**2
+            Spec0 = np.abs( self.__FFT[:,0] )**2
             Spec0_density = Spec0 / np.sum( Spec0 )
             freq_mean = np.sum(  self.__f_axis * Spec0_density )
             std_dev = np.sqrt( np.sum( (self.__f_axis - freq_mean)**2 * Spec0_density ) ) / 2
@@ -367,7 +379,7 @@ class BeamformerFDAS( Beamformer ):
             freq_max_index = min( freq_mean_index + std_dev_nindex, self.__f_axis.size )
             
             # compute bmf on the selected frequency
-            SpecH = Spec[freq_min_index:freq_max_index, None, :] * self.__H[freq_min_index:freq_max_index,:,:]
+            SpecH = self.__FFT[freq_min_index:freq_max_index, None, :] * self.__H[freq_min_index:freq_max_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
             self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / BFSpec.size
             selected_frequency = self.__f_axis[freq_mean_index]
@@ -377,19 +389,19 @@ class BeamformerFDAS( Beamformer ):
         # Find the location that best matches the phase distribution at the frequency for which energy is max
         elif type == "omp":
             # compute spectrum on all channels            
-            Spec = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
+            self.__FFT = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
 
             # init result vector
             omp_fo = np.zeros( self.locations_number )
 
             # frequency index carrying max energy
-            freq_max_index = np.argmax( np.mean( np.abs( Spec ), axis=1 ) )
+            freq_max_index = np.argmax( np.mean( np.abs( self.__FFT ), axis=1 ) )
 
             # Set dictionnary as the set of all phases complex multiplicators at the i_f0 frequency 
             Dico = self.__H[freq_max_index,:,:].T
 
             # Compute the first decomposition coef given by matching pursuit 
-            result: Result = omp( Dico, Spec[freq_max_index,:], maxit=1, verbose=False )
+            result: Result = omp( Dico, self.__FFT[freq_max_index,:], maxit=1, verbose=False )
 
             # Get coef in the location vector (that could be reshaped as (nx, ny))  
             omp_fo = result.coef + 1e-12
