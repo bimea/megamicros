@@ -1,4 +1,4 @@
-# megamicros.bmf.py
+# megamicros.tools.acoustics.bmf.py
 #
 # Copyright (c) 2023 Sorbonne Université
 # Author: bruno.gas@sorbonne-universite.fr
