@@ -61,15 +61,45 @@ class Predictor2D( Predictor ):
     """
 
     __antennas_focal: list
+    __sampling_mode: str
+    __boxes: list
     
-    def __init__():
-        pass
+    def __init__( self ):
+        self.__antennas_focal = []
+        self.__sampling_mode = None
+        self.__boxes = []
 
-    def addAntenna(self, position: list | tuple | np.ndarray, focal_width: float, focal_depth: float, focal_width_sampling: float, focal_depth_sampling: float ) -> None:
+
+    def addAntenna(self, position: list | tuple | np.ndarray, focal_width: float, focal_depth: float ) -> None:
+        """ Add an antenna in the room with its own focal dimensions
+
+        Parameters
+        ----------
+
+        * position: list|tuple|np.ndarray
+            The 3D position of the antenna in the room in meters
+        * focal_width: float
+            The width of the focal plan in meters
+        * focal_depth: float
+            The depth of the focal plan in meters
+        """
+        
         super().addAntenna( position )
         self.__antennas_focal.append( {
             'plan_width': focal_width, 
             'plan_depth': focal_depth, 
-            'plan_width_sampling': focal_width_sampling, 
-            'plan_depth_samplin': focal_depth_sampling
         } )
+
+
+    def addBoxSampling( self, centers: list|tuple|np.ndarray, width: float, depth: float ) -> None:
+        """ Generate a box sampling using centers of boxes as sampling points.
+            This sampling can be added to an existing one.
+        """
+        self.__sampling_mode = 'box'
+
+        if type(centers) is np.ndarray or type(centers) is tuple:
+            centers = list( centers )
+
+        self.__boxes = []
+        for center in centers:
+            self.__boxes.append( [center[0]*scale_width-half_width, center[1]*scale_length-half_length, width*scale_width, length*scale_length] )
