@@ -1,4 +1,4 @@
-# megamicros.tools.acoustics.predict.py
+# megamicros.tools.acoustics.location.py
 #
 # Copyright (c) 2023 Sorbonne Université
 # Author: bruno.gas@sorbonne-universite.fr
@@ -21,7 +21,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-""" Define Predictor classes for localization prediction
+""" Define Locator classes for location prediction using BFE signals
 
 Documentation
 -------------
@@ -31,7 +31,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 from megamicros.log import log
 
-class Predictor:
+class Locator:
     """ Predictor base class for localization prediction
     """
     __room_width: float
@@ -63,7 +63,7 @@ class Predictor:
         log.info( f'Antenna added in room at position: {position}' )
 
 
-class Predictor2D( Predictor ):
+class Locator2D( Locator ):
     """ Predictor2D class for 2D localization prediction
     """
 
@@ -122,3 +122,5 @@ class Predictor2D( Predictor ):
                 width, 
                 depth
             ]) )
+
+        log.info( f'{len( centers )} box sampling added with {len(centers)} boxes of {width} x {depth} meters' )

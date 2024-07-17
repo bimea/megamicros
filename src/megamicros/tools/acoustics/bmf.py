@@ -280,6 +280,13 @@ class BeamformerFDAS( Beamformer ):
         If the signal length is smaller than the `__fft_window_size` parameter, the input is cropped. 
         If it is larger, the input signal is padded with zeros
         
+        There are several methods to compute the BMF:
+        * `type='full'`: beamforming is computed over all the frequencies
+        * `type='max'`: beamforming is only performed on the frequency givng the maximum energy (energy is computed on the first MEMs)
+        * `type='mean'`: the power spectrum along MEMs 0 is viewed as a probability density which is approximated by a gaussian distribution. Beamforming is computed on the mean frequency of the gaussian distribution.
+        * `type='gauss'`: the power spectrum along MEMs 0 is viewed as a probability density which is approximated by a gaussian distribution. Beamforming is computed on a range of frequencies around the mean frequency of the gaussian distribution with standard deviation as the width of the range.
+        * `type='omp'`: find the location that best matches the phase distribution at the frequency for which energy is max using OMP algorithm
+        
         Parameters
         ----------
         signal: np.ndarray
@@ -414,3 +421,29 @@ class BeamformerFDAS( Beamformer ):
         return self.__BFE, selected_frequency, band_width
 
 
+    def plotBfe( self, room_width: float, room_depth: float, x_npos: float, y_npos: float, position=None, prediction=None ):
+        """ Plot the BFE in a room and highlight the max value and the source position"""
+
+        bfe_room = np.reshape( self.__BFE, ( x_npos, y_npos ) )
+
+        fig, ax = plt.subplots()
+        img = ax.imshow( bfe_room, origin='lower' )
+        if prediction is not None:
+            ax.set_title( f"BFE - max found at ({prediction[0]:.2f},{prediction[1]:.2f}) meters" )
+
+        xticks = np.linspace( 0, x_npos-1, 10 )
+        xticks_number = len( xticks )
+        yticks = np.linspace( 0, y_npos-1, 10 )
+        yticks_number = len( yticks )
+        ax.set_xticks( xticks, labels=np.array( [i for i in range( xticks_number )] )*room_width//(xticks_number-1) )
+        ax.set_yticks( yticks, labels=np.array( [i for i in range( yticks_number )] )*room_depth//(yticks_number-1) )
+
+        if position is not None:
+            ax.scatter( position[0]*x_npos/room_width, position[1]*y_npos/room_depth, color='green' )
+
+        if prediction is not None:
+            ax.scatter( prediction[0]*x_npos/room_width, prediction[1]*y_npos/room_depth, color='orange' )
+
+        fig.colorbar( img, ax=ax, label='Interactive colorbar' )
+
+        return ax
