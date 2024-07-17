@@ -29,6 +29,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
 import numpy as np
+from megamicros.log import log
 
 class Predictor:
     """ Predictor base class for localization prediction
@@ -42,18 +43,24 @@ class Predictor:
         self.__room_width = room_width
         self.__room_depth = room_depth
         self.__room_height = room_height
-        self.__antennas_positions = []
+        self.__antennas_position = []
+        log.info( f'Localization Predictor object initialized on room {room_width} x {room_depth} x {room_height} meters' )
 
     def addAntenna( self, position: list|tuple|np.ndarray ) -> None:
         """ Add an antenna in the room
         """
 
         if type(position) is list:
-            self.__antennas_position.append( np.array( position ) )
+            position = np.array( position )
         elif type(position) is tuple:
-            self.__antennas_position.append( np.array( list( position ) ) )
-        else:
-            self.__antennas_position.append( position )
+            position = np.array( list( position ) )
+        
+        self.__antennas_position.append( position )
+
+        if position.shape[0] != 3:
+            raise ValueError( f'Invalid antenna position: {position}. Should be a 3D position' )
+        
+        log.info( f'Antenna added in room at position: {position}' )
 
 
 class Predictor2D( Predictor ):
@@ -64,10 +71,12 @@ class Predictor2D( Predictor ):
     __sampling_mode: str
     __boxes: list
     
-    def __init__( self ):
+    def __init__( self, room_width: float, room_depth: float, room_height: float ) -> None:
+        super().__init__( room_width, room_depth, room_height )
         self.__antennas_focal = []
         self.__sampling_mode = None
         self.__boxes = []
+        log.info( 'Localization Predictor2D object initialized' )
 
 
     def addAntenna(self, position: list | tuple | np.ndarray, focal_width: float, focal_depth: float ) -> None:
@@ -89,6 +98,7 @@ class Predictor2D( Predictor ):
             'plan_width': focal_width, 
             'plan_depth': focal_depth, 
         } )
+        log.info( f'Antenna added in room with focal {focal_width} x {focal_depth} meters' )
 
 
     def addBoxSampling( self, centers: list|tuple|np.ndarray, width: float, depth: float ) -> None:
@@ -97,9 +107,18 @@ class Predictor2D( Predictor ):
         """
         self.__sampling_mode = 'box'
 
-        if type(centers) is np.ndarray or type(centers) is tuple:
+        if type( centers ) is np.ndarray or type( centers ) is tuple:
             centers = list( centers )
 
-        self.__boxes = []
+        half_width = width / 2
+        half_depth = depth / 2
         for center in centers:
-            self.__boxes.append( [center[0]*scale_width-half_width, center[1]*scale_length-half_length, width*scale_width, length*scale_length] )
+            if type( center ) is not np.ndarray or center.shape[0] != 2:
+                raise ValueError( f'Invalid center: {center}. Should be a 2D position in np.ndarray type' )
+            
+            self.__boxes.append( np.array( [
+                center[0] - half_width, 
+                center[1] - half_depth, 
+                width, 
+                depth
+            ]) )
