@@ -148,6 +148,8 @@ class Locator2D( Locator ):
     def roomPlot( self ):
         """ Plot the room with antennas and sampling points
         """
+
+        # Create the figure and the axes
         fig, ax = plt.subplots()
         xticks = np.linspace( 0, self.room_width, 10 )
         xticks_number = len( xticks )
@@ -155,5 +157,13 @@ class Locator2D( Locator ):
         yticks_number = len( yticks )
         ax.set_xticks( xticks, labels=np.array( [i for i in range( xticks_number )] )*self.room_width//(xticks_number-1) )
         ax.set_yticks( yticks, labels=np.array( [i for i in range( yticks_number )] )*self.room_depth//(yticks_number-1) )
+
+        # Force same unit size on both x and y axis
+        ax.set_aspect('equal')
+
+        # Add boxes if any
+        if self.__sampling_mode == 'box':
+            for box in self.__boxes:
+                ax.add_patch( Rectangle( ( box[0], box[1] ), box[2], box[3], fill=False, edgecolor='red' ) )
 
         return ax
