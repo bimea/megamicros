@@ -29,6 +29,8 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 from megamicros.log import log
 
 class Locator:
@@ -38,6 +40,23 @@ class Locator:
     __room_depth: float
     __room_height: float
     __antennas_position: list
+
+
+    @property
+    def room_width( self ) -> float:
+        """ Get the room width in meters """
+        return self.__room_width
+    
+    @property
+    def room_depth( self ) -> float:
+        """ Get the room depth in meters """
+        return self.__room_depth
+
+    @property
+    def room_height( self ) -> float:
+        """ Get the room height in meters """
+        return self.__room_height
+
 
     def __init__( self, room_width: float, room_depth: float, room_height: float ) -> None:
         self.__room_width = room_width
@@ -124,3 +143,17 @@ class Locator2D( Locator ):
             ]) )
 
         log.info( f'{len( centers )} box sampling added with {len(centers)} boxes of {width} x {depth} meters' )
+
+
+    def roomPlot( self ):
+        """ Plot the room with antennas and sampling points
+        """
+        fig, ax = plt.subplots()
+        xticks = np.linspace( 0, self.room_width, 10 )
+        xticks_number = len( xticks )
+        yticks = np.linspace( 0, self.room_depth, 10 )
+        yticks_number = len( yticks )
+        ax.set_xticks( xticks, labels=np.array( [i for i in range( xticks_number )] )*self.room_width//(xticks_number-1) )
+        ax.set_yticks( yticks, labels=np.array( [i for i in range( yticks_number )] )*self.room_depth//(yticks_number-1) )
+
+        return ax
