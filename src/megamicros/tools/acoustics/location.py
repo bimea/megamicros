@@ -145,8 +145,35 @@ class Locator2D( Locator ):
 
         log.info( f'Box sampling added with {n_x}x{n_y} boxes of {width} x {depth} meters' )
 
+    def locateFromBFE( self, BFE: np.ndarray, sampling_x: int, sampling_y: int ) -> np.ndarray:
+        """ Locate a source from BFE signals
+        Parameters
+        ----------
+        BFE : np.ndarray
+            The BFE signals
+        sampling_x : int
+            The number of sampling points in x
+        sampling_y : int
+            The number of sampling points in y
+        """
 
-    def roomPlot( self ):
+        # Get the maximum value and max indice of BFE:
+        max_value = np.max( BFE )
+        max_indice = np.argmax( BFE )
+
+        # Get the corresponding position in metric space
+        x = max_indice % sampling_x
+        y = max_indice // sampling_x
+
+        # >>>>>>>>>>>>>>>>>>>
+
+        if self.__sampling_mode == 'box':
+            for box in self.__boxes:
+                pass
+        else:
+            pass
+
+    def roomPlot( self, room_view: bool=False ) -> plt.Axes:
         """ Plot the room with antennas and sampling points
         """
 
@@ -159,9 +186,10 @@ class Locator2D( Locator ):
         ax.set_xticks( xticks, labels=np.array( [i for i in range( xticks_number )] )*self.room_width//(xticks_number-1) )
         ax.set_yticks( yticks, labels=np.array( [i for i in range( yticks_number )] )*self.room_depth//(yticks_number-1) )
 
-        # Force same unit size on both x and y axis and add the room
+        # Force same unit size on both x and y axis and add the room if requested
         ax.set_aspect('equal')
-        ax.add_patch( Rectangle( ( 0, 0 ), self.room_width, self.room_depth, fill=False, edgecolor='blue' ) )
+        if room_view:
+            ax.add_patch( Rectangle( ( 0, 0 ), self.room_width, self.room_depth, fill=False, edgecolor='blue' ) )
 
         # Add antennas if any
         for a in range( len( self.antennas_position ) ):
