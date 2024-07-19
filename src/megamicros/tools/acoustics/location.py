@@ -56,6 +56,11 @@ class Locator:
     def room_height( self ) -> float:
         """ Get the room height in meters """
         return self.__room_height
+    
+    @property
+    def antennas_position( self ) -> list:
+        """ Get the antenna positions as a list of np.array 3D positions """
+        return self.__antennas_position
 
 
     def __init__( self, room_width: float, room_depth: float, room_height: float ) -> None:
@@ -97,6 +102,10 @@ class Locator2D( Locator ):
         self.__boxes = []
         log.info( 'Localization Predictor2D object initialized' )
 
+    @property
+    def antennas_focal( self ) -> list:
+        """ Get the antenna positions as a list of np.array 3D positions """
+        return self.__antennas_focal
 
     def addAntenna(self, position: list | tuple | np.ndarray, focal_width: float, focal_depth: float ) -> None:
         """ Add an antenna in the room with its own focal dimensions
@@ -120,29 +129,21 @@ class Locator2D( Locator ):
         log.info( f'Antenna added in room with focal {focal_width} x {focal_depth} meters' )
 
 
-    def addBoxSampling( self, centers: list|tuple|np.ndarray, width: float, depth: float ) -> None:
+    def addBoxSampling( self, n_x: int, n_y: int, c_x: float, c_y: float, width: float, depth: float ) -> None:
         """ Generate a box sampling using centers of boxes as sampling points.
             This sampling can be added to an existing one.
         """
         self.__sampling_mode = 'box'
 
-        if type( centers ) is np.ndarray or type( centers ) is tuple:
-            centers = list( centers )
-
         half_width = width / 2
         half_depth = depth / 2
-        for center in centers:
-            if type( center ) is not np.ndarray or center.shape[0] != 2:
-                raise ValueError( f'Invalid center: {center}. Should be a 2D position in np.ndarray type' )
-            
-            self.__boxes.append( np.array( [
-                center[0] - half_width, 
-                center[1] - half_depth, 
-                width, 
-                depth
-            ]) )
+        for i in range( n_x ):
+            for j in range( n_y ):
+                self.__boxes.append( np.array( [
+                    c_x + i*width, c_y + j*depth, width, depth
+                ]) )
 
-        log.info( f'{len( centers )} box sampling added with {len(centers)} boxes of {width} x {depth} meters' )
+        log.info( f'Box sampling added with {n_x}x{n_y} boxes of {width} x {depth} meters' )
 
 
     def roomPlot( self ):
@@ -158,12 +159,21 @@ class Locator2D( Locator ):
         ax.set_xticks( xticks, labels=np.array( [i for i in range( xticks_number )] )*self.room_width//(xticks_number-1) )
         ax.set_yticks( yticks, labels=np.array( [i for i in range( yticks_number )] )*self.room_depth//(yticks_number-1) )
 
-        # Force same unit size on both x and y axis
+        # Force same unit size on both x and y axis and add the room
         ax.set_aspect('equal')
+        ax.add_patch( Rectangle( ( 0, 0 ), self.room_width, self.room_depth, fill=False, edgecolor='blue' ) )
+
+        # Add antennas if any
+        for a in range( len( self.antennas_position ) ):
+            ax.add_patch( Rectangle( 
+                ( self.antennas_position[a][0]-self.antennas_focal[a]['plan_width']/2, self.antennas_position[a][1]-self.antennas_focal[a]['plan_depth']/2 ),
+                self.antennas_focal[a]['plan_width'], self.antennas_focal[a]['plan_depth'], fill=True, edgecolor='lightgrey', facecolor='lightgrey'
+            ) )
+            ax.scatter( self.antennas_position[a][0], self.antennas_position[a][1], color='orange', marker='^' )
 
         # Add boxes if any
         if self.__sampling_mode == 'box':
             for box in self.__boxes:
                 ax.add_patch( Rectangle( ( box[0], box[1] ), box[2], box[3], fill=False, edgecolor='red' ) )
-
+                
         return ax
