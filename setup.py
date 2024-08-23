@@ -167,6 +167,9 @@ setup(
         "pyaudio",
         "libusb1",
         "websockets",
+        "ffmpeg",
+        "imageio",
+        "imageio-ffmpeg",
         "megamicros-tools",
         "megamicros-aidb"
     ],

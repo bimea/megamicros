@@ -29,6 +29,7 @@ import os
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.io import wavfile
+from imageio import mimsave
 
 from megamicros.exception import MuException
 from megamicros.log import log
@@ -209,8 +210,117 @@ class MuAudio( MuData ):
         self.__frame_number = int( np.shape(self.__raw)[1] / self.__frame_size )
 
 
-def generate_moovie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_frequency: float, norm=str|None, extent=None, directory=None, cleanup=True ):
+
+def generate_video( imgs: list, rate: float, directory=None, norm: str|None=None, flip=True ):
     """
+    Generate a video from a list of images
+    
+    Parameters
+    ----------
+    imgs: list
+        list of images saved as 2D numpy array
+    rate: float
+        images number per second (video frequency)
+    directory: str, optional
+        directory where to save the video
+    flip: bool, optional
+        flip images vertically
+    """
+
+    if directory is None:
+        directory = '.'
+
+    log.info( f' .Generate grescale and colored video from energy-type images' )
+
+    if norm is None:        
+        # Normalize images in greyscale values
+        normalized_imgs = [(img - np.min(img)) / (np.max(img)-np.min(img)) for img in imgs]
+    elif norm == 'energy':
+        min_pixel_value = min( np.min(img) for img in imgs )
+        max_pixel_value = max( np.max(img) for img in imgs )
+        dynamic_range = max_pixel_value - min_pixel_value
+        normalized_imgs = [(img - min_pixel_value) / (dynamic_range) for img in imgs]
+    else:
+        raise MuException( f"Unknown normalization method: '{norm}'.")
+    
+    # Buil grey scale image
+    normalized_imgs = [(img * 255).astype(np.uint8) for img in normalized_imgs]
+
+    # Flip images along the vertical axis
+    if flip:
+        normalized_imgs = [np.flipud(img) for img in normalized_imgs]
+
+    # Convert normalized grayscale images into color images using one of the available colormaps
+    cmap = plt.get_cmap('hot')
+
+    # Convert grayscale images to color images
+    color_imgs = [cmap(img) for img in normalized_imgs]
+
+    # Save in directory
+    mimsave(f'{directory}/video.mp4', normalized_imgs, fps=rate)
+    mimsave(f'{directory}/video-colored.mp4', color_imgs, fps=rate)
+
+    log.info( f' .Video saved' )
+
+
+def generate_movie( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_frequency: float, norm=str|None, directory=None, colored=True ):
+    """
+    Generate a film by adding audio to image sequence.
+    Images files are build in a ./tmp local directory and removed if `cleanup` is set du True
+
+    Parameters
+    ----------
+    imgs: np.ndarray
+        list of images saved as 2D numpy array
+    rate: float 
+        images number per second (video frequency)
+    sound: np.ndarray
+        sound as a numpy array of float
+    sampling_frequency: float
+        sound sampling frequency
+    norm: str, optional
+        images normalization method. Can be either None or "energy"
+    extend: floats (left, right, bottom, top), optional
+        The bounding box in data coordinates that the image will fill.
+        The image is stretched individually along x and y to fill the box.
+    directory: str, optional
+        directory where to save the movie
+    cleanup: bool, optional
+        clean temporary directory
+    """
+    
+    if directory is None:
+        directory = '.'
+
+    # Can work with int type for sampling_frequency
+    sampling_frequency = int( sampling_frequency )
+
+    # Create the video from images
+    log.info( f' .Generate video from images...' )
+    generate_video( imgs=imgs, rate=rate, directory=directory, norm=norm, flip=True )
+
+    # Save sound
+    log.info( f' .Generate sound wav file...' )
+    wavfile.write ( f"{directory}/audio.wav", sampling_frequency, np.array( sound >> 8 ).astype(np.int16)*4 )
+
+    # Create moovie by merging video and sound
+    log.info( f' .Merge audio with video and make mp4 movie file...' )
+    if os.path.exists(f'{directory}/movie.mp4'):
+        os.remove( f'{directory}/movie.mp4' )
+    
+    if colored:
+        cmd = f"cd {directory} && ffmpeg -v error -i video-colored.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -shortest movie.mp4"
+    else:
+        cmd = f"cd {directory} && ffmpeg -v error -i video.mp4 -i audio.wav -map 0:v -map 1:a -c:v copy -shortest movie.mp4"
+    error = os.system( cmd )
+    if error:
+        raise MuException( "failed to write mp4 movie file..." )
+    
+
+
+def generate_moovie_old( imgs: np.ndarray, rate: float, sound: np.ndarray, sampling_frequency: float, norm=str|None, extent=None, directory=None, cleanup=True ):
+    """
+    This function is deprecated. Use `generate_movie` instead.
     Generate a film by adding audio to image sequence.
     Images files are build in a ./tmp local directory and removed if `cleanup` is set du True
 

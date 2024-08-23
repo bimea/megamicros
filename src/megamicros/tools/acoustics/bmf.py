@@ -220,8 +220,20 @@ class BeamformerFDAS( Beamformer ):
         self.__fft_window_size = fft_window_size
 
 
-    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int ):
+    def __init__( self, mems_position: np.ndarray, locations: np.ndarray, sampling_frequency: float, frame_length: int, bandwidth: tuple|None=None ):
         """ Create a new Frequency Domain Adaptive Beamformer by delay and sum method instance 
+        Parameters
+        ----------
+        mems_positions: np.ndarray
+            The MEMs positions as an array of 3D array positions (MEMs number x 3)
+        locations: np.ndarray
+            The space locations where to compute the BMF as an array of 3D array positions (locations number x 3)
+        sampling_frequency: float
+            The sampling frequency of input signals
+        frame_length: int
+            The frame length in samples number
+        bandwidth: tuple, optional
+            The normalized frequencies bandwidth. Default is [0, 1] which means all frequencies from 0 to Fe/2
         """
         
         super().__init__( mems_position, locations, sampling_frequency, frame_length )
@@ -242,6 +254,11 @@ class BeamformerFDAS( Beamformer ):
         frequency_step = self.sampling_frequency / freq_number / 2
 
         # bandwidth range
+        if bandwidth is not None:
+            self.__band_width = bandwidth
+        else:
+            self.__band_width = [0, 1]
+        
         self.__fft_low_cut_off_index = int( self.sampling_frequency * self.__band_width[0] / frequency_step / 2 )
         self.__fft_high_cut_off_index = int( self.sampling_frequency * self.__band_width[1] / frequency_step / 2 ) - 1
         self.__band_width_length = self.__fft_high_cut_off_index - self.__fft_low_cut_off_index + 1
@@ -309,9 +326,13 @@ class BeamformerFDAS( Beamformer ):
         # Process beamforming on input signal involving all frequencies
         if type == 'full':
             self.__FFT = np.fft.rfft( signal, n=self.__fft_window_size, axis=0 )
-            SpecH = self.__FFT[:, None, :] * self.__H
+            # SpecH = self.__FFT[:, None, :] * self.__H
+            # BFSpec = np.sum( SpecH, -1 ) / self.mems_number
+            # self.__BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index+1,:], 0 ) / self.__band_width_length
+
+            SpecH = self.__FFT[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index, None, :] * self.__H[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-            self.__BFE = np.sum( ( np.abs( BFSpec )**2 )[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index+1,:], 0 ) / self.__band_width_length
+            self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / self.__band_width_length
 
             return self.__BFE, None, None
 

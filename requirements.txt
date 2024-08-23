@@ -6,5 +6,7 @@ libusb1
 pyaudio
 websockets
 ffmpeg
+imageio
+imageio-ffmpeg
 megamicros-tools
 megamicros-aidb

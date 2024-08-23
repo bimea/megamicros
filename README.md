@@ -89,6 +89,14 @@ Finally, you can install the Python *mkdocs* server and targeting the local web 
 
 ## Releases
 
+### 2.1.13-2.1.21
+
+* Prepare the next major release
+* Transform megamicros_tools package in megamicros.tools sub package
+* Major updates in tools/acoustics/location.py
+* Add BFE on limited frequency bandwith
+* Add getBFE function in core/h5 to get BFE data from MµH5 files
+
 ### 2.1.12
 
 * Fix `get()` method error when getting signals from H5 file

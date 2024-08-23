@@ -61,7 +61,6 @@ class MemsArrayH5( MemsArray ):
     MuH5 file is a H5 file that follows the special Megamicros format
     """
 
-    __start_time = 0
     __loop: bool = False                 # Whether or not the current file is played in loop
     __filename: str = None               # H5 filename or directory name where to find H5 files
     __files= list()
@@ -458,6 +457,91 @@ class MemsArrayH5( MemsArray ):
         except Exception as e:
             raise MuH5Exception( f"Run failed on settings: {e}")
         
+
+    def getBFE( self ) -> dict:
+        """ Get the BFE data from H5 file in one shot
+        
+        Parameters
+        ----------
+        return: dict
+            the BFE data as a dictionary with keys 'BFE', 'energy', 'indexes', 'locations', 'mems_position'
+        """
+
+        # Run over H5 files
+        for index, file in enumerate( self.files ):
+            self.__current_filename = file
+            log.info( f" .Processing {self.__current_filename} H5 file... " )
+
+            try:
+                with h5py.File( self.__current_filename, 'r' ) as self.__current_file:
+
+                    if 'muh5' in self.__current_file:
+                        group = self.__current_file['muh5']
+                        meta = dict( zip( group.attrs.keys(), group.attrs.values() ) )
+
+                        # Verbose
+                        log.info( f" > {self.file_duration}s ({(self.file_duration/60):.2f}min) of data in H5 file" )
+                        log.info( f" > Whether counter is available: {self.counter}" )
+                        log.info( f" > {len( self.available_mems )} available mems" )
+                        log.info( f" > {len( self.available_analogs )} available analogic channels" )
+                        log.info( f" > Total available channels number is {self.available_channels_number}" )
+                        log.info( f" > Total actual channels number is {self.channels_number}" )
+                        log.info( f" > Sampling frequency: {self.sampling_frequency} Hz" )
+                        log.info( f" > Active MEMs: {self.mems}" )
+                        log.info( f" > Active analogic channels: {self.analogs}" )
+                        log.info( f" > Whether counter is active: {self.counter and not self.counter_skip}" )
+
+                        log.info( f" > Datatype: {str( self.datatype )}" )
+                        if meta['compression']:
+                            log.info( f" > Compression mode: ON" )
+                        else:
+                            log.info( f" > compression mode: OFF" )
+
+                        if 'muh5/bfe' in self.__current_file:
+                            log.info( f" .BFE data extraction" )
+
+                            group_bfe = self.__current_file['muh5/bfe']
+                            if 'antenna' in group_bfe:
+                                group_antenna = self.__current_file['muh5/bfe/antenna']
+                                antenna = dict( zip( group_antenna.attrs.keys(), group_antenna.attrs.values() ) )
+                                log.info( f" > Mems number: {antenna['mems_number']}" )
+                                log.info( f" > Locations number: {antenna['locations_number']}" )
+                            else:
+                                antenna = {}
+                                log.warning( f"Cannot find BFE antenna properties in {self.__current_filename} H5 file (no `muh5/bfe/antenna` group found)" )
+
+                            BFE = []
+                            BFE_count = []
+                            sub_groups_number = len( group_bfe ) - 1
+                            for i in range( sub_groups_number ):
+                                print('sub-group: ', i)
+                                if str( i ) in group_bfe:
+                                    group = group_bfe[str( i )]
+                                    print('group: ', group)
+                                    BFE.append( np.array( group['sig'] ) )
+                                    BFE_count.append( np.array( group['count'] ) )
+
+                            data = {
+                                'antenna': antenna,
+                                'BFE': BFE,
+                                'count': np.concatenate( BFE_count )
+                            }
+
+                            return data
+                            
+                        else:
+                            raise MuH5Exception( f"Cannot find BFE data in {self.__current_filename} H5 file (no `muh5/bfe` group found)" )
+
+                        # Leave once the first file is processed 
+                        break
+
+            except Exception as e:
+                log.error( f"getBFE failed on Exception ({type(e).__name__}): {e}" )
+                raise e
+            except :
+                log.error( f"getBFE failed on unexpected unknown Exception ({type(e).__name__}): {e}" )
+                raise e      
+    
 
     def get( self ) -> np.array:
         """ Get selected channels from H5 file in one shot
