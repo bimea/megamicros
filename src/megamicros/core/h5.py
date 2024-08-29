@@ -26,7 +26,7 @@
 
 Documentation
 -------------
-MegaMicros documentation is available on https://readthedoc.biimea.io
+MegaMicros documentation is available on https://readthedoc.bimea.io
 """
 # comment
 
@@ -544,12 +544,10 @@ class MemsArrayH5( MemsArray ):
     
 
     def get( self ) -> np.array:
-        """ Get selected channels from H5 file in one shot
+        """ Get all channels from H5 file in one shot
 
         Parameters
         ----------
-        channels: list|tuple|np.array
-            list of channels to get
         return: np.array
             the signal as a numpy array
         """

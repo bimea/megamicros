@@ -1,4 +1,4 @@
-# megamicros.core.mu.py base class for antenna connected to a remote antenna server
+# megamicros.core.mu.py base class for antenna connected to a megamicros device
 #
 # Copyright (c) 2024 Sorbonne Université
 # Author: bruno.gas@bimea.io
@@ -26,7 +26,7 @@
 
 Documentation
 -------------
-MegaMicros documentation is available on https:#readthedoc.biimea.io
+MegaMicros documentation is available on https:#readthedoc.bimea.io
 """
 
 import numpy as np
@@ -161,8 +161,7 @@ class MuUsbException( MuException ):
 
 
 class Megamicros( MemsArray ):
-    """ MEMs array class with input stream connected to a remote megamicros server.
-
+    """ MEMs array class with input stream connected to a megamicros device.
     """
     class SystemType( enum.Enum ):
         """ Megamicros antenna type enumeration

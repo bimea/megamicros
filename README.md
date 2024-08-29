@@ -69,27 +69,16 @@ Create a virtual environnement in the ``megamicros`` repository and install the 
 
 ## Megamicros documentation
 
-You have direct access to the documentation on the [GitHub repository web page](docs/index.md).
-You can also consult the *Megamicros* project web page at [readthedoc.biimea.io](https://readthedoc.biimea.io).
-Finally, you can install the Python *mkdocs* server and targeting the local web page it creates with your browser:
+* Comming soon...
 
-```bash
-  cd path_to_project/megamicros
-  > source venv/bin/activate
-  (venv) > pip install mkdocs "mkdocstrings[python]" mkdocs-material plantuml_markdown
-  (venv) > mkdocs serve
-  [09:50:16] Serving on http://127.0.0.1:8000/
-```
-
-## Dev considerations
-
-### Extracting current real time index when playing audio using then html.audio balise
-
-* [Audio file aligned with graph](https://community.plotly.com/t/audio-file-aligned-with-graph/60994/3)
+You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](https://readthedoc.biimea.io).
 
 ## Releases
 
-### 2.1.13-2.1.21
+The next major release (2.2) is comming soon. 
+The core of megamicros will not change but most of the tools will be reorganized
+
+### 2.1.13-2.1.24
 
 * Prepare the next major release
 * Transform megamicros_tools package in megamicros.tools sub package

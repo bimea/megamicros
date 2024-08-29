@@ -166,12 +166,13 @@ setup(
         "matplotlib",
         "pyaudio",
         "libusb1",
+        "h5py",
         "websockets",
         "ffmpeg",
         "imageio",
         "imageio-ffmpeg",
-        "megamicros-tools",
-        "megamicros-aidb"
+        "pyqtgraph",
+        "pyqt6"
     ],
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"

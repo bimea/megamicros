@@ -3,10 +3,13 @@ numpy
 scipy
 matplotlib
 libusb1
+h5py
 pyaudio
 websockets
 ffmpeg
 imageio
 imageio-ffmpeg
-megamicros-tools
-megamicros-aidb
+pyqtgraph 
+pyqt6
+#megamicros-tools
+#megamicros-aidb
