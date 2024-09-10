@@ -29,8 +29,8 @@ import argparse
 
 from megamicros import __version__
 from megamicros.apps import welcome_msg
-from megamicros_tools.log import log
-from megamicros_tools.exception import MuException
+from megamicros.log import log
+from megamicros.exception import MuException
 from megamicros.core.mu import Megamicros
 
 
