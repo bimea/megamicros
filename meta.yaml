@@ -1,0 +1,22 @@
+package:
+  name: megamicros
+  version: "2.1.26"
+
+source:
+  path: src
+
+build:
+  noarch: python
+  script: python setup.py install  # or any other build script
+
+requirements:
+  build:
+    - python
+    - setuptools
+  run:
+    - python
+
+about:
+  home: https://github.com/bimea/megamicros
+  license: MIT
+  summary: A short description of megamicros.

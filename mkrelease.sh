@@ -6,3 +6,7 @@
 python3 -m build --sdist
 python3 -m build --wheel
 python setup.py sdist upload -r bimea
+
+# Build and upload to Conda
+# conda-build my_package
+# anaconda upload /path/to/your/package.tar.bz2

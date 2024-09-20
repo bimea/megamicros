@@ -193,6 +193,12 @@ class BeamformerFDAS( Beamformer ):
         return self.__H
     
     @property
+    def SV( self, freq, pos ) -> np.ndarray:
+        """ Steering vector for a given position and frequency """
+
+        return self.__H[freq, pos, :]
+
+    @property
     def FFT( self ) -> np.ndarray:
         """ FFT matrix """
 
