@@ -514,10 +514,10 @@ class MemsArrayH5( MemsArray ):
                             BFE_count = []
                             sub_groups_number = len( group_bfe ) - 1
                             for i in range( sub_groups_number ):
-                                print('sub-group: ', i)
+                                # print('sub-group: ', i)
                                 if str( i ) in group_bfe:
                                     group = group_bfe[str( i )]
-                                    print('group: ', group)
+                                    # print('group: ', group)
                                     BFE.append( np.array( group['sig'] ) )
                                     BFE_count.append( np.array( group['count'] ) )
 
