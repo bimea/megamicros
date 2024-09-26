@@ -78,13 +78,14 @@ You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](
 The next major release (2.2) is comming soon. 
 The core of megamicros will not change but most of the tools will be reorganized
 
-### 2.1.13-2.1.27
+### 2.1.13-2.1.28
 
 * Prepare the next major release
 * Transform megamicros_tools package in megamicros.tools sub package
 * Major updates in tools/acoustics/location.py
 * Add BFE on limited frequency bandwith
 * Add getBFE function in core/h5 to get BFE data from MµH5 files
+* fix bug in tools/signal.py: `megamicros.exception` instead of `import exception`.
 
 ### 2.1.12
 
