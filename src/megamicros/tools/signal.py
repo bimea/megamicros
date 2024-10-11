@@ -31,8 +31,8 @@ This module provides a set of tools for signal processing and analysis.
 import numpy as np
 from scipy import signal
 
-from exception import MuException
-from log import log
+from megamicros.exception import MuException
+from megamicros.log import log
 
 
 def wiener_entropy( signal: np.ndarray, sampling_frequency: float, frame_duration: float, hop: int|None=None ):
