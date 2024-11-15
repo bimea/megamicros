@@ -21,7 +21,8 @@ USB_RECIPIENT__OTHER = 0x03
 USB_INTERFACE                           = 1
 USB_DEFAULT_TIMEOUT                     = 5000
 USB_RECIPIENT_DEVICE			        = USB_RECIPIENT__DEVICE
-USB_REQUEST_TYPE_VENDOR			        = 0x40
+#USB_REQUEST_TYPE_VENDOR			    = 0x40 // Ne fonctionne pas sur les proto télémaque, utiliser 0x21
+USB_REQUEST_TYPE_VENDOR			        = 0x21
 USB_ENDPOINT_OUT				        = 0x00
 
 
