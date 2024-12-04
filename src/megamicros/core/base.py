@@ -970,7 +970,7 @@ class MemsArray:
         queue_size: int
             The new queue size value. 0 means no size
         """
-        if queue_size > self.queue_maxsize:
+        if self.queue_maxsize != 0 and queue_size > self.queue_maxsize:
             raise MuException( f"Cannot set queue size to {queue_size}: max size is {self.queue_maxsize}" )
         
         self.__queue_size = queue_size

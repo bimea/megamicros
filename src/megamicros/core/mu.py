@@ -143,6 +143,8 @@ DEFAULT_CLOCKDIV				= 0x09										# Default internal acquisition clock value
 DEFAULT_SELFTEST_DURATION       = 0.1                                       # Default selftest duration in seconds     
 DEFAULT_START_TRIGG_STATUS      = False								        # Default start trigger status (external hard (True) or internal soft (False))
 
+CONTROL_DATA_FAILURE            = False                                     # Perform control data failure if True
+EXIT_ON_DATA_FAILURE            = True                                      # Exit on data failure (when data are lost during transfer)
 
 # =============================================================================
 # Exception dedicaced to Megamicros antenna systems
@@ -768,16 +770,21 @@ class Megamicros( MemsArray ):
         # whorst than that, data is no longer aligned in which case this difference no longer makes sense.
         # Submit transfer again but current transfer is lost. 
         # A restart request should be sent to the server to restart the acquisition process. See in the future...
-        if self.counter:
+        if self.counter and CONTROL_DATA_FAILURE:
             ctrl_buffer_length = data[self.usb_buffer_words_length-self.channels_number] - data[0] + 1
             if ctrl_buffer_length != self.usb_buffer_length:
                 log.warning( f"Megamicros.__callback(): from transfer[{transfer.getUserData()}]: data has been lost. Send a restart request...")
-                if( self.running ):
-                    try:
-                        transfer.submit()
-                    except Exception as e:
-                        log.error( f"Megamicros.__callback(): transfer submit failed: {e}" )
-                        self.setRunningFlag( False )
+                if EXIT_ON_DATA_FAILURE:
+                    log.error( f"Megamicros.__callback(): data failure detected. Exiting (EXIT_ON_DATA_FAILURE flag is True)..." )
+                    log.debug( f" .Data failure detected: counter difference is {ctrl_buffer_length} samples instead of {self.usb_buffer_length} samples" )
+                    self.setRunningFlag( False )
+                else:
+                    if( self.running ):
+                        try:
+                            transfer.submit()
+                        except Exception as e:
+                            log.error( f"Megamicros.__callback(): transfer submit failed: {e}" )
+                            self.setRunningFlag( False )
                 return
 
             # All seems correct
@@ -951,7 +958,10 @@ class Megamicros( MemsArray ):
             log.info( f' .End of acquisition' )
             log.info( f'  > Performed {self.__transfer_index} transfer(s), received {self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE} bytes' )
             log.info( f'  > Equivalent recording time: {(self.__transfer_index * self.usb_buffer_duration):.2f} s' )
-            log.info( f'  > Transfer rate: {(self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE / self.__transfer_index / self.usb_buffer_duration / 1024 / 1024):.2f} MB/s' )
+            if self.__transfer_index != 0:
+                log.info( f'  > Transfer rate: {(self.__transfer_index * self.usb_buffer_words_length * MU_TRANSFER_DATAWORDS_SIZE / self.__transfer_index / self.usb_buffer_duration / 1024 / 1024):.2f} MB/s' )
+            else:
+                log.info( f'  > Transfer rate: 0 MB/s' )
             log.info( f'  > Elapsed time: {elapsed_time:.2f} s')
             log.info( f'  > Mean completion time: {mean_completion_time*1000:.4f} ms')
 
