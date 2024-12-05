@@ -78,6 +78,10 @@ You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](
 The next major release (2.2) is comming soon. 
 The core of megamicros will not change but most of the tools will be reorganized
 
+### 2.1.29
+
+* Minor updates on megamicros.mu
+
 ### 2.1.13-2.1.28
 
 * Prepare the next major release
