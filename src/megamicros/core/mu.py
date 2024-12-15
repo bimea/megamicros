@@ -703,7 +703,6 @@ class Megamicros( MemsArray ):
 
         transfer_timestamp = time.time() - self.usb_buffer_duration
 
-
         # Transfer not completed -> skip data transfer without runing user callback
         # Data is lost, if any
         if transfer.getStatus() != usb1.TRANSFER_COMPLETED:
