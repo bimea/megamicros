@@ -1,17 +1,8 @@
-# megamicros.core.ws.py base class for antenna connected to a remote antenna server
+# megamicros.core.ws.py
 #
 # Copyright (c) 2023 Sorbonne Université
 # Author: bruno.gas@sorbonne-universite.fr
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -208,9 +199,16 @@ class MemsArrayWS( MemsArray ):
             log.info( f" .Try connecting to ws://{self.__server_host}:{str(self.__server_port)}...") 
 
             async with websockets.connect( f"ws://{self.__server_host}:{str(self.__server_port)}" ) as websocket:
+                print(f"Sending connect message to server")
+                await websocket.send( "connect" )
+
                 # check server response
-                response = json.loads( await websocket.recv() )
-                error = self.__check_mbs_error( response )
+                resp = await websocket.recv()
+                print('resp:', resp)
+                response = json.loads( resp )
+                print('response:', response)
+
+                error = self.__check_server_error( response )
                 if error:
                     raise MuWSException( f"Connection to server failed with error: {error}" )
                 else:
@@ -241,7 +239,26 @@ class MemsArrayWS( MemsArray ):
         self.__flag_success = True
         return True
 
+    def __check_server_error( self, response ) -> bool|str :
+        """ Check the response from WS server concerning the presence of errors 
+        
+        Parameters
+        ----------
+        response: dict
+            Response given by the remote server after its transformation in Python object
+        
+        Returns
+        -------
+        message: str|bool 
+            string error message received from server or False if no message
+        """
 
+        if response['type'] == 'error':
+            return response['content'] if 'content' and response['content'] is str else 'Unknown error'
+        else:
+            return False
+
+    # Will be removed in the future
     def __check_mbs_error( self, response ) -> bool|str :
         """ Check the response from MBS server concerning the presence of errors 
         
