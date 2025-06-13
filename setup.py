@@ -172,7 +172,8 @@ setup(
         "imageio",
         "imageio-ffmpeg",
         "pyqtgraph",
-        "pyqt6"
+        "pyqt6",
+        "paho_mqtt"
     ],
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
