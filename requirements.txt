@@ -1,4 +1,6 @@
 --index-url https://pypi.bimea.io
+build
+twine
 numpy
 scipy
 matplotlib
@@ -12,5 +14,3 @@ imageio-ffmpeg
 pyqtgraph 
 pyqt6
 paho_mqtt
-#megamicros-tools
-#megamicros-aidb
