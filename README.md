@@ -75,10 +75,16 @@ You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](
 
 ## Releases
 
-The next major release (2.2) is comming soon.
-The core of megamicros will not change but most of the tools will be reorganized
+### 3.0.0
+
+New major release
+
+* Usb interface Refactoring
 
 ### 2.1.30-2.1.34
+
+The next minor release (2.2) is comming soon.
+The core of megamicros will not change but most of the tools will be reorganized
 
 * Update the release making process
 * Import mqtt and muh5 from the ol library megamicros_tools

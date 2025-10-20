@@ -1,17 +1,7 @@
-# megamicros.log.py logging messages process for MegaMicros libraries
+# megamicros.log.py
 #
-# Copyright (c) 2024 Bimea
+# Copyright (c) 2024-2025 Bimea
 # Author: bruno.gas@bimea.io
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -22,7 +12,9 @@
 # THE SOFTWARE.
 
 """
-MegaMicros documentation is available on https://readthedoc.bimea.io
+@file megamicros.log.py
+@brief Megamicros logging utilities
+@documentation MegaMicros documentation is available on https://readthedoc.bimea.io
 
 Declare a stream handler for screen printing and a file handler for log file reporting
 Declare a global logging handler which default level is set on `logging.NOTSET` (which means no log messages printing)
@@ -37,11 +29,9 @@ You can set the level to:
 
 Usage:
 ------
-
 from megamicros import log
 log.setLevel( 'info' )
 """
-
 
 import logging
 import traceback

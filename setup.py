@@ -164,17 +164,24 @@ setup(
         "numpy",
         "scipy",
         "matplotlib",
-        "pyaudio",
         "libusb1",
-        "h5py",
-        "websockets",
-        "ffmpeg",
-        "imageio",
-        "imageio-ffmpeg",
-        "pyqtgraph",
-        "pyqt6",
-        "paho_mqtt"
     ],
+    #install_requires=[
+    #    "numpy",
+    #    "scipy",
+    #    "matplotlib",
+    #    "pyaudio",
+    #    "libusb1",
+    #    "h5py",
+    #    "websockets",
+    #    "ffmpeg",
+    #    "imageio",
+    #    "imageio-ffmpeg",
+    #    "pyqtgraph",
+    #    "pyqt6",
+    #    "paho_mqtt"
+    #],
+
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
     # syntax, for example:
@@ -216,7 +223,7 @@ setup(
 
     # see https://pypi.org/project/cmake-build-extension/
     #ext_modules=[
-    #    cmake_build_extension.CMakeExtension(
+    #    cmake_build_extension.CMakeExtension(@
     #        name="megamicros-mbs",
     #        source_dir=str(pathlib.Path(".") / "c++" ),
     #        install_prefix="megamicros_mbs",

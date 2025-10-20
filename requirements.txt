@@ -1,16 +1,5 @@
---index-url https://pypi.bimea.io
-build
-twine
-numpy
-scipy
-matplotlib
-libusb1
-h5py
-pyaudio
-websockets
-ffmpeg
-imageio
-imageio-ffmpeg
-pyqtgraph 
-pyqt6
-paho_mqtt
+# Install from official bimea repository:
+#--index-url https://pypi.bimea.io
+
+# Install from local repository:
+-e ./
