@@ -16,19 +16,28 @@
 @brief Define USB device handling functions
 """
 
+import queue
 from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 import usb1
 
 from megamicros.log import log
 from megamicros.exception import MuException
 
-USB_DEFAULT_INTERFACE        = 0x00
-USB_DEFAULT_ENDPOINT_IN      = 0x81
-USB_DEFAULT_TIMEOUT          = 1000  # in ms
-
-LIBUSB_RECIPIENT_DEVICE      = 0x00
+# libusb constants (provided by the C libusb but not accessible through python/usb1)
+LIBUSB_RECIPIENT_DEVICE      = 0x00             
 LIBUSB_REQUEST_TYPE_VENDOR   = 0x40
 LIBUSB_ENDPOINT_OUT          = 0x00
+
+# Default constants to perform input bulk transfers from the usb device
+USB_DEFAULT_INTERFACE        = 0x00
+USB_DEFAULT_ENDPOINT_IN      = 0x81
+USB_DEFAULT_TRANSFER_TIMEOUT  = 1000             # timeout in ms
+USB_DEFAULT_WRITE_TIMEOUT     = 1000             # timeout in ms
+
+USB_DEFAULT_BUFFERS_NUMBER   = 8                # Default usb transfer buffers number
+USB_DEFAULT_QUEUE_MAXSIZE    = 0			            # Queue max size as the number of buffer that can be queued (0 means infinite signal queueing)
+USB_DEFAULT_QUEUE_SIZE       = 0                     # Queue limit after which the last signal is lost
+
 
                                                                             
 class UsbException( MuException ):
@@ -40,6 +49,32 @@ class UsbException( MuException ):
 class Usb:
     """ Class representing a USB device """
 
+    class Queue( queue.Queue ):
+        """ Thread safe queue adapted to the Megamicros USB class 
+        
+        Original comportment is that of blocks insertion once maxsize is reached, until queue items are consumed.
+        This implementation pop up the last element of the queue if maxsize is reached.
+        """
+
+        @property
+        def transfert_lost( self ) -> bool:
+            """ Get the transfer lost counter """
+            return self.__transfert_lost
+    
+        def __init__( self, maxsize: int = 0 ):
+            self.__transfert_lost: int = 0
+            super().__init__( maxsize )
+
+        def put( self, data ):
+            # pop up the last element of the queue if maxsize is reached.
+            if self.maxsize > 0 and self.qsize() >= self.maxsize:
+                self.get()
+                self.__transfert_lost += 1
+
+            # Let parent class do the work 
+            super().put( data )
+
+
     def __init__( self, vendor_id:int|None = None, product_id:int|None = None, bus_address:int|None = None, endpoint_in:int|None = None, endpoint_out:int|None = None ):
         self.__vendor_id = vendor_id
         self.__product_id = product_id
@@ -50,10 +85,104 @@ class Usb:
         self.__usb_handle: usb1.USBDeviceHandle|None = None
         self.__is_open = False
         self.__is_claimed = False
+        self.__buffer_size: int = 0
+        self.__buffers_number: int = USB_DEFAULT_BUFFERS_NUMBER
+
+        # Transfer parameters
+        self.__transfer_timeout: int = USB_DEFAULT_TRANSFER_TIMEOUT
+        self.__transfer_buffers: list[usb1.USBTransfer] = []
+
+        # Queue management
+        self.__queue_size: int = USB_DEFAULT_QUEUE_SIZE
+        self.__queue_max_size: int = USB_DEFAULT_QUEUE_MAXSIZE
+        self.__queue: Usb.Queue = Usb.Queue( maxsize=USB_DEFAULT_QUEUE_MAXSIZE )
+        self.__queue_size: int = USB_DEFAULT_QUEUE_SIZE
 
         if vendor_id is not None and product_id is not None and bus_address is not None :
             self.open( vendor_id, product_id, bus_address, endpoint_in if endpoint_in is not None else USB_DEFAULT_ENDPOINT_IN, endpoint_out )
 
+    @property
+    def buffer_size( self ) -> int:
+        return self.__buffer_size
+
+    @property
+    def buffers_number( self ) -> int:
+        return self.__buffers_number
+
+    @property
+    def transfer_timeout( self ) -> int:
+        return self.__transfer_timeout
+
+    @property
+    def bus_address( self ) -> int:
+        return self.__bus_address
+    
+    @property
+    def queue( self ) -> 'Usb.Queue':
+        return self.__queue
+    
+    @property
+    def queue_size( self ) -> int:
+        return self.__queue_size
+
+    @property
+    def queue_max_size( self ) -> int:
+        return self.__queue_max_size
+
+    def asyncBulkTransfer( self, duration: int ) -> None:
+        """
+        Perform an asynchronous bulk transfer on the USB device.
+        This call is non blocking. The device is claimed during all the transfer 
+        """
+
+        if not self.__usb_handle:
+            raise UsbException( 'Failed to start asynchronous bulk transfer: no available handler. Please open device before using it!' )
+
+        if self.__buffers_number == 0:
+            raise UsbException( 'Failed to start asynchronous bulk transfer: buffers number is not set.' )
+        
+        if self.__buffer_size == 0:
+            raise UsbException( 'Failed to start asynchronous bulk transfer: no allocated buffers.' )
+
+        # Claims the interface
+        if not self.__is_claimed:
+            self.claim()
+
+        log.info( ' .Init asynchronous bulk transfer...')
+
+        # Allocate the list of transfer buffers
+        for id in range( self.buffers_number ):
+            transfer = self.__usb_handle.getTransfer()
+            transfer.setBulk(
+                usb1.ENDPOINT_IN | self.bus_address,
+                self.buffer_size,
+                callback=self.__callback,
+                user_data = id,
+                timeout=self.transfer_timeout
+            )
+            self.__transfer_buffers.append( transfer )
+            # To be done in the thread:
+            #transfer.submit()
+
+
+        raise NotImplementedError( 'Usb.asyncBulkTransfer() not implemented yet' )
+
+    def setBufferSize( self, size:int ) -> None:
+        """ Set the USB transfer buffer size in bytes"""
+        self.__buffer_size = size
+
+    def setBuffersNumber( self, number:int ) -> None:
+        """ Set the USB transfer buffers number """
+        self.__buffers_number = number
+
+    def setQueueSize( self, size:int ) -> None:
+        """ Set the USB transfer queue size in bytes """
+        self.__queue_size = size
+
+    def setQueueMaxSize( self, maxsize:int ) -> None:
+        """ Set the USB transfer queue max size in number of buffers """
+        self.__queue_max_size = maxsize
+        self.__queue = Usb.Queue( maxsize=maxsize )
 
     def open( self, vendor_id:int, product_id:int, bus_address:int, endpoint_in:int, endpoint_out:int|None = None ) -> None:
         """ 
@@ -116,7 +245,7 @@ class Usb:
             self.__is_open = False
             log.info( f' .Disconnected from USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
 
-    def __ctrlWrite( self, request, data, time_out=USB_DEFAULT_TIMEOUT ):
+    def __ctrlWrite( self, request, data, time_out=USB_DEFAULT_WRITE_TIMEOUT ) -> None:
         """
         Send a write command to the USB interface
 
@@ -159,7 +288,7 @@ class Usb:
             self.release()
 
 
-    def __ctrlWriteReset( self, request, time_out=USB_DEFAULT_TIMEOUT ):
+    def __ctrlWriteReset( self, request, time_out=USB_DEFAULT_WRITE_TIMEOUT ) -> None:
         """
         Send a reset write command to the MegaMicro FPGA through the usb interface.
         This command needs to perform a _controlTransfer() call instead of a controlWrite() call.
@@ -195,9 +324,9 @@ class Usb:
         if not keeping_claimed:
             self.release()
 
-    def syncBulkRead( self, size:int, time_out=USB_DEFAULT_TIMEOUT ) -> bytes:
+    def syncBulkRead( self, size:int, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
         """
-        Perform a synchronous bulk read transferon the USB device
+        Perform a synchronous bulk read transfer on the USB device
 
         Parameters
         ----------
@@ -234,12 +363,7 @@ class Usb:
 
         return data
 
-    def asyncBulkTransfer( self, duration: int, time_out=USB_DEFAULT_TIMEOUT ) -> None:
-        """
-        Perform an asynchronous bulk transfer on the USB device
-        Not implemented yet
-        """
-        raise NotImplementedError( 'Usb.asyncBulkTransfer() not implemented yet' )
+
     
     def __callback( self, transfer_id ) -> None:
         """
@@ -248,7 +372,7 @@ class Usb:
         """
         raise NotImplementedError( 'Usb.__callback() not implemented yet' )
     
-    def asyncBulkTransferWait( self, time_out=USB_DEFAULT_TIMEOUT ) -> bytes:
+    def asyncBulkTransferWait( self, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
         """
         Wait for the end of an asynchronous bulk transfer on the USB device
         Not implemented yet
@@ -262,7 +386,7 @@ class Usb:
         """
         raise NotImplementedError( 'Usb.asyncBulkTransferStop() not implemented yet' )
     
-    def __asyncBulkTransfer_thread( self, time_out=USB_DEFAULT_TIMEOUT ) -> None:
+    def __asyncBulkTransfer_thread( self, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> None:
         """
         Thread function to perform an asynchronous bulk transfer on the USB device
         Not implemented yet
