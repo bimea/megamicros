@@ -109,6 +109,10 @@ class Usb:
         if vendor_id is not None and product_id is not None and bus_address is not None :
             self.open( vendor_id, product_id, bus_address, endpoint_in if endpoint_in is not None else USB_DEFAULT_ENDPOINT_IN, endpoint_out )
 
+    def __del__( self ):
+        self.close()
+        log.info( ' .USB object destroyed' )
+
     @property
     def buffer_size( self ) -> int:
         return self.__buffer_size
@@ -174,8 +178,6 @@ class Usb:
             True if the connected USB device matches the given vendor_id and product_id, False otherwise
         """
 
-        log.info( f' .Connecting to USB device {vendor_id:04x}:{product_id:04x} ...' )
-
         context = usb1.USBContext()
         usb_handle = context.openByVendorIDAndProductID( 
             vendor_id, 
@@ -230,14 +232,14 @@ class Usb:
         if self.__usb_handle is None:
             raise UsbException( 'Failed to connect to USB device: the device may be disconnected or user not allowed to access' )
 
-        # Test claiming the interface:
-        self.claim()
-
         self.__vendor_id = vendor_id
         self.__product_id = product_id
         self.__bus_address = bus_address
         self.__endpoint_in = endpoint_in
         self.__endpoint_out = endpoint_out
+
+        # Test claiming the interface:
+        self.claim()
 
         # release the interface
         self.release()
@@ -253,6 +255,7 @@ class Usb:
                 if self.__usb_handle.claimInterface( self.__bus_address ) == False:
                     raise UsbException( f'Failed to claim interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
                 log.info( f' .Claimed interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+                self.__is_claimed = True
 
     def release(self) -> None:
         """ Release the USB device interface """
@@ -261,6 +264,7 @@ class Usb:
                 if self.__usb_handle.releaseInterface( self.__bus_address ) == False:
                     raise UsbException( f'Failed to release interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
                 log.info( f' .Released interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+                self.__is_claimed = False
 
     def close( self ) -> None:
         """ Close the USB device connection """
@@ -301,20 +305,25 @@ class Usb:
         if not self.__is_claimed:
             self.claim()
 
-        ndata = self.__usb_handle.controlWrite(
-            LIBUSB_RECIPIENT_DEVICE | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT,  # bmRequestType
-            request, 	    # command
-            0,			    # command parameter value
-            0,			    # index
-            data,		    # data to send 
-            time_out        # timeout in ms 
-        )
+        try:
+            ndata = self.__usb_handle.controlWrite(
+                LIBUSB_RECIPIENT_DEVICE | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_ENDPOINT_OUT,  # bmRequestType
+                request, 	    # command
+                0,			    # command parameter value
+                0,			    # index
+                data,		    # data to send 
+                time_out        # timeout in ms 
+            )
 
-        if ndata != sizeof( data ):
-            log.warning( ' .In Usb.__ctrlWrite(): Command failed with ', ndata, ' data transfered against ', sizeof( data ), ' wanted ' )
+            if ndata != sizeof( data ):
+                log.warning( ' .In Usb.__ctrlWrite(): Command failed with ', ndata, ' data transfered against ', sizeof( data ), ' wanted ' )
 
-        if not keeping_claimed:
-            self.release()
+            if not keeping_claimed:
+                self.release()
+
+        except Exception as e:
+            log.error( f"write failed on device: {e}" )
+            raise
 
 
     def ctrlWriteReset( self, request, time_out=USB_DEFAULT_WRITE_TIMEOUT ) -> None:

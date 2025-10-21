@@ -18,7 +18,10 @@
 
 from ctypes import addressof, byref, sizeof, create_string_buffer
 import time
-from .usb import Usb, USB_DEFAULT_WRITE_TIMEOUT
+import platform
+import numpy as np
+
+from .usb import Usb
 from .log import log
 from .exception import MuException
 
@@ -54,7 +57,7 @@ MU_TRANSFER_DATAWORDS_SIZE		= 4											# Size of transfer words in bytes (sam
 MU_DEFAULT_DATATYPE             = 'int32'                                   # Datatype for FPGA megamicros data 
 
 # Default run propertie's values
-DEFAULT_TIME_ACTIVATION			= 1											# Waiting time after MEMs powering in seconds
+DEFAULT_TIME_ACTIVATION			= 0.2											# Waiting time after MEMs powering in seconds
 DEFAULT_TIME_ACTIVATION_RESET	= 0.01										# Waiting time between commands of the MegaMicro device reset sequence  
 DEFAULT_CLOCKDIV				= 0x09										# Default internal acquisition clock value
 DEFAULT_SELFTEST_DURATION       = 0.1                                       # Default selftest duration in seconds     
@@ -69,6 +72,8 @@ CONTROL_DATA_FAILURE            = False                                     # Pe
 EXIT_ON_DATA_FAILURE            = True                                      # Exit on data failure (when data are lost during transfer)
 
 MU_BUS_ADDRESS                  = 0x00                                      # Default USB bus address for MegaMicros devices
+USB_DEFAULT_WRITE_TIMEOUT       = 1000                                      # Default USB write timeout in milliseconds
+USB_DEFAULT_TRANSFER_TIMEOUT    = 1000                                      # Default USB transfer timeout in milliseconds
 
 # Mu32 USB-2 properties
 MU32_USB2_VENDOR_ID		                = 0xFE27                # Mu32 Usb-2 vendor Id
@@ -122,10 +127,32 @@ class MArray :
         self.__counter: bool=False                                    # Counter activation flag
         self.__counter_skip: bool=False                               # Whether the counter is removed or not in output stream
         self.__status: bool=False                                     # Status activation flag
-        self.__sampling_frequency: float=0.0                          # System sample rate for audio acquisition
+        self.__sampling_frequency: int=44000                          # System sample rate for audio acquisition
         self.__datatype: str="int32"                                  # "int32" or "float32"
         self.__duration: int=0                                        # acquisition duration in seconds
         self.__frame_length: int=0                                    # frame length in samples number for data transfer
+
+    @property
+    def sampling_frequency( self ) -> int:
+        return self.__sampling_frequency
+
+    @property
+    def counter( self ) -> int:
+        return self.__counter
+
+    @property
+    def status( self ) -> int:
+        return self.__status
+
+    def setSamplingFrequency( self, sampling_frequency: int ) -> None:
+        self.__sampling_frequency = sampling_frequency
+
+    def setCounter( self, counter: int ) -> None:
+        self.__counter = counter
+
+    def setStatus( self, status: int ) -> None:
+        self.__status = status
+
 
 class Megamicros(MArray):
     """
@@ -152,7 +179,53 @@ class Megamicros(MArray):
         self.__wait_delay: int=0                                      # Wait delay between start command and
 
         self.checkAndOpenDevice()
+        mems_power, analogs_power = self.selftest( DEFAULT_SELFTEST_DURATION )
+        self.__available_mems = np.where( np.array(mems_power) > 0 )[0].tolist()
+        self.__available_analogs = np.where( np.array(analogs_power) > 0 )[0].tolist()
+
         log.info(" .Megamicros device initialized")
+
+    def __del__( self ):
+        log.info( ' .Megamicros resources cleaned up' )
+
+    @property
+    def usb( self ) -> Usb:
+        return self.__usb
+
+    @property
+    def sampling_frequency( self ) -> int:
+        return super().sampling_frequency
+
+    @property
+    def mems_sensibility( self ) -> float:
+        return self.__mems_sensibility
+    
+    @property
+    def available_mems( self ) -> float:
+        return self.__available_mems
+
+    @property
+    def available_analogs( self ) -> float:
+        return self.__available_analogs
+
+    def setSamplingFrequency( self, sampling_frequency: int ) -> None:
+        super().setSamplingFrequency(sampling_frequency)
+        self.__clockdiv = ( self.__clock_divider_reference // self.sampling_frequency ) - 1
+
+    def setClokdiv( self, clockdiv: int ) -> None:
+        self.__clockdiv = clockdiv
+        self.setSamplingFrequency(self.__clock_divider_reference // ( self.__clockdiv + 1 ))
+
+    def setClockDividerReference( self, clock_divider_reference: int ) -> None:
+        self.__clock_divider_reference = clock_divider_reference
+        self.setSamplingFrequency(self.__clock_divider_reference // ( self.__clockdiv + 1 ))
+
+    def setAvailableMems( self, available_mems: list[int] ) -> None:
+        self.__available_mems = available_mems
+
+    def setAvailableAnalogs( self, available_analogs: list[int] ) -> None:
+        self.__available_analogs = available_analogs
+
 
     def checkAndOpenDevice(self) -> None:
         """
@@ -199,13 +272,132 @@ class Megamicros(MArray):
             raise
 
 
+    def selftest(self, duration: int) -> tuple[list[float], list[float]]:
+        """
+        @brief Perform a one-second recording test to obtain and update the Megamicros receiver settings.
+        The test is performed with the default settings, not with the current settings. 
+        Current settings are then updated with the tests results. 
+        Check mems, analogs, status and counter channels.
+        Update _available_mems and _available_analogs and others.
+        The system should be detected before. 
+
+        @param duration: duration of the selftest in seconds
+        """
+
+        # Compute MEMs energy using the bulk transfer method because the bulkRead method does not work on Windows
+        if platform.system() == 'Windows':
+            log.info(" .Performing selftest using bulk transfer method...")
+            raise NotImplementedError( 'Usb.asyncBulkTransferWait() not implemented yet' )
+
+        if not self.usb.isOpened():
+            raise MuException("MegaMicros device is not opened")
+
+        log.info(" .Performing selftest using bulk read method...")
+
+        self.usb.claim()
+        try:
+            mems_number = self.__pluggable_beams_number * MU_BEAM_MEMS_NUMBER
+            analogs_number = self.__pluggable_analogs_number
+            channels_number = mems_number + analogs_number + 2
+            frame_length = int( duration * self.sampling_frequency )
+            buffer_size = channels_number * frame_length * MU_TRANSFER_DATAWORDS_SIZE
+            self.__ctrlResetMu()
+            self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION )
+            self.__ctrlTixels( frame_length )
+            self.__ctrlDatatype( 'int32' )
+            self.__ctrlMems( request='activate', mems='all' )
+            self.__ctrlCSA( counter=True, status=True, analogs='all' )
+            self.__ctrlStart()
+            bytes_read:bytearray = self.usb.syncBulkRead( 
+                size=buffer_size, 
+                time_out=USB_DEFAULT_TRANSFER_TIMEOUT 
+            )
+            self.__ctrlStop()
+
+            if len( bytes_read ) != buffer_size:
+                self.usb.release()
+                raise MuException( f'Selftest failed: expected {buffer_size} bytes but got {len( bytes_read )} bytes' )
+
+            log.info(" .Selftest completed successfully")
+
+        except MuException as e:
+            log.error(f"Error during selftest: {e}")
+            self.usb.release()
+            raise
+
+        self.usb.release()
+
+        # Check data length
+        data = np.frombuffer( bytes_read, dtype=np.int32 )
+        if len( data ) != frame_length * channels_number:
+            # Windows platform failed on this test (Zadig driver issue ?)
+            # Note that Zadig driver is based on libusb 0.1 porting for Windows while Python libusb is based on libusb 1.0
+            if platform.system() == 'Windows':
+                log.warning( f"Received {len(data)} data bytes instead of {frame_length * channels_number} ({frame_length} samples)" )
+                if len( data ) > frame_length * channels_number:
+                    log.warning( f"Windows platform detected --> Data length will be adjusted to {frame_length} samples." )
+                    data = data[:frame_length * channels_number]
+                else:
+                    new_data_length = len( data ) // channels_number
+                    log.warning( f"Windows platform detected --> Data length will be adjusted to {new_data_length*channels_number} ({new_data_length} samples)." )
+                    if len( data ) % channels_number == 0:
+                        log.warning( f"Removed exactly {frame_length - new_data_length} samples of {channels_number} channels each." )
+                    else:
+                        log.warning( f"Removed {frame_length * channels_number - len( data )} bytes than cannot be expressed as multiples of channels or samples number." )
+                    data = data[:new_data_length * channels_number]
+                    data_length = new_data_length
+            else:
+                raise MuException( f"Received {len(data)} data bytes instead of {frame_length * channels_number}" )
+
+        # Compute mean energy        
+        data = data.reshape( ( channels_number, frame_length ), order='F' )
+
+        # convert to float with sensibility factor
+        signals = data.astype( np.float32 ) * self.__mems_sensibility
+
+        channels_power = np.sum( signals**2, axis=1 ) / frame_length
+        mems_power = channels_power[1:mems_number+1]
+        if analogs_number > 0:
+            analogs_power = channels_power[mems_number+1:mems_number+analogs_number+1]
+        else:
+            analogs_power = np.array([])
+			
+        mems_power = np.where( mems_power > 0, 1, 0 )
+        analogs_power = np.where( analogs_power > 1e-10 , 1, 0 )
+
+        log.info( f" .Autotest results:" )
+        log.info( f"  > equivalent recording time is: {frame_length / self.sampling_frequency} " )
+        log.info( f"  > Received {len(bytes_read)} data bytes: {frame_length} samples on {channels_number} channels")
+        log.info( f"  > detected {len( np.where( mems_power > 0 )[0] )} active MEMs: {np.where( mems_power > 0 )[0].tolist()}" )
+        if analogs_number > 0:
+            log.info( f"  > detected {len( np.where( analogs_power > 0 )[0] )} active analogs: {np.where( analogs_power > 0 )[0].tolist()}" )
+        else:
+            log.info( f"  > detected no active analogs" )
+        log.info( f"  > detected counter channel with values from {data[0][0]} to {data[0][-1]}" )
+        log.info( f"  > estimated data lost: {data[0][-1] - data[0][0] + 1 - frame_length} samples" )
+        log.info( f"  > detected status channel with values {data[channels_number-1][0]} <-> {data[channels_number-1][-1]}" )
+        log.info( f" .Selftest endded successfully" )
+
+
+
+        return mems_power.tolist(), analogs_power.tolist()
+
 
     def __ctrlWrite(self, request: int, data: bytes=b"", timeout=USB_DEFAULT_WRITE_TIMEOUT) -> None:
         """
-        @brief Send a control write USB request to the MegaMicros device
-        @param request: USB request code
-        @param data: USB request data (default to empty)
-        @throw MuException in case of error during the USB transfer
+        Send a control write USB request to the MegaMicros device
+
+        Parameters
+        ----------
+        request: str
+            USB request code
+        data: bytes, optional
+            USB request data (default to empty)
+
+        Raises
+        ------
+        MuException
+            In case of error during the USB transfer
         """
         try:
             if data == b"":
@@ -215,6 +407,28 @@ class Megamicros(MArray):
         
         except MuException as e:
             log.error(f"Error during control write request {request:#04x}: {e}")
+            raise
+
+
+    def __ctrlWriteReset(self, request: int, timeout=USB_DEFAULT_WRITE_TIMEOUT) -> None:
+        """
+        Send a control write USB request to the MegaMicros device with no data
+
+        Parameters
+        ----------
+        request: str
+            USB request code
+
+        Raises
+        ------
+        MuException
+            In case of error during the USB transfer
+        """
+
+        try:
+            self.__usb.ctrlWriteReset(request, timeout)
+        except MuException as e:
+            log.error(f"Error during control write reset request {request:#04x}: {e}")
             raise
 
 
@@ -229,7 +443,7 @@ class Megamicros(MArray):
         buf[2] = bytes( ( ( ( samples_number & 0x0000ff00 ) >> 8 ),) )
         buf[3] = bytes( ( ( ( samples_number & 0x00ff0000 ) >> 16 ),) )
         buf[4] = bytes( ( ( ( samples_number & 0xff000000 ) >> 24 ),) )
-        self.__ctrlWrite( 0xB4, buf )
+        self.__ctrlWrite( 0xB4, buf, USB_DEFAULT_WRITE_TIMEOUT )
 
 
     def __ctrlResetAcq( self ):
@@ -239,9 +453,9 @@ class Megamicros(MArray):
         """
         buf = create_string_buffer( 1 )
         buf[0] = MU_CMD_RESET
-        self.__ctrlWrite( 0xB0, buf )
+        self.__ctrlWrite( 0xB0, buf, USB_DEFAULT_WRITE_TIMEOUT )
         buf[0] = MU_CMD_PURGE
-        self.__ctrlWrite( 0xB0, buf )
+        self.__ctrlWrite( 0xB0, buf, USB_DEFAULT_WRITE_TIMEOUT )
 
 
     def __ctrlResetFx3( self ):
@@ -253,8 +467,8 @@ class Megamicros(MArray):
         Please use ctrlResetMu() in all cases
         """
         try:
-            self.__ctrlWriteReset( MU_CMD_FX3_RESET, time_out=1 )
-            self.__ctrlWriteReset( MU_CMD_FX3_PH, time_out=1 )
+            self.__ctrlWriteReset( MU_CMD_FX3_RESET, USB_DEFAULT_WRITE_TIMEOUT )
+            self.__ctrlWriteReset( MU_CMD_FX3_PH, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Fx3 reset failed: {e}" ) 
             raise
@@ -267,15 +481,15 @@ class Megamicros(MArray):
         buf = create_string_buffer( 1 )
         buf[0] = MU_CMD_RESET
         try:
-            self.__ctrlWriteReset( MU_CMD_FX3_RESET, time_out=1 )
+            self.__ctrlWriteReset( MU_CMD_FX3_RESET, USB_DEFAULT_WRITE_TIMEOUT )
             time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
-            self.__ctrlWriteReset( MU_CMD_FX3_PH, time_out=1 )
+            self.__ctrlWriteReset( MU_CMD_FX3_PH, USB_DEFAULT_WRITE_TIMEOUT )
             time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
-            self.__ctrlWrite( MU_CMD_FPGA_0, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_0, buf, USB_DEFAULT_WRITE_TIMEOUT )
             time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
-            self.__ctrlWriteReset( MU_CMD_FX3_PH, time_out=1 )
+            self.__ctrlWriteReset( MU_CMD_FX3_PH, USB_DEFAULT_WRITE_TIMEOUT )
             time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
-            self.__ctrlWriteReset( MU_CMD_FX3_RESET, time_out=1 )
+            self.__ctrlWriteReset( MU_CMD_FX3_RESET, USB_DEFAULT_WRITE_TIMEOUT )
             time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
         except Exception as e:
             log.error( f"Mu32 reset failed: {e}" ) 
@@ -288,7 +502,7 @@ class Megamicros(MArray):
         buf = create_string_buffer( 1 )
         buf[0] = MU_CMD_RESET
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_0, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_0, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"FPGA reset failed: {e}" ) 
             raise
@@ -302,7 +516,7 @@ class Megamicros(MArray):
         buf[0] = MU_CMD_INIT
         buf[1] = clockdiv
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_1, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_1, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 clock setting and powerwing on microphones failed: {e}" ) 
             raise	
@@ -328,7 +542,7 @@ class Megamicros(MArray):
             raise MuException( 'Mu32::ctrlDatatype(): Unknown data type [%s]. Please, use [int32] or [float32]' % datatype )
 
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_1, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_1, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 datatype setting failed: {e}" ) 
             raise	
@@ -355,12 +569,12 @@ class Megamicros(MArray):
                     for beam in range( self.__pluggable_beams_number ):
                         buf[2] = beam		# beam number
                         buf[3] = 0xFF		# active MEMs map
-                        self.__ctrlWrite( MU_CMD_FPGA_3, buf )
+                        self.__ctrlWrite( MU_CMD_FPGA_3, buf, USB_DEFAULT_WRITE_TIMEOUT )
                 elif request == 'deactivate':
                     for beam in range( self.__pluggable_beams_number ):
                         buf[2] = beam		
                         buf[3] = 0x00		
-                        self.__ctrlWrite( MU_CMD_FPGA_3, buf )
+                        self.__ctrlWrite( MU_CMD_FPGA_3, buf, USB_DEFAULT_WRITE_TIMEOUT )
                 else:
                     raise MuException( 'Megamicros::ctrlMems(): Unknown parameter [%s]' % request )
             else:
@@ -377,7 +591,7 @@ class Megamicros(MArray):
                         if map_mems[beam] != 0:
                             buf[2] = beam
                             buf[3] = map_mems[beam]				
-                            self.__ctrlWrite( MU_CMD_FPGA_3, buf )
+                            self.__ctrlWrite( MU_CMD_FPGA_3, buf, USB_DEFAULT_WRITE_TIMEOUT )
                 else:
                     raise MuException( 'Megamicros::ctrlMems(): request [%s] is not implemented' % request )
         except Exception as e:
@@ -419,7 +633,7 @@ class Megamicros(MArray):
         buf[3] = map_csa
 
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_3, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_3, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 analogic channels and status activating failed: {e}" ) 
             raise	
@@ -434,7 +648,7 @@ class Megamicros(MArray):
         buf[1] = 0x00
 
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_1, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_1, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 starting failed: {e}" ) 
             raise	
@@ -449,7 +663,7 @@ class Megamicros(MArray):
         #buf[1] = 0x01 + ( 0x01 << 7 )						# (état haut)
 
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_1, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_1, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 starting by external trig failed: {e}" ) 
             raise	
@@ -463,7 +677,7 @@ class Megamicros(MArray):
         buf[1] = 0x00
 
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_1, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_1, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 stop failed: {e}" ) 
             raise
@@ -477,7 +691,7 @@ class Megamicros(MArray):
         buf[0] = MU_CMD_RESET
 
         try:
-            self.__ctrlWrite( MU_CMD_FPGA_0, buf )
+            self.__ctrlWrite( MU_CMD_FPGA_0, buf, USB_DEFAULT_WRITE_TIMEOUT )
         except Exception as e:
             log.error( f"Mu32 microphones powering off failed: {e}" ) 
             raise	
