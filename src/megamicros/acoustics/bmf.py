@@ -1,17 +1,7 @@
-# megamicros.tools.acoustics.bmf.py
+# megamicros.acoustics.bmf.py
 #
-# Copyright (c) 2023 Sorbonne Université
-# Author: bruno.gas@sorbonne-universite.fr
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
+# ® Copyright 2024-2025 Bimea
+# Author: bruno.gas@bimea.io
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -21,18 +11,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-"""Define beamformer classes for beamforming
+"""
+Define beamformer classes for beamforming
 
 Documentation
 -------------
-MegaMicros documentation is available on https://readthedoc.biimea.io
+MegaMicros documentation is available on https://readthedoc.bimea.io
 """
 
 import numpy as np
 
 from megamicros.exception import MuException
 from megamicros.log import log
-from megamicros.tools.acoustics.omp import omp, Result
+from megamicros.acoustics.omp import omp, Result
 
 
 SOUND_SPEED = 340.29

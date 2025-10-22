@@ -1,6 +1,6 @@
 # megamicros.version.py is a simple program that prints the welcome message and the version of the program.
 #
-# Copyright (c) 2024-2025 Bimea
+# ® Copyright 2024-2025 Bimea
 # Author: bruno.gas@bimea.io
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -11,10 +11,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-
-
-from src.megamicros.antenna import __version__
-from megamicros.apps import welcome_msg
+from megamicros import __version__
+from megamicros import welcome_msg
 
 def main():
     print( welcome_msg )

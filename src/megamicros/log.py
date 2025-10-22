@@ -1,6 +1,6 @@
 # megamicros.log.py
 #
-# Copyright (c) 2024-2025 Bimea
+# ® Copyright 2024-2025 Bimea
 # Author: bruno.gas@bimea.io
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR

@@ -11,19 +11,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-
-import sys
-sys.path.append( 'src' )
-
 import argparse
 
-from src.megamicros.antenna import __version__
-from megamicros.apps import welcome_msg
+from megamicros import __version__, welcome_msg
 from megamicros.log import log
 from megamicros.exception import MuException
-from megamicros.core.mu import Megamicros
-
-
+from megamicros.antenna import Megamicros
 
 def arg_parse() -> tuple:
 
@@ -34,8 +27,6 @@ def arg_parse() -> tuple:
     parser.add_argument( "--check-device", help=f"check megamicros device", action='store_true' )
 
     return parser.parse_args()
-
-
 
 def main():
 
@@ -57,14 +48,17 @@ def main():
     if args.check_usb:
         print( "Checking USB..." )
         try:
-            devices = Megamicros.check_device()
-            print( f"Found following device {devices['usb_vendor_id']:04x}:{devices['usb_vendor_product']:04x} characteristics:")
-            print( f"  - system_type: {devices['system_type']}" )
-            print( f"  - usb_vendor_id: {devices['usb_vendor_id']:04x}" )
-            print( f"  - usb_vendor_product: {devices['usb_vendor_product']:04x}" )
-            print( f"  - usb_bus_address: {devices['usb_bus_address']}" )
-            print( f"  - pluggable_mems_number: {devices['pluggable_beams_number']*8}" )
-            print( f"  - pluggable_analogs_number: {devices['pluggable_analogs_number']}" )
+            print( "Not implemented yet" )
+            return
+            #
+            #devices = Megamicros.check_device()
+            #print( f"Found following device {devices['usb_vendor_id']:04x}:{devices['usb_vendor_product']:04x} characteristics:")
+            #print( f"  - system_type: {devices['system_type']}" )
+            #print( f"  - usb_vendor_id: {devices['usb_vendor_id']:04x}" )
+            #print( f"  - usb_vendor_product: {devices['usb_vendor_product']:04x}" )
+            #print( f"  - usb_bus_address: {devices['usb_bus_address']}" )
+            #print( f"  - pluggable_mems_number: {devices['pluggable_beams_number']*8}" )
+            #print( f"  - pluggable_analogs_number: {devices['pluggable_analogs_number']}" )
 
         except MuException as e:
             print( f"Failed: {e}")
@@ -72,7 +66,8 @@ def main():
     elif args.check_device:
         print( "Checking Megamicros device..." )
         try:
-            available_mems, available_analogs = Megamicros.selfest()
+            antenna = Megamicros()
+            available_mems, available_analogs = antenna.selftest(1)
             print( f"Found Megamicros device:")
             print( f"  - {len(available_mems)} available MEMs found")
             print( f"  - {len(available_analogs)} available analogs found")

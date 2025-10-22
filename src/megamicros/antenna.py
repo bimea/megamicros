@@ -1,6 +1,6 @@
 # megamicros.antenna.py
 #
-# Copyright (c) 2024-2025 Bimea
+# ® Copyright 2024-2025 Bimea
 # Author: bruno.gas@bimea.io
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -26,6 +26,7 @@ import numpy as np
 from .usb import Usb
 from .log import log
 from .exception import MuException
+from .marray import MArray
 
 # MegaMicro hardware commands
 MU_CMD_RESET					= b'\x00'									# Reset: power off the microphones
@@ -59,8 +60,8 @@ MU_TRANSFER_DATAWORDS_SIZE		= 4											# Size of transfer words in bytes (sam
 MU_DEFAULT_DATATYPE             = 'int32'                                   # Datatype for FPGA megamicros data 
 
 # Default run propertie's values
-DEFAULT_TIME_ACTIVATION			= 0.2											# Waiting time after MEMs powering in seconds
-DEFAULT_TIME_ACTIVATION_RESET	= 0.01										# Waiting time between commands of the MegaMicro device reset sequence  
+DEFAULT_TIME_ACTIVATION			= 200										# Waiting time after MEMs powering in milliseconds
+DEFAULT_TIME_ACTIVATION_RESET	= 10										# Waiting time between commands of the MegaMicro device reset sequence in milliseconds
 DEFAULT_CLOCKDIV				= 0x09										# Default internal acquisition clock value
 DEFAULT_SELFTEST_DURATION       = 0.1                                       # Default selftest duration in seconds     
 DEFAULT_START_TRIGG_STATUS      = False								        # Default start trigger status (external hard (True) or internal soft (False))
@@ -79,149 +80,6 @@ USB_DEFAULT_TRANSFER_TIMEOUT    = 1000                                      # De
 USB_DEFAULT_BUFFERS_NUMBER      = 8                                         # Default USB buffers number for data acquisition
 USB_DEFAULT_QUEUE_LENGTH        = 0                                         # Default USB transfer queue length in number of frames (0 means infinite queueing)
 USB_DEFAULT_QUEUE_TIMEOUT       = 2                                         # Default USB transfer queue get timeout in seconds (delay until the queue is considered as empty)
-
-DEFAULT_FRAME_LENGTH            = 1024                                      # Default frame length in samples number for data transfer
-DEFAULT_ACQ_DURATION            = 0                                         # Default acquisition duration in seconds (0 = infinite loop)
-DEFAULT_SAMPLING_FREQUENCY      = 44100                                     # Default system sample rate for audio acquisition
-MU_DEFAULT_DATATYPE             = 'int32'                                   # Default datatype (int32 or float32)
-
-class MArray :
-    """
-    @class MArray
-    @brief Base class to handle MegaMicros devices
-    """
-
-    def __init__(self):
-        """
-        @brief Constructor
-        """
-        self.__available_mems: list[int]=[]                           # Available microphones (connected and ok on the antenna)
-        self.__available_analogs: list[int]=[]                        # Available analogs (connected and ok on the antenna)
-        self.__mems: list[int]=[]                                     # Activated microphones
-        self.__analogs: list[int]=[]                                  # Activated analogs
-        self.__mems_positions: list[list[float]]=[]                   # Microphones positions vectors
-        self.__counter: bool=True                                     # Counter activation flag
-        self.__counter_skip: bool=False                               # Whether counters are removed or not in output stream
-        self.__sampling_frequency: int=DEFAULT_SAMPLING_FREQUENCY     # Default system sample rate for audio acquisition
-        self.__datatype: str=MU_DEFAULT_DATATYPE                      # "int32" or "float32"
-        self.__duration: int=DEFAULT_ACQ_DURATION                     # acquisition duration in seconds
-        self.__frame_length: int=DEFAULT_FRAME_LENGTH                 # Frame length in samples number for data transfer
-        self.__h5_recording: bool=False                               # H5 local recording flag
-
-    @property
-    def sampling_frequency( self ) -> int:
-        return self.__sampling_frequency
-
-    @property
-    def available_mems( self ) -> float:
-        return self.__available_mems
-
-    @property
-    def available_analogs( self ) -> float:
-        return self.__available_analogs
-
-    @property
-    def mems( self ) -> int:
-        return self.__mems
-
-    @property
-    def analogs( self ) -> int:
-        return self.__analogs
-
-    @property
-    def counter( self ) -> bool:
-        return self.__counter
-    
-    @property
-    def duration( self ) -> int:
-        return self.__duration
-    
-    @property
-    def datatype( self ) -> str:
-        return self.__datatype
-    
-    @property
-    def frame_length( self ) -> int:
-        return self.__frame_length
-    
-    @property
-    def frame_duration( self ) -> float:
-        return self.__frame_length / self.sampling_frequency
-    
-    @property
-    def h5_recording( self ) -> bool:
-        return self.__h5_recording
-
-    def setDuration( self, duration: int ) -> None:
-        """ Set duration of next acquisition run in seconds 
-
-        Parameters
-        ----------
-        duration: int
-            The acquisition duration in seconds (0 = infinite loop)
-        """
-        self.__duration = duration
-
-    def setAvailableMems( self, mems: list[int] ) -> None:
-        """ Set the available MEMs (connected and ok on the antenna)
-
-        Parameters
-        ----------
-        mems: list[int]
-            The available MEMs list
-        """
-        self.__available_mems = mems
-
-    def setAvailableAnalogs( self, analogs: list[int] ) -> None:
-        """ Set the available analogs (connected and ok on the antenna)
-
-        Parameters
-        ----------
-        analogs: list[int]
-            The available analogs list
-        """
-        self.__available_analogs = analogs
-
-    def setSamplingFrequency( self, sampling_frequency: int ) -> None:
-        self.__sampling_frequency = sampling_frequency
-
-    def setCounter( self, counter: bool=True ) -> None:
-        self.__counter = counter
-
-    def setFrameLength( self, length: int ) -> None:
-        """ Set the frame length in samples number. This property also updates the USB buffer length in samples number.
-
-        Parameters
-        ----------
-        length: int
-            The frame length / USB buffer length in samples number
-        """
-        self.__frame_length = length
-        self.__frame_duration = length / self.sampling_frequency
-
-    def setActiveMems( self, mems: tuple ) -> None :
-        """ Activate mems
-        
-        Parameters:
-        -----------
-        mems : tuple
-            list or tuple of mems number to activate
-        """
-
-        # Set parent property
-        self.__mems = mems
-
-    def setActiveAnalogs( self, analogs: tuple ) -> None :
-        """ Activate analogs
-        
-        Parameters:
-        -----------
-        analogs : tuple
-            list or tuple of analogs number to activate
-        """
-
-        # Set parent property
-        self.__analogs = analogs
 
 
 class Megamicros(MArray):
@@ -347,6 +205,7 @@ class Megamicros(MArray):
         self.__clockdiv: int=9                                              # Clock divider (default to 9 for 50kHz or 48kHz sampling frequencies)
         self.__sync_delay: int=10                                           # Default synchronization delay (10 for usual systems, 8 for Aikhous systems)
         self.__start_trigg_status: bool=False                               # Start trigger status (external hard (True) or internal soft (False))
+        self.__time_activation: int=DEFAULT_TIME_ACTIVATION                 # Waiting time between commands of the MegaMicro device reset sequence in milliseconds
 
         # Check connected devices and open connection to the first found
         self.checkAndOpenDevice()
@@ -409,6 +268,10 @@ class Megamicros(MArray):
     @property
     def transfer_lost( self ) -> int:
         return self.usb.transfer_lost
+
+    @property
+    def time_activation( self ) -> int:
+        return self.__time_activation
 
     def setQueueLength( self, length: int ) -> None:
         """ Set USB transfer queue length in number of frames
@@ -503,12 +366,23 @@ class Megamicros(MArray):
         self.usb.release()
         log.info( " .Megamicros acquisition process successfully ended" )
 
+    def stop( self ) -> None:
+        """ Stop data acquisition on the MegaMicros device
+        """
+        log.info( " .Stopping Megamicros acquisition process" )
+        self.usb.asyncBulkTransferStop()
+        self.usb.release()
 
-    def run( self ) -> None:
+    def run( self, *args, **kwargs ) -> None:
         """ Run data acquisition on the MegaMicros device through USB async bulk transfer
         """
 
-        # 1024 not yet implemented
+        if len( args ) > 0:
+            raise MuException( f"Run() method does not accept direct arguments" )
+
+        self._set_run_settings( [], kwargs=kwargs )
+
+        # 1024 systems not yet implemented
         if not self.__system['name'] in ['mu32', 'mu32usb2', 'mu32a', 'mu256', 'mu256h']:
             raise MuException(f"MegaMicros system {self.__system['name']} not supported yet for data acquisition")
 
@@ -533,6 +407,7 @@ class Megamicros(MArray):
         log.info( f"  > Analogics sensibility: {self.analogs_sensibility}" )
         log.info( f"  > Whether counter is activated: {'YES' if 0 in self.counters else 'NO'}" )
         log.info( f"  > Whether status is activated: {'YES' if 0 in self.status else 'NO'}" )
+        log.info( f"  > Time activation (MEMS powering delay): {self.time_activation} ms" )
         log.info( f"  > Total channels number is {channels_number}" )
         log.info( f"  > Datatype: {str( self.datatype )}" )
         log.info( f"  > Frame length in samples number: {self.frame_length} samples" )
@@ -550,7 +425,7 @@ class Megamicros(MArray):
         # set device configuration
         try:
             self.__ctrlResetMu()
-            self.__ctrlClockdiv( self.clockdiv, DEFAULT_TIME_ACTIVATION )
+            self.__ctrlClockdiv( self.clockdiv, self.time_activation / 1000 )
             self.__ctrlTixels( 0 )
             self.__ctrlDatatype( self.datatype )
             self.__ctrlMems( request='activate', mems=self.mems )
@@ -666,6 +541,98 @@ class Megamicros(MArray):
             self.__status = status
 
 
+    def setMemsSensibility( self, sensibility: float ) -> None:
+        """ Set MEMs sensibility
+        
+        Parameters:
+        -----------
+        sensibility : float
+            The MEMs sensibility in Pa/digit
+        """
+
+        self.__mems_sensibility = sensibility
+
+    def setAnalogsSensibility( self, sensibility: float ) -> None:
+        """ Set analogs sensibility
+        
+        Parameters:
+        -----------
+        sensibility : float
+            The analogs sensibility in V/digit
+        """
+
+        self.__analogs_sensibility = sensibility
+
+    def setTimeActivation( self, time_activation: int ) -> None:
+        """ Set time activation after MEMs powering in milliseconds
+        
+        Parameters:
+        -----------
+        time_activation : int
+            time activation after MEMs powering in milliseconds
+        """
+
+        self.__time_activation = time_activation
+
+    def _set_run_settings( self, args, kwargs ) -> None :
+        """ Set settings for run method
+        
+        Parameters
+        ----------
+        args: array
+            direct arguments of the run function
+        kwargs: array
+            named arguments of the run function
+        """
+        
+        if len( args ) > 0:
+            log.warning( f" .Direct arguments are not accepted. Use named arguments instead ({args})" )
+            raise MuException( "Direct arguments are not accepted" )
+
+        try:
+            if 'counter' in kwargs:
+                if isinstance( kwargs['counter'], list ) or isinstance( kwargs['counter'], tuple ):
+                    self.setCounters( kwargs['counter'] )
+                else:   
+                    self.setCounter( kwargs['counter'] )
+                del kwargs['counter']
+
+            if 'counters' in kwargs:
+                if isinstance( kwargs['counters'], list ) or isinstance( kwargs['counters'], tuple ):
+                    self.setCounters( kwargs['counters'] )
+                else:   
+                    self.setCounter( kwargs['counters'] )
+                del kwargs['counters']
+
+            if 'sampling_frequency' in kwargs:
+                self.setSamplingFrequency( kwargs['sampling_frequency'] )
+                del kwargs['sampling_frequency']
+
+            if 'clockdiv' in kwargs:
+                self.setClockdiv( kwargs['clockdiv'] )
+                del kwargs['clockdiv']
+
+            if 'mems_sensibility' in kwargs:
+                self.setMemsSensibility( kwargs['mems_sensibility'] )
+                del kwargs['mems_sensibility']  
+
+            if 'analogs_sensibility' in kwargs:
+                self.setAnalogsSensibility( kwargs['analogs_sensibility'] )
+
+            if 'queue_length' in kwargs:
+                self.setQueueLength( kwargs['queue_length'] )
+                del kwargs['queue_length']
+
+            if 'time_activation' in kwargs:
+                self.setTimeActivation( kwargs['time_activation'] )
+                del kwargs['time_activation']
+
+            super()._set_run_settings( [], kwargs )
+
+        except Exception as e:
+            raise MuException( f"Run failed on settings: {e}")
+
+
 
     def selftest(self, duration: int) -> tuple[list[float], list[float]]:
         """
@@ -697,7 +664,7 @@ class Megamicros(MArray):
             frame_length = int( duration * self.sampling_frequency )
             buffer_size = channels_number * frame_length * MU_TRANSFER_DATAWORDS_SIZE
             self.__ctrlResetMu()
-            self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION )
+            self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION / 1000 )
             self.__ctrlTixels( frame_length )
             self.__ctrlDatatype( 'int32' )
             self.__ctrlMems( request='activate', mems='all' )
@@ -883,15 +850,15 @@ class Megamicros(MArray):
         buf[0] = MU_CMD_RESET
         try:
             self.__ctrlWriteReset( MU_CMD_FX3_RESET, USB_DEFAULT_WRITE_TIMEOUT )
-            time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
+            time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
             self.__ctrlWriteReset( MU_CMD_FX3_PH, USB_DEFAULT_WRITE_TIMEOUT )
-            time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
+            time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
             self.__ctrlWrite( MU_CMD_FPGA_0, buf, USB_DEFAULT_WRITE_TIMEOUT )
-            time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
+            time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
             self.__ctrlWriteReset( MU_CMD_FX3_PH, USB_DEFAULT_WRITE_TIMEOUT )
-            time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
+            time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
             self.__ctrlWriteReset( MU_CMD_FX3_RESET, USB_DEFAULT_WRITE_TIMEOUT )
-            time.sleep( DEFAULT_TIME_ACTIVATION_RESET )
+            time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
         except Exception as e:
             log.error( f"Mu32 reset failed: {e}" ) 
             raise
@@ -909,7 +876,7 @@ class Megamicros(MArray):
             raise
 
 
-    def __ctrlClockdiv( self, clockdiv=0x09, time_activation=DEFAULT_TIME_ACTIVATION ):
+    def __ctrlClockdiv( self, clockdiv=0x09, time_activation=DEFAULT_TIME_ACTIVATION / 1000 ):
         """
         Init acq32: set sampling frequency and supplies power to microphones 
         """

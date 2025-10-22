@@ -1,11 +1,28 @@
-"""A setuptools based setup module.
+# setup.py - Megamicros setup released under GNU GPL v3
+#
+# ® Copyright 2024-2025 Bimea
+# Author: bruno.gas@bimea.io
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
 
+"""
+MegaMicros documentation is available on https://readthedoc.bimea.io
+
+This module provides a set of Python tools for Megamicros systems.
+"""
+"""
 See:
 https://packaging.python.org/guides/distributing-packages-using-setuptools/
 https://github.com/pypa/sampleproject
 
 Dependencies:
-    pip install build
+    pip install build setuptools
 """
 
 import os.path
