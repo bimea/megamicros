@@ -17,7 +17,7 @@ sys.path.append( 'src' )
 
 import argparse
 
-from megamicros import __version__
+from src.megamicros.antenna import __version__
 from megamicros.apps import welcome_msg
 from megamicros.log import log
 from megamicros.exception import MuException

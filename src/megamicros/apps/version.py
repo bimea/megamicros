@@ -13,7 +13,7 @@
 
 
 
-from megamicros import __version__
+from src.megamicros.antenna import __version__
 from megamicros.apps import welcome_msg
 
 def main():

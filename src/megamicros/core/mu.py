@@ -43,6 +43,27 @@ from megamicros.log import log
 from megamicros.exception import MuException
 from .base import MemsArray, DEFAULT_SAMPLING_FREQUENCY, DEFAULT_FRAME_LENGTH
 
+# Define megamicros systems list
+
+MU32_USB2_SYSTEM_NAME			        = 'Mu32-USB2'           # Deprecated name for Mu32 with USB-2 port
+MU32_SYSTEM_NAME				        = 'Mu32'                # Standard name for Mu32 with USB-3 port
+MU32A_SYSTEM_NAME				        = 'Mu32-A'              # Alternative name for Mu32 with USB-3 port and one or more analogs
+MU128_SYSTEM_NAME				        = 'Mu128'               # Deprecated name for Mu128 with USB-2 port
+MU256_SYSTEM_NAME				        = 'Mu256'               # Standard name for Mu256 with USB-3 port
+MU256H_SYSTEM_NAME				        = 'Mu256-H'             # Standard name for Mu256-H Aikhous model with USB-3 port
+MU1024_SYSTEM_NAME				        = 'Mu1024'              # Standard name for Mu1024 with USB-3 port  
+
+SystemType = enum.Enum('SystemType', [
+    'unknown',          # no megamicros type specified
+    'mu32usb2',        # 32 channels megamicros device with USB2 port
+    'mu32',            # 32 channels megamicros device with USB3 port
+    'mu32a',           # 32 channels megamicros device with USB3 port and one or more analogs
+    'mu128',           # 128 channels megamicros device with USB2 port (deprecated)
+    'mu256',           # 256 channels megamicros device with USB3 port
+    'mu256h',          # 256 channels megamicros Aikhous device with USB3 port
+    'mu1024'           # 1024 channels megamicros device with USB3 port
+])
+
 
 # Mu32 USB-2 properties
 MU32_USB2_VENDOR_ID		                = 0xFE27                # Mu32 Usb-2 vendor Id
