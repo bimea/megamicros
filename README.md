@@ -14,7 +14,7 @@ First create your virtual environnement, then install:
 ```bash
   > virtualenv venv
   > source venv/bin/activate
-  (venv) > pip install --index https://pypi.bimea.io megamicros
+  (venv) > pip install --upgrade --extra-index-url https://repository.bimea.io/api-pypi megamicros
 ```
 
 You may want to not write systematically the repository address. 
@@ -22,13 +22,13 @@ Always specifying the pypi url on the command line is a bit cumbersome.
 For pip command this can be done by setting the environment variable ``PIP_EXTRA_INDEX_URL`` in your .bashr/.profile/.zshrc/.zprofile:
 
 ```bash
-  export PIP_EXTRA_INDEX_URL=https://pypi.bimea.io
+  export PIP_EXTRA_INDEX_URL=https://pypi.bimea.io/api-pypi
 ```
 
 or by adding the following lines to ~/.pip/pip.conf:
 
 ```bash
-  [global] extra-index-url = https://pypi.bimea.io
+  [global] extra-index-url = https://pypi.bimea.io/api-pypi
 ```
 
 Installing *megamicros* becomes as simple as:
@@ -52,12 +52,6 @@ Clone the *Megamicros* GitHub repository:
   > git clone https://github.com/bimea/megamicros.git
 ```
 
-Update your ``.bashrc/.zprofile/...`` by adding (or updating) the ``PYTHONPATH`` variable:
-
-```bash
-  > export PYTHONPATH=path_to_megamicros/megamicros/src
-```
-
 Create a virtual environnement in the ``megamicros`` repository and install the Python libraries needed for *Megamicros* to work:
 
 ```bash
@@ -68,8 +62,6 @@ Create a virtual environnement in the ``megamicros`` repository and install the 
 ```
 
 ## Megamicros documentation
-
-* Comming soon...
 
 You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](https://readthedoc.biimea.io).
 
