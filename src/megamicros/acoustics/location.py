@@ -11,7 +11,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-""" Define Locator classes for location prediction using BFE signals
+""" 
+Define Locator classes for location prediction using BFE signals
 
 Documentation
 -------------
