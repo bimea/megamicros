@@ -10,19 +10,21 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-
 """
-MegaMicros documentation is available on https://readthedoc.bimea.io
-
 This module provides a set of tools for signal processing and analysis.
-"""
 
+Features:
+    - Compute energy, wiener entropy, Q50 and perform signal segmentation 
+
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
+"""
 
 import numpy as np
 from scipy import signal
 
-from .exception import MuException
-from .log import log
+from ..exception import MuException
+from ..log import log
 
 
 def wiener_entropy( signal: np.ndarray, sampling_frequency: float, frame_duration: float, hop: int|None=None ):

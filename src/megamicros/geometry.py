@@ -11,10 +11,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-"""
-MegaMicros documentation is available on https://readthedoc.bimea.io
 
+"""
 This module provides a set of tools for defining antenna geometries.
+
+Features:
+    - Create circular antenna arrays
+    - Create rectangular antenna arrays
+    - Generate 3D coordinates for antenna elements
+    
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
 import numpy as np

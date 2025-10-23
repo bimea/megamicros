@@ -12,9 +12,50 @@
 # THE SOFTWARE.
 
 """
-@file megamicros.antenna.py
-@brief core module of the Megamicros library
+Core module of the Megamicros library
+
+Features:
+    - Base class for microphone arrays modelling.
+    - Management of available and active microphones and analog inputs
+    - Configuration of sampling frequency, data type, frame length, and acquisition duration
+    - Support for counter activation and skipping in output streams
+    - H5 local recording flag
+
+Examples:
+    Basic usage::
+
+        from megamicros import log
+        from megamicros.antenna import Megamicros
+
+        antenna = Megamicros()
+
+        print( "Available MEMS: ", antenna.available_mems )
+        print( "Available Analogs: ", antenna.available_analogs )
+
+        antenna.run(
+            mems=antenna.available_mems,
+            sampling_frequency=44100,
+            duration=60,
+            frame_length=1024,
+            datatype='int32'
+        )
+        antenna.wait()
+
+        # Print frames stored in the queue
+        print(f"queue content : {antenna.queue_content} frames")
+
+        # Retrieve data from the queue
+        for data in antenna:
+            print( f"data={data}" )
+
+    Advanced usage::
+
+        See the Notebooks for advanced usage examples.
+
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
+
 
 from ctypes import addressof, byref, sizeof, create_string_buffer
 import time

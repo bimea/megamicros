@@ -21,7 +21,7 @@ MegaMicros documentation is available on https://readthedoc.biimea.io
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
-from megamicros.log import log
+from ..log import log
 
 class Locator:
     """ Predictor base class for localization prediction

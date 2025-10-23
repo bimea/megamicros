@@ -12,8 +12,42 @@
 # THE SOFTWARE.
 
 """
-@file megamicros.marray.py
-@brief Base class for microphone arrays modelling
+This module defines the base class for all microphone arrays in the Megamicros library.
+
+Features:
+    - Management of available and active microphones and analog inputs
+    - Configuration of sampling frequency, data type, frame length, and acquisition duration
+    - Support for counter activation and skipping in output streams
+    - H5 local recording flag
+
+Examples:
+    Basic usage::
+
+        from megamicros import log
+        from megamicros.marray import MArray
+
+        antenna = MArray()
+        antenna.run(
+            mems=(0,1,2,3),
+            sampling_frequency=44100,
+            duration=60,
+            frame_length=1024,
+            datatype='int32'
+        )
+        antenna.wait()
+
+    Advanced usage::
+
+        See the Notebooks for advanced usage examples.
+
+Note:
+    The MArray is not fully implemented and acts as an abstract class for specific array implementations.
+
+See Also:
+    megamicros.antenna for Antenna class implementation.
+
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
 from .log import log
@@ -27,7 +61,7 @@ MU_DEFAULT_DATATYPE             = 'int32'                                   # De
 class MArray :
     """
     @class MArray
-    @brief Base class to handle MegaMicros devices
+    @brief Base class to handle Antenna devices
     """
 
     def __init__(self):

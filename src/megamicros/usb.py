@@ -12,8 +12,30 @@
 # THE SOFTWARE.
 
 """
-@file megamicros.usb.py
-@brief Define USB device handling functions
+Define USB device handling functions to communicate with Megamicros hardware.
+
+Features:
+    - Handle USB device connection, claiming, and release
+    - Perform synchronous and asynchronous bulk read transfers
+    - Support for control write commands to the USB device
+
+Basic usage::
+
+    try:
+        if Usb.checkDeviceByVendorProduct( vendor_id=0xFE27, product_id=0xAC03 ):
+            print( "Device found!" )
+            usb_device = Usb()
+            usb_device.open( vendor_id=0xFE27, product_id=0xAC03, bus_address=0x00, endpoint_in=0x81 )
+            usb_device.claim()
+            usb_device.release()
+            usb_device.close()
+        else:
+            print( "Device not found!" )
+    except Exception as e:
+        print( f"An error occurred: {e}" )
+    
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
 import queue

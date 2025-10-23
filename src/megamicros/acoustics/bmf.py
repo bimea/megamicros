@@ -12,18 +12,36 @@
 # THE SOFTWARE.
 
 """
-Define beamformer classes for beamforming
+Define beamformer classes for beamforming usages
 
-Documentation
--------------
-MegaMicros documentation is available on https://readthedoc.bimea.io
+Features:
+    - Abstract base class for beamformers
+    - Frequency Domain Delay and Sum Beamformer Algorithm (BeamformerFDAS)
+    - Several methods to compute the BMF:
+        * `type='full'`: beamforming is computed over all the frequencies
+        * `type='max'`: beamforming is only performed on the frequency givng the maximum energy (energy is computed on the first MEMs)
+        * `type='mean'`: the power spectrum along MEMs 0 is viewed as a probability density which is approximated by a gaussian distribution. Beamforming is computed on the mean frequency of the gaussian distribution.
+        * `type='gauss'`: the power spectrum along MEMs 0 is viewed as a probability density which is approximated by a gaussian distribution. Beamforming is computed on a range of frequencies around the mean frequency of the gaussian distribution with standard deviation as the width of the range.
+        * `type='omp'`: find the location that best matches the phase distribution at the frequency for which energy is max using OMP algorithm
+        
+Examples:
+    Basic usage::
+
+        Comming soon...
+
+    Advanced usage::
+
+        See the Notebooks for advanced usage examples.
+
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
 import numpy as np
 
-from megamicros.exception import MuException
-from megamicros.log import log
-from megamicros.acoustics.omp import omp, Result
+from ..exception import MuException
+from ..log import log
+from ..acoustics.omp import omp, Result
 
 
 SOUND_SPEED = 340.29

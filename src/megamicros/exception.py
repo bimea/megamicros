@@ -12,10 +12,13 @@
 # THE SOFTWARE.
 
 """
-@file megamicros.exception.py
-@brief Megamicros exception base class
-@documentation MegaMicros documentation is available on https://readthedoc.bimea.io
-@usage from megamicros.exception import MuException
+Megamicros exception base class.
+
+Features:
+    - Base exception class for Megamicros library
+    
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
 
