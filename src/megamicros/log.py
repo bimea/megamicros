@@ -1,17 +1,7 @@
-# megamicros.log.py logging messages process for MegaMicros libraries
+# megamicros.log.py
 #
-# Copyright (c) 2024 Bimea
+# ® Copyright 2024-2025 Bimea
 # Author: bruno.gas@bimea.io
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -22,25 +12,76 @@
 # THE SOFTWARE.
 
 """
-MegaMicros documentation is available on https://readthedoc.bimea.io
+Megamicros logging utilities.
 
-Declare a stream handler for screen printing and a file handler for log file reporting
-Declare a global logging handler which default level is set on `logging.NOTSET` (which means no log messages printing)
-The default log file name is `./megamicros.log`.
+This module provides logging functionality for the Megamicros library with colored output
+and file logging capabilities.
 
-You can set the level to:
-* debug
-* info
-* warning
-* error
-* critical
+Features:
+    - Stream handler for console output with colors (Unix-like systems)
+    - File handler for persistent logging to './megamicros.log'
+    - Configurable log levels: debug, info, warning, error, critical
+    - Default level set to NOTSET (no output until explicitly configured)
 
-Usage:
-------
+Examples:
+    Basic usage::
 
-from megamicros import log
-log.setLevel( 'info' )
+        from megamicros import log
+        
+        # Set logging level
+        log.setLevel('info')
+        
+        # Log messages
+        log.debug('Debug message')
+        log.info('System ready')
+        log.warning('This is a warning')
+        log.error('An error occurred')
+        log.critical('Critical system failure')
+
+    Advanced usage::
+
+        from megamicros import log
+        import logging
+        
+        # Enable debug mode for development
+        log.setLevel('debug')
+        
+        # Check current level
+        current_level = log.level
+        print(f"Current log level: {current_level}")
+        
+        # Use with exception handling
+        try:
+            # Your code here
+            pass
+        except Exception as e:
+            log.error(f"Exception caught: {e}")
+            if log.level == logging.DEBUG:
+                log.tracedebug()  # Print full traceback
+
+    Testing all log levels::
+
+        from megamicros import log
+        
+        log.setLevel('debug')
+        log.debug('This is a debug message')
+        log.info('This is an info message') 
+        log.warning('This is a warning message')
+        log.error('This is an error message')
+        log.critical('This is a critical message')
+
+Note:
+    Colors are automatically disabled on Windows systems and enabled on Unix-like systems.
+    The default log file './megamicros.log' is created in the current working directory.
+
+See Also:
+    formats_str(): Get available format options and conversions
+    tracedebug(): Print debug trace information
+
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
+
 
 
 import logging
@@ -107,7 +148,31 @@ log.addHandler( mulog_ch )
 log.setLevel( logging.NOTSET )
 
 def formats_str( arg: int|str|None = None ) -> int|str|list[dict[str, str|int]]|None :
+	"""Convert between log level names and logging constants.
 
+	This function provides bidirectional conversion between string labels
+	('debug', 'info', etc.) and their corresponding logging module constants.
+
+	Args:
+		arg: Can be:
+			- int: logging constant (returns corresponding string label)
+			- str: string label (returns corresponding logging constant) 
+			- None: returns list of all available formats
+			
+	Returns:
+		- str: label name if arg is int
+		- int: logging constant if arg is str  
+		- list: all available formats if arg is None
+		- None: if arg type is invalid
+		
+	Examples:
+		>>> formats_str(logging.DEBUG)
+		'debug'
+		>>> formats_str('info')
+		20
+		>>> formats_str()
+		[{'label': 'debug', 'format': 10}, ...]
+	"""
 	formats: list[dict[str, str|int]] = [
 		{'label': 'debug', 'format': logging.DEBUG },
 		{'label': 'info', 'format': logging.INFO },
@@ -127,5 +192,16 @@ def formats_str( arg: int|str|None = None ) -> int|str|list[dict[str, str|int]]|
 	
 
 def tracedebug():
+	"""Print traceback information if debug level is active.
+    
+    Only prints the full exception traceback when the current log level
+    is set to DEBUG. Does nothing at other log levels.
+    
+    Examples:
+        >>> try:
+        ...     1/0
+        ... except:
+        ...     log.tracedebug()  # Only prints if log.level == logging.DEBUG
+    """
 	if log.level == logging.DEBUG:
 		print( traceback.format_exc() )
