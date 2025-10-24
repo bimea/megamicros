@@ -12,7 +12,7 @@
 # THE SOFTWARE.
 
 """
-Core module of the Megamicros library
+Core module of the Megamicros systems library
 
 Features:
     - Base class for microphone arrays modelling.
