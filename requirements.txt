@@ -3,3 +3,4 @@
 
 # Install from local repository:
 -e ./
+pyroomacoustics

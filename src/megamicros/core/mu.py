@@ -18,14 +18,14 @@ Features:
     - Base class for microphone arrays modelling.
     - Management of available and active microphones and analog inputs
     - Configuration of sampling frequency, data type, frame length, and acquisition duration
-    - Support for counter activation and skipping in output streams
+    - Support for counter activation
     - H5 local recording flag
 
 Examples:
     Basic usage::
 
         from megamicros import log
-        from megamicros.antenna import Megamicros
+        from megamicros.core.mu import Megamicros
 
         antenna = Megamicros()
 
@@ -34,8 +34,8 @@ Examples:
 
         antenna.run(
             mems=antenna.available_mems,
-            sampling_frequency=44100,
-            duration=60,
+            sampling_frequency=50000,
+            duration=10,
             frame_length=1024,
             datatype='int32'
         )
@@ -64,10 +64,10 @@ import enum
 import queue
 import numpy as np
 
-from .usb import Usb
-from .log import log
-from .exception import MuException
-from .marray import MArray
+from ..usb import Usb
+from ..log import log
+from ..exception import MuException
+from .base import MemsArray, TRANSFER_DATAWORDS_SIZE
 
 # MegaMicro hardware commands
 MU_CMD_RESET					= b'\x00'									# Reset: power off the microphones
@@ -97,7 +97,6 @@ MU_MEMS_UQUANTIZATION			= 24										# MEMs unsigned quantization
 MU_MEMS_QUANTIZATION			= MU_MEMS_UQUANTIZATION - 1					# MEMs signed quantization 
 MU_MEMS_AMPLITUDE				= 2**MU_MEMS_QUANTIZATION					# MEMs maximal amlitude value for "int32" data type
 MU_MEMS_SENSIBILITY				= 3.54e-6 	                                # MEMs sensibility factor (-26dBFS for 104 dB that is 3.17 Pa)
-MU_TRANSFER_DATAWORDS_SIZE		= 4											# Size of transfer words in bytes (same for in32 and float32 data type which always states for 32 bits (-> 4 bytes) )
 MU_DEFAULT_DATATYPE             = 'int32'                                   # Datatype for FPGA megamicros data 
 
 # Default run propertie's values
@@ -123,10 +122,11 @@ USB_DEFAULT_QUEUE_LENGTH        = 0                                         # De
 USB_DEFAULT_QUEUE_TIMEOUT       = 2                                         # Default USB transfer queue get timeout in seconds (delay until the queue is considered as empty)
 
 
-class Megamicros(MArray):
+class Megamicros(MemsArray):
     """
-    @class MegaMicros
-    @brief Main class to handle MegaMicros devices. Support 32, 256 and 1024 systems
+    class MegaMicros
+    
+    Main class to handle MegaMicros devices. Support 32, 256 and 1024 systems
     """
 
     Systems = {
@@ -237,8 +237,8 @@ class Megamicros(MArray):
         self.__system: dict = Megamicros.Systems['unknown']                 # Megamicros system type
         self.__usb: Usb=Usb()                                               # USB interface instance
         self.__usb_buffers_number: int=USB_DEFAULT_BUFFERS_NUMBER           # USB buffers number used in USB data acquisition process
-        self.__usb_queue_length: int=USB_DEFAULT_QUEUE_LENGTH               # USB transfer queue size in in number of frames
-        self.__mems_sensibility: float=3.54e-6                              # MEMS sensibility in Pa/digit (default to 3.54e-6 Pa/digit)
+        self.__available_analogs: list[int]=[]                              # Available analogs (connected and ok on the antenna)
+        self.__analogs: list[int]=[]                                        # Activated analogs
         self.__analogs_sensibility: float=0.33                              # Analogs sensibility in V/digit (default to 0.33 V/digit: 0x00FFFFFF on 24bits <-> 5.65Vcc)
         self.__counters: list[int]=[0]                                      # Activated counters
         self.__status: list[int]=[]                                         # Activated status channels
@@ -251,10 +251,6 @@ class Megamicros(MArray):
         # Check connected devices and open connection to the first found
         self.checkAndOpenDevice()
         mems_power, analogs_power = self.selftest( DEFAULT_SELFTEST_DURATION )
-
-        # Set available mems and analogs according to selftest results
-        self.setAvailableMems(np.where(np.array(mems_power) > 0)[0].tolist())
-        self.setAvailableAnalogs(np.where(np.array(analogs_power) > 0)[0].tolist())
 
         # Set default sampling frequency in accordance with default megamicros systems
         self.setClockdiv( DEFAULT_CLOCKDIV )
@@ -269,8 +265,12 @@ class Megamicros(MArray):
         return self.__usb
 
     @property
-    def mems_sensibility( self ) -> float:
-        return self.__mems_sensibility
+    def analogs( self ) -> int:
+        return self.__analogs
+    
+    @property
+    def available_analogs( self ) -> float:
+        return self.__available_analogs
 
     @property
     def analogs_sensibility( self ) -> float:
@@ -278,6 +278,7 @@ class Megamicros(MArray):
 
     @property
     def counters( self ) -> list[int]:
+        """ Return the list of activated counters"""
         return self.__counters
     
     @property
@@ -288,23 +289,46 @@ class Megamicros(MArray):
     
     @property
     def status(self) -> list[int]:
+        """ Return the list of activated status channels """
         return self.__status
 
     @property
+    def channels_number( self ) -> int:
+        """ Return the total number of channels (MEMS, analogs, counters, status) """
+        return len(self.mems) + len(self.analogs) + len(self.counters) + len(self.status)
+
+    @property
     def clockdiv( self ) -> int:
+        """ Return the clock divider (default to 9 for 50kHz or 48kHz sampling frequencies) """
         return self.__clockdiv
     
     @property
-    def queue_length( self ) -> int:
-        return self.__usb_queue_length
+    def sync_delay( self ) -> int:
+        """ Return the synchronization delay (10 for usual systems, 8 for Aikhous systems) """
+        return self.__sync_delay
+
+    @property
+    def queue( self ) -> Usb.Queue:
+        """ Get the USB queue instance """
+        return self.__usb.queue
 
     @property
     def queue_size( self ) -> int:
-        return self.usb.queue_size
+        """ Get the USB queue size (e.g. maxsize) in bytes"""
+        return self.__usb.queue.maxsize
 
     @property
-    def queue_content( self ) -> list:
-        return self.usb.queue_content
+    def queue_length( self ) -> int:
+        """ Get the USB queue length in number of frames """
+        if self.channels_number == 0 or self.frame_length == 0:
+            return 0
+        else:
+            return self.__usb.queue.maxsize // ( self.frame_length * self.channels_number * TRANSFER_DATAWORDS_SIZE )
+
+    @property
+    def queue_content( self ) -> int:
+        """ Get the number of elements currently in the USB queue """
+        return self.__usb.queue.qsize()
 
     @property
     def transfer_lost( self ) -> int:
@@ -314,17 +338,94 @@ class Megamicros(MArray):
     def time_activation( self ) -> int:
         return self.__time_activation
 
+    @property
+    def insfos( self ) -> dict:
+        """ Get current Megamicros configuration as a dictionary """
+        infos_dict = {
+            'system_name': self.__system['name'],
+            'available_mems': self.available_mems,
+            'active_mems': self.mems,
+            'mems_sensibility': self.mems_sensibility,
+            'available_analogs': self.available_analogs,
+            'active_analogs': self.analogs,
+            'analogs_sensibility': self.analogs_sensibility,
+            'counters': self.counters,
+            'status': self.status,
+            'clockdiv': self.clockdiv,
+            'sampling_frequency': self.sampling_frequency,
+            'sync_delay': self.sync_delay,
+            'datatype': self.datatype,
+            'duration': self.duration,
+            'frame_length': self.frame_length,
+            'frame_duration': self.frame_duration,
+            'channels_number': self.channels_number,
+            'counter': self.counter,
+            'h5_recording': self.__h5_recording
+        }
+        return infos_dict
+
+    def setAvailableMems( self, mems: list[int] ) -> None:
+        """ Set the available MEMs (connected and ok on the antenna)
+
+        Parameters
+        ----------
+        mems: list[int]
+            The available MEMs list
+        """
+        mems_number = self.__system['beams'] * MU_BEAM_MEMS_NUMBER
+        # Check if a MEMS number in the list is >= mems_number:
+        for m in mems:
+            if m >= mems_number:
+                raise MuException( f"Megamicros system {self.__system['name']} has only {mems_number} MEMS, cannot set available MEMS {mems}" )
+
+        super().setAvailableMems(mems)
+
+    def setAvailableAnalogs( self, analogs: list[int] ) -> None:
+        """ Set the available analogs (connected and ok on the antenna)
+
+        Parameters
+        ----------
+        analogs: list[int]
+            The available analogs list
+        """
+        analogs_number = self.__system['analogs']
+        # Check if an analog number in the list is >= analogs_number:
+        for a in analogs:
+            if a >= analogs_number:
+                raise MuException( f"Megamicros system {self.__system['name']} has only {analogs_number} analogs, cannot set available analogs {analogs}" )
+        self.__available_analogs = analogs
+
+    def setActiveAnalogs( self, analogs: tuple ) -> None :
+        """ Activate analogs
+        
+        Parameters:
+        -----------
+        analogs : tuple
+            list or tuple of analogs number to activate
+        """
+
+        self.__analogs = analogs
+
+    def setSyncDelay( self, delay: int ) -> None:
+        """ Set the synchronization delay (10 for usual systems, 8 for Aikhous systems)
+
+        Parameters:
+        -----------
+        delay : int
+            The synchronization delay value
+        """
+        self.__sync_delay = delay
+
     def setQueueLength( self, length: int ) -> None:
         """ Set USB transfer queue length in number of frames
         """
-        channels_number = len(self.mems) + len(self.analogs) + ( 1 if 0 in self.counters else 0 ) + ( 1 if 0 in self.status else 0 )
-        self.__usb_queue_length = length
-        self.usb.setQueueSize( length * self.frame_length * channels_number * MU_TRANSFER_DATAWORDS_SIZE )
+        self.usb.setQueueSize( length * self.frame_length * self.channels_number * TRANSFER_DATAWORDS_SIZE )
 
     def checkAndOpenDevice(self) -> None:
         """
-        @brief Check and open the MegaMicros USB device
-        @throw MuException in case of error during the USB transfer
+        Check and open the MegaMicros USB device
+        
+        Throw MuException in case of error during the USB transfer
         """
         try:
             if self.__usb.isOpened():
@@ -427,13 +528,12 @@ class Megamicros(MArray):
         if not self.__system['name'] in ['mu32', 'mu32usb2', 'mu32a', 'mu256', 'mu256h']:
             raise MuException(f"MegaMicros system {self.__system['name']} not supported yet for data acquisition")
 
-        channels_number = len(self.mems) + len(self.analogs) + ( 1 if 0 in self.counters else 0 ) + ( 1 if 0 in self.status else 0 )
-        if channels_number == 0 :
+        if self.channels_number == 0 :
             raise MuException("No channel activated for data acquisition")
 
         # Set USB configuration
         self.usb.setBuffersNumber( self.__usb_buffers_number )
-        self.usb.setBufferSize( self.frame_length * channels_number * MU_TRANSFER_DATAWORDS_SIZE )
+        self.usb.setBufferSize( self.frame_length * self.channels_number * TRANSFER_DATAWORDS_SIZE )
 
         # verbose
         log.info( f" .Starting run execution on Megamicros device..." )
@@ -449,11 +549,11 @@ class Megamicros(MArray):
         log.info( f"  > Whether counter is activated: {'YES' if 0 in self.counters else 'NO'}" )
         log.info( f"  > Whether status is activated: {'YES' if 0 in self.status else 'NO'}" )
         log.info( f"  > Time activation (MEMS powering delay): {self.time_activation} ms" )
-        log.info( f"  > Total channels number is {channels_number}" )
+        log.info( f"  > Total channels number is {self.channels_number}" )
         log.info( f"  > Datatype: {str( self.datatype )}" )
         log.info( f"  > Frame length in samples number: {self.frame_length} samples" )
         log.info( f"  > Frame duration: {self.frame_duration} s ({self.frame_duration * 1000} ms)" )
-        log.info( f"  > Frame size in bytes: {self.frame_length * channels_number * MU_TRANSFER_DATAWORDS_SIZE}" )
+        log.info( f"  > Frame size in bytes: {self.frame_length * self.channels_number * TRANSFER_DATAWORDS_SIZE}" )
         log.info( f"  > Number of USB transfer buffers: {self.__usb_buffers_number}" )
         log.info( f"  > USB queue length: {'infinite queuing' if self.queue_length == 0 else self.queue_length} (frames)" )
         log.info( f"  > USB queue size: {'infinite queuing' if self.usb.queue_size == 0 else self.usb.queue_size} (bytes)" )
@@ -568,7 +668,6 @@ class Megamicros(MArray):
         else:
             self.__counters = counters
 
-
     def setStatus( self, status: list[int] | bool) -> None :
         """ Activate status channels
         """
@@ -580,18 +679,6 @@ class Megamicros(MArray):
                 self.__status = []
         else:
             self.__status = status
-
-
-    def setMemsSensibility( self, sensibility: float ) -> None:
-        """ Set MEMs sensibility
-        
-        Parameters:
-        -----------
-        sensibility : float
-            The MEMs sensibility in Pa/digit
-        """
-
-        self.__mems_sensibility = sensibility
 
     def setAnalogsSensibility( self, sensibility: float ) -> None:
         """ Set analogs sensibility
@@ -631,6 +718,14 @@ class Megamicros(MArray):
             raise MuException( "Direct arguments are not accepted" )
 
         try:
+            if 'analogs' in kwargs:
+                self.setActiveAnalogs( kwargs['analogs'] )
+                del kwargs['analogs']
+
+            if 'available_analogs' in kwargs:
+                self.setAvailableAnalogs( kwargs['available_analogs'] )
+                del kwargs['available_analogs']
+
             if 'counter' in kwargs:
                 if isinstance( kwargs['counter'], list ) or isinstance( kwargs['counter'], tuple ):
                     self.setCounters( kwargs['counter'] )
@@ -674,8 +769,7 @@ class Megamicros(MArray):
             raise MuException( f"Run failed on settings: {e}")
 
 
-
-    def selftest(self, duration: int) -> tuple[list[float], list[float]]:
+    def selftest(self, duration: int = DEFAULT_SELFTEST_DURATION) -> tuple[list[float], list[float]]:
         """
         @brief Perform a one-second recording test to obtain and update the Megamicros receiver settings.
         The test is performed with the default settings, not with the current settings. 
@@ -703,7 +797,7 @@ class Megamicros(MArray):
             analogs_number = self.__system['analogs']
             channels_number = mems_number + analogs_number + self.__system['counters'] + self.__system['status']
             frame_length = int( duration * self.sampling_frequency )
-            buffer_size = channels_number * frame_length * MU_TRANSFER_DATAWORDS_SIZE
+            buffer_size = channels_number * frame_length * TRANSFER_DATAWORDS_SIZE
             self.__ctrlResetMu()
             self.__ctrlClockdiv( DEFAULT_CLOCKDIV, DEFAULT_TIME_ACTIVATION / 1000 )
             self.__ctrlTixels( frame_length )
@@ -760,8 +854,8 @@ class Megamicros(MArray):
             data = data.reshape( ( channels_number, frame_length ), order='F' )
 
             # Get signals with sensibility factor
-            mems_signal = data[1:mems_number+1].astype( np.float32 ) * self.__mems_sensibility
-            analogs_signal = data[mems_number+1:mems_number+analogs_number+1].astype( np.float32 ) * self.__analogs_sensibility
+            mems_signal = data[1:mems_number+1].astype( np.float32 ) * self.mems_sensibility
+            analogs_signal = data[mems_number+1:mems_number+analogs_number+1].astype( np.float32 ) * self.analogs_sensibility
 
             # Compute mean energy  
             mems_power = np.sum( mems_signal**2, axis=1 ) / frame_length
@@ -785,6 +879,10 @@ class Megamicros(MArray):
             log.info( f"  > estimated data lost: {data[0][-1] - data[0][0] + 1 - frame_length} samples" )
             log.info( f"  > detected status channel with values {data[channels_number-1][0]} <-> {data[channels_number-1][-1]}" )
             log.info( f" .Selftest endded successfully" )
+
+            # Set available mems and analogs according to selftest results
+            self.setAvailableMems(np.where(np.array(mems_power) > 0)[0].tolist())
+            self.setAvailableAnalogs(np.where(np.array(analogs_power) > 0)[0].tolist())
 
             return mems_power.tolist(), analogs_power.tolist()
         else:
