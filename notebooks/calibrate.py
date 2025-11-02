@@ -6,6 +6,8 @@ la calibration géométrique d'antenne
 
 Created on Wed May 14 12:20:11 2014
 @author: charles
+
+Voir aussi: GéoCalib dans bimea/Manips
 """
 
 from __future__ import division
