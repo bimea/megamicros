@@ -182,6 +182,7 @@ setup(
         "scipy",
         "matplotlib",
         "libusb1",
+        "h5py",
     ],
     #install_requires=[
     #    "numpy",
