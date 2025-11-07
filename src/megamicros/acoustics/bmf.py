@@ -329,7 +329,6 @@ class BeamformerFDAS( Beamformer ):
         BFE: np.ndarray
             The beamformed energy channels (location_number x 1)
         """
-
         signal_length, mems_number = signal.shape
         # Control input size
         if signal_length > self.__fft_window_size:
@@ -348,7 +347,11 @@ class BeamformerFDAS( Beamformer ):
 
             SpecH = self.__FFT[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index, None, :] * self.__H[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-            self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / self.__band_width_length
+            # self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / self.__band_width_length
+            self.__BFE = np.sum( np.abs( BFSpec ), 0 ) / self.__band_width_length
+            self.__BFE = self.__BFE**2
+            # Compute power in db:
+            self.__BFE = 10 * np.log(self.__BFE)
 
             return self.__BFE, None, None
 
