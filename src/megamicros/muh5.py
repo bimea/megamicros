@@ -50,7 +50,35 @@ class MuH5:
     @property
     def samples_number( self ):
         return self.__samples_number
+    
+    @property
+    def info( self ):
+        return self.__info
+    
+    @property
+    def video_available( self ) -> bool:
+        return self.__video_available
+    
+    @property 
+    def info_video( self ):
+        return self.__info_video
+    
+    @property
+    def video_adaptive_fps( self ) -> bool:
+        return self.__adaptive_fps
+    
+    @property
+    def video_max_fps( self ) -> float:
+        return self.__max_fps
+    
+    @property
+    def video_dataset_count( self ) -> int:
+        return self.__video_dataset_count
 
+    @property
+    def video_frame_count( self ) -> int:
+        return self.__video_frame_count
+    
 
     def __init__( self, filename:str ):
 
@@ -78,8 +106,83 @@ class MuH5:
             self.__dataset_number = self.__info['dataset_number']
             self.__samples_number = self.__dataset_number * self.__dataset_length
 
+            # Explore the first dataset to check data integrity and get data type
+            dataset = f['muh5/0/sig']
+            data = np.array( dataset[:] )
+            if data.shape[0] != self.__channels_number or data.shape[1] != self.__dataset_length:
+                raise Exception( f"Data integrity error: dataset shape {data.shape} does not match expected shape ({self.__channels_number}, {self.__dataset_length})" )
+
+            # Check if muh5/video group exists
+            self.__video_available = False
+            if 'video' not in f['muh5']:
+                self.__video_available = False
+            else:
+                self.__video_available = True
+
+                # get video group attributes:
+                video_group = f['muh5/video']
+                self.__info_video = dict( zip( video_group.attrs.keys(), video_group.attrs.values() ) )
+                self.__adaptive_fps = self.__info_video['adaptive_fps']
+                self.__max_fps = self.__info_video['max_fps']
+                self.__video_dataset_count = self.__info_video['video_dataset_count']
+                self.__video_frame_count = self.__info_video['video_frame_count']
+
+                # Explore the first dataset to check video data integrity
+                # Check video dataset existance
+                if '0' not in f['muh5/video']:
+                    raise Exception( f"Video data integrity error: video dataset 0 not found in muh5/video group " )
+                else:
+                    log.info( f" .This muh5 file contains a video: {self.__video_frame_count} frames found" )
+
             log.info( f" .Created MuH5 object from {filename} file " )
-            
+
+    def get_video_frames( self, start_frame: int=0, end_frame: int=-1 ) -> np.ndarray:
+        """
+        Extract video from file
+
+        Returns
+        -------
+        * video (np.ndarray): array of shape ( frame_count, height, width, channels ) containing video frames
+        """
+
+        if not self.__video_available:
+            raise Exception( "No video available in this MuH5 file" )
+
+        if end_frame == -1:
+            end_frame = self.__video_frame_count - 1
+
+        if start_frame < 0 or end_frame >= self.__video_frame_count or start_frame > end_frame:
+            raise Exception( f"Frame index out of bounds: start_frame={start_frame}, end_frame={end_frame}, video_frame_count={self.__video_frame_count}" )
+
+        video_frames = []
+
+        with h5py.File( self.__filename, 'r' ) as f:
+            # Get frames from start_frame to end_frame
+            frame_index = 0
+            for dataset_index in range( self.__video_dataset_count ):
+                dataset = f['muh5/video/' + str( dataset_index ) + '/img']
+                dataset_frame_number = dataset.shape[0]
+                if frame_index + dataset_frame_number - 1 < start_frame:
+                    # Skip this dataset
+                    frame_index += dataset_frame_number
+                    continue
+                if frame_index > end_frame:
+                    # All requested frames have been extracted
+                    break
+                # Extract frames from this dataset
+                data = np.array( dataset[:] )
+                
+                # Get the range of frames to extract from this dataset
+                dataset_start_frame = max( 0, start_frame - frame_index )
+                dataset_end_frame = min( dataset_frame_number - 1, end_frame - frame_index )
+
+                for index in range( dataset_start_frame, dataset_end_frame + 1 ):
+                    video_frames.append( data[index,:,:,:] )
+                    frame_index += 1
+
+        video_array = np.array( video_frames )
+
+        return video_array
 
     def get_signal( self, channels: list, mems_sensibility:float=MU_MEMS_SENSIBILITY ) -> np.ndarray:
         """
