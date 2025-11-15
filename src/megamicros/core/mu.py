@@ -106,6 +106,7 @@ DEFAULT_CLOCKDIV				= 0x09										# Default internal acquisition clock value
 DEFAULT_SELFTEST_DURATION       = 0.1                                       # Default selftest duration in seconds     
 DEFAULT_START_TRIGG_STATUS      = False								        # Default start trigger status (external hard (True) or internal soft (False))
 DEFAULT_MEMS_SENSIBILITY        = 3.54e-6                                   # Default MEMS sensitivity (racine(2)/400 000 = 3,54µPa/digit)
+DEFAULT_ANALOGS_SENSIBILITY     = 0.33                                      # Default analogs sensibility in V/digit (0.33 V/digit: 0x00FFFFFF on 24bits <-> 5.65Vcc)
 DEFAULT_CLOCK_DIVIDER_REFERENCE = 500000                                    # Constant for the clock divider (500kHz)
 AIKHOUS_CLOCK_DIVIDER_REFERENCE = 480000                                    # Constant for the clock divider for Aikhous systems (480kHz)
 DEFAULT_SYNC_DELAY              = 10                                        # Default synchronization delay (10 for usual systems, 8 for Aikhous systems)
@@ -239,7 +240,7 @@ class Megamicros(MemsArray):
         self.__usb_buffers_number: int=USB_DEFAULT_BUFFERS_NUMBER           # USB buffers number used in USB data acquisition process
         self.__available_analogs: list[int]=[]                              # Available analogs (connected and ok on the antenna)
         self.__analogs: list[int]=[]                                        # Activated analogs
-        self.__analogs_sensibility: float=0.33                              # Analogs sensibility in V/digit (default to 0.33 V/digit: 0x00FFFFFF on 24bits <-> 5.65Vcc)
+        self.__analogs_sensibility: float=DEFAULT_ANALOGS_SENSIBILITY       # Analogs sensibility in V/digit (default to 0.33 V/digit: 0x00FFFFFF on 24bits <-> 5.65Vcc)
         self.__counters: list[int]=[0]                                      # Activated counters
         self.__status: list[int]=[]                                         # Activated status channels
         self.__clock_divider_reference: int=DEFAULT_CLOCK_DIVIDER_REFERENCE # Clock divider reference (sr = cdr/(clockdiv+1), default to 500kHz for usual systems, 480kHz for Aikhous systems) 
