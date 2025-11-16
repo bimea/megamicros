@@ -129,6 +129,7 @@ class MemsArray :
         self.__mems_sensibility: float=DEFAULT_MEMS_SENSIBILITY       # MEMS sensibility in Pa/digit (default to 3.54e-6 Pa/digit)
         self.__mems_positions: list[list[float]]=[]                   # Microphones positions vectors
         self.__counter: bool=False                                    # Counter activation flag
+        self.__counter_skip: bool=False                               # Whether to skip counter in output data stream
         self.__sampling_frequency: int=DEFAULT_SAMPLING_FREQUENCY     # Default system sample rate for audio acquisition
         self.__datatype: str=DEFAULT_DATATYPE                         # "int32" or "float32"
         self.__duration: int=DEFAULT_ACQ_DURATION                     # acquisition duration in seconds
@@ -152,7 +153,7 @@ class MemsArray :
         return self.__sampling_frequency
 
     @property
-    def mems( self ) -> int:
+    def mems( self ) -> list[int]:
         return self.__mems
 
     @property
@@ -170,6 +171,10 @@ class MemsArray :
     @property
     def counter( self ) -> bool:
         return self.__counter
+    
+    @property
+    def counter_skip( self ) -> bool:
+        return self.__counter_skip
 
     @property
     def channels_number( self ) -> int:
@@ -299,6 +304,20 @@ class MemsArray :
 
     def setCounter( self, counter: bool=True ) -> None:
         self.__counter = counter
+
+    def setCounterSkip( self, counter_skip: bool=True ) -> None:
+        """ Set whether to skip counter in output data stream
+        
+        Parameters:
+        -----------
+        counter_skip : bool
+            Whether to skip counter in output data stream
+        """
+
+        if counter_skip and not self.counter:
+            log.warning( " .Counter skip requested but counter is not activated" )
+
+        self.__counter_skip = counter_skip
 
     def setFrameLength( self, length: int ) -> None:
         """ Set the frame length in samples number. This property also updates the USB buffer length in samples number.

@@ -183,6 +183,7 @@ setup(
         "matplotlib",
         "libusb1",
         "h5py",
+        "imageio",
     ],
     #install_requires=[
     #    "numpy",

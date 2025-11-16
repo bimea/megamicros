@@ -67,6 +67,11 @@ You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](
 
 ## Releases
 
+### 3.0.2
+
+* Add Data classes for signal and video
+* Define the default sensibilitu of analogs to 0.33 (see megaicros.core.mu)
+
 ### 3.0.1
 
 * Add the sgcal diffuse antenna calibration of Charles Vanwynsberghe(see: https://github.com/cvanwynsberghe/sgcal-jasa).
