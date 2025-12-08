@@ -6,7 +6,7 @@ Megamicros Mems array library
 
 You can install *Megamicros* using the Phyton pip utility or from the GitHub repository.
 
-### Using pip install 
+### Using pip install
 
 *Megamicros* is stored in a private PyPi repository so that you have to mention it. 
 First create your virtual environnement, then install:
