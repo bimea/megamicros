@@ -1,6 +1,9 @@
 # Install from official bimea repository:
 #--index-url https://pypi.bimea.io
 
+build
+twine
+
 # Install from local repository:
 -e ./
 pyroomacoustics

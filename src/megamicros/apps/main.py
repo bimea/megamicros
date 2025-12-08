@@ -17,6 +17,7 @@ from megamicros import __version__, welcome_msg
 from megamicros.log import log
 from megamicros.exception import MuException
 from megamicros.core.mu import Megamicros
+from megamicros.usb import Usb
 
 def arg_parse() -> tuple:
 
@@ -48,17 +49,19 @@ def main():
     if args.check_usb:
         print( "Checking USB..." )
         try:
-            print( "Not implemented yet" )
+            for system_name, system_info in Megamicros.Systems.items():
+                if Usb.checkDeviceByVendorProduct( system_info['vendor_id'],  system_info['product_id'] ):
+                    print( f"Found following {system_info['name']} Megamicros device found with following characteristics:")
+                    print( f"  - system name: {system_info['name']}" )
+                    print( f"  - usb vendor id: {system_info['vendor_id']:04x}" )
+                    print( f"  - usb vendor product: {system_info['product_id']:04x}" )
+                    print( f"  - usb bus address: {system_info['bus_address']}" )
+                    print( f"  - pluggable mems number: {system_info['beams']*8}" )
+                    print( f"  - pluggable analogs number: {system_info['analogs']}" )
+                    return
+
+            print("No Megamicros system found.")
             return
-            #
-            #devices = Megamicros.check_device()
-            #print( f"Found following device {devices['usb_vendor_id']:04x}:{devices['usb_vendor_product']:04x} characteristics:")
-            #print( f"  - system_type: {devices['system_type']}" )
-            #print( f"  - usb_vendor_id: {devices['usb_vendor_id']:04x}" )
-            #print( f"  - usb_vendor_product: {devices['usb_vendor_product']:04x}" )
-            #print( f"  - usb_bus_address: {devices['usb_bus_address']}" )
-            #print( f"  - pluggable_mems_number: {devices['pluggable_beams_number']*8}" )
-            #print( f"  - pluggable_analogs_number: {devices['pluggable_analogs_number']}" )
 
         except MuException as e:
             print( f"Failed: {e}")

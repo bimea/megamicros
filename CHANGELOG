@@ -1,5 +1,8 @@
-V3 - 2025
-### 3.0.2
+# Changelog
+
+## Releases
+
+### 3.0.2-5
 
 * Add Data classes for signal and video
 * Define the default sensibility of analogs to 0.33 (see megaicros.core.mu)

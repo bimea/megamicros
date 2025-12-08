@@ -1,5 +1,9 @@
 import os
-import pkg_resources
+try:
+    from importlib.metadata import version
+except ImportError:
+    # Fallback for Python < 3.8
+    from importlib_metadata import version
 
 def _get_version():
     try:
@@ -13,7 +17,7 @@ def _get_version():
     
     try:
         # Try to get version from installed package (for installed package)
-        return pkg_resources.get_distribution('megamicros').version
+        return version('megamicros')
     except:
         pass
     
