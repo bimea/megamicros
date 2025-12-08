@@ -287,3 +287,101 @@ The core of megamicros will not change but most of the tools will be reorganized
 ### 2.0.31
 
 * Change the DB_PROCESSING_DELAY_RATE value needed for realtime simulation from 3/10 to 2/10
+
+## Pypi
+
+```bash
+# Installer les outils nécessaires
+pip install --upgrade build twine
+```
+
+Créez aussi un compte sur <https://test.pypi.org> pour tester d'abord.
+
+Créez un fichier `~/.pypirc` :
+
+```bash
+[pypi]
+username = __token__
+password = pypi-YOUR_API_TOKEN_HERE
+
+[testpypi]
+username = __token__
+password = pypi-YOUR_TEST_API_TOKEN_HERE
+```
+
+Remarque : Il est recommandé d'utiliser des tokens API plutôt que votre mot de passe. Générez-les depuis votre compte PyPI dans : Account Settings → API tokens.
+
+### Builder le package
+
+```bash
+# Depuis la racine de votre projet
+python -m build
+```
+
+Cela créera deux fichiers dans le dossier dist/ :
+
+* `megamicros-X.X.X.tar.gz` (source distribution)
+* `megamicros-X.X.X-py3-none-any.whl` (wheel distribution)
+
+(Optionnel) Tester sur TestPyPI d'abord
+
+```bash
+# Upload sur TestPyPI
+python -m twine upload --repository testpypi dist/*
+
+# Tester l'installation
+pip install --index-url https://test.pypi.org/simple/ megamicros
+```
+
+Uploader sur PyPI officiel
+
+```bash
+# Vérifier les distributions
+python -m twine check dist/*
+
+# Upload sur PyPI
+python -m twine upload dist/*
+```
+
+Vérifier
+
+Après l'upload, votre package sera disponible à :
+
+https://pypi.org/project/megamicros/
+Et installable via :
+
+```bash
+pip install megamicros
+```
+
+Points importants à vérifier avant l'upload
+
+1. Version unique : Assurez-vous que le numéro de version dans VERSION n'a jamais été uploadé
+2. README.md : Doit être bien formaté (sera affiché sur PyPI)
+3. Licence : Vérifiez que votre licence GPL est correctement spécifiée
+4. Nom du package : "megamicros" doit être disponible sur PyPI (vérifiez d'abord)
+
+Workflow recommandé pour les mises à jour futures
+
+```bash
+# 1. Mettre à jour VERSION
+echo "3.0.2" > VERSION
+
+# 2. Nettoyer les anciens builds
+rm -rf dist/ build/ src/megamicros.egg-info/
+
+# 3. Builder
+python -m build
+
+# 4. Vérifier
+python -m twine check dist/*
+
+# 5. Uploader
+python -m twine upload dist/*
+```
+
+Note : Une fois un package uploadé avec une version donnée, vous ne pouvez plus modifier ou re-uploader cette version. Vous devez incrémenter le numéro de version pour chaque nouveau upload.
+
+Token (bimea-token):
+
+pypi-AgEIcHlwaS5vcmcCJGI0N2E3YmUzLTQ5MTctNGNjOS1iMjdkLWQ1MmUxNjdlMjI0YwACKlszLCI4MjBlZjBkMi04MGM4LTQ3MzAtODNlNS0wODRhYzg2NjQyYmIiXQAABiBi9AFbwpQiJ4hSEsOWQ6rlf1g7x9OQ1LQcIt8KQgQP5Q
