@@ -138,7 +138,7 @@ class Beamformer:
     def setFrameLength( self, frame_length: float ) -> None :
         """ Set the input data buffer length in samples number """
 
-        log.info( f" .Set beamformer frame length to {frame_length} Hz" )
+        log.info( f" .Set beamformer frame length to {frame_length} Samples" )
         self.__frame_length = frame_length
 
 
@@ -226,7 +226,7 @@ class BeamformerFDAS( Beamformer ):
     def setFFtWindowSize( self, fft_window_size):
         """ Set the FFT window size in samples number 
         
-        Note that it is not required the FFT window size is the same as frame length. But only same size is allowed for now
+        Note that it is not required that the FFT window size is the same as frame length. But only same size is allowed for now
         """
         if fft_window_size != self.frame_length:
             raise MuBmfException( f"Cannot set FFT window size to {fft_window_size} samples. Should be same as frame length ({self.frame_length} samples)" )
@@ -308,9 +308,9 @@ class BeamformerFDAS( Beamformer ):
 
     def compute( self, signal: np.ndarray, type='full' ) -> np.ndarray:
         """ Process beamforming on input signals
-        
-        If the signal length is smaller than the `__fft_window_size` parameter, the input is cropped. 
-        If it is larger, the input signal is padded with zeros
+
+        If the signal length is smaller than the `__fft_window_size` parameter, the input is zero padded.
+        If it is larger, the input signal is cropped.
         
         There are several methods to compute the BMF:
         * `type='full'`: beamforming is computed over all the frequencies
@@ -329,14 +329,14 @@ class BeamformerFDAS( Beamformer ):
         BFE: np.ndarray
             The beamformed energy channels (location_number x 1)
         """
-
+        signal_length, mems_number = signal.shape
         # Control input size
-        #if signal.shape[0] > self.__fft_window_size:
-        #    log.warning( f" .bmf > Input signal is longer than FFT width: it will be truncated" )
-        #    self._in = signal[:self.__fft_window_size,:]
-        #elif signal.shape[0] < self.__fft_window_size:
-        #    log.warning( f" .bmf > Input signal is shorter than FFT width: it will be zero-padded" )
-        #    self._in = np.pad( signal, ( ( 0,self.__fft_window_size-signal.shape[0]), (0,0) ) )
+        if signal_length > self.__fft_window_size:
+            log.warning( f" .bmf > Input signal is longer than FFT width: it will be truncated" )
+            self._in = signal[:self.__fft_window_size,:]
+        elif signal_length < self.__fft_window_size:
+            log.warning( f" .bmf > Input signal is shorter than FFT width: it will be zero-padded" )
+            self._in = np.pad( signal, ( ( 0,self.__fft_window_size-signal_length), (0,0) ) )
 
         # Process beamforming on input signal involving all frequencies
         if type == 'full':
@@ -347,7 +347,11 @@ class BeamformerFDAS( Beamformer ):
 
             SpecH = self.__FFT[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index, None, :] * self.__H[self.__fft_low_cut_off_index:self.__fft_high_cut_off_index,:,:]
             BFSpec = np.sum( SpecH, -1 ) / self.mems_number
-            self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / self.__band_width_length
+            # self.__BFE = np.sum( np.abs( BFSpec )**2, 0 ) / self.__band_width_length
+            self.__BFE = np.sum( np.abs( BFSpec ), 0 ) / self.__band_width_length
+            self.__BFE = self.__BFE**2
+            # Compute power in db:
+            self.__BFE = 10 * np.log(self.__BFE)
 
             return self.__BFE, None, None
 

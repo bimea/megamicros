@@ -26,7 +26,7 @@ Documentation:
 
 import numpy as np
 
-    
+
 def circle( points_number: int, radius: float, height: float, angle_offset: float, clockwise: bool ) -> list:
     """ Create a circle of MEMs positions
 

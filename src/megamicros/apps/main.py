@@ -16,7 +16,7 @@ import argparse
 from megamicros import __version__, welcome_msg
 from megamicros.log import log
 from megamicros.exception import MuException
-from megamicros.antenna import Megamicros
+from megamicros.core.mu import Megamicros
 
 def arg_parse() -> tuple:
 

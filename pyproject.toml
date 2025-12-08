@@ -5,3 +5,56 @@ requires = [
     "cmake_build_extension"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "megamicros"
+dynamic = ["version"]
+description = "Megamicros Mems array library"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Bruno Gas", email = "bruno.gas@bimea.io"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy"
+]
+keywords = ["MEMs", "antenna", "beamforming", "acoustics", "Machine Learninge"]
+requires-python = ">=3.7"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "libusb1",
+    "h5py",
+    "imageio",
+]
+
+[project.urls]
+Homepage = "https://github.com/bimea/megamicros"
+Documentation = "https://readthedoc.bimea.io"
+Source = "https://github.com/bimea/megamicros/"
+
+[project.scripts]
+megamicros = "megamicros.apps.main:main"
+megamicros-version = "megamicros.apps.version:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["contrib", "docs", "tests*", "tasks"]
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}

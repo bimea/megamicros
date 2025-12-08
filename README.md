@@ -6,35 +6,14 @@ Megamicros Mems array library
 
 You can install *Megamicros* using the Phyton pip utility or from the GitHub repository.
 
-### Using pip install 
+### Using pip install
 
-*Megamicros* is stored in a private PyPi repository so that you have to mention it. 
 First create your virtual environnement, then install:
 
 ```bash
   > virtualenv venv
   > source venv/bin/activate
-  (venv) > pip install --upgrade --extra-index-url https://repository.bimea.io/api-pypi megamicros
-```
-
-You may want to not write systematically the repository address. 
-Always specifying the pypi url on the command line is a bit cumbersome. 
-For pip command this can be done by setting the environment variable ``PIP_EXTRA_INDEX_URL`` in your .bashr/.profile/.zshrc/.zprofile:
-
-```bash
-  export PIP_EXTRA_INDEX_URL=https://pypi.bimea.io/api-pypi
-```
-
-or by adding the following lines to ~/.pip/pip.conf:
-
-```bash
-  [global] extra-index-url = https://pypi.bimea.io/api-pypi
-```
-
-Installing *megamicros* becomes as simple as:
-
-```bash
-  > pip install megamicros
+  (venv) > pip install megamicros
 ```
 
 Upgrading:
@@ -61,174 +40,50 @@ Create a virtual environnement in the ``megamicros`` repository and install the 
   > pip install -r requirements.txt
 ```
 
+## Issues with usb access
+
+### On windows systems
+
+Before using the megamicros python library you must install the *Zadig* usb driver. 
+
+### On MacOs / Linux systems
+
+In some Linux distributions, only the root user has access to the USB port, so the following message may appear:
+
+```bash
+    ...
+    aborting:  LIBUSB_ERROR_ACCESS [-3]
+```
+
+The USB devices are probably not accessible to users (test under root should be ok).
+You must then give user access to the usb port by creating a new device rules file:
+
+```bash
+    > sudo vi /etc/udev/rules.d/99-megamicros-devices.rules
+    # Insert next lines which give access to the Megamicros devices (Mu32-usb2, Mu32-usb3, Mu256, Mu1024):
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="fe27", ATTRS{idProduct}=="ac00", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="fe27", ATTRS{idProduct}=="ac01", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="fe27", ATTRS{idProduct}=="ac03", MODE="0666"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="fe27", ATTRS{idProduct}=="ac02", MODE="0666"
+```
+
+User should be also in the ``plugdev`` group. Check the group file:
+
+```bash
+    > vi /etc/group
+    ...
+    plugdev:x:46:user_account_login
+    ...
+```
+
+If there is no entry with your user account (``user_account_login`` above), then add your user account in the ``plugdev`` group.
+Unplugg and plugg your usb device. All should be fine.
+
+!!! Note
+
+    Don't forget that if you run your Python programs on a virtual machine, usb ports should be declared as accessible on your VM.
+
+
 ## Megamicros documentation
 
 You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](https://readthedoc.biimea.io).
-
-## Releases
-
-### 3.0.0
-
-New major release
-
-* Usb interface Refactoring
-
-### 2.1.30-2.1.34
-
-The next minor release (2.2) is comming soon.
-The core of megamicros will not change but most of the tools will be reorganized
-
-* Update the release making process
-* Import mqtt and muh5 from the ol library megamicros_tools
-
-### 2.1.29
-
-* Minor updates on megamicros.mu
-
-### 2.1.13-2.1.28
-
-* Prepare the next major release
-* Transform megamicros_tools package in megamicros.tools sub package
-* Major updates in tools/acoustics/location.py
-* Add BFE on limited frequency bandwith
-* Add getBFE function in core/h5 to get BFE data from MµH5 files
-* fix bug in tools/signal.py: `megamicros.exception` instead of `import exception`.
-
-### 2.1.12
-
-* Fix `get()` method error when getting signals from H5 file
-
-### 2.1.11
-
-* Fix the issue of H5 file bad recording
-
-### 2.1.10
-
-* Add system_type property to Mµ antenna systems
-
-### 2.1.5 - 2.1.9
-
-* Fix compatibility problems with libusb (Zadig) under windows
-
-### 2.1.3 - 2.1.4
-
-* Add the `megamicros` program
-
-### 2.1.1 - 2.1.2
-
-* Minor modifications
-
-### 2.1.0
-
-* Remove the aidb application from the package in favor of the megamicros-aidb new package
-* Remove the aiboard application from the package in favor of the megamicros-aiboard new package
-* megamicros-tools becomes a dependency of megamicros
-* Remove log, mqtt, muh5, exception, previously moved in megamicros-tools
-  * Please use in your code `from megamicros_tools.log import log` instead of `from megamicros.log import log`
-  * Same with `exception`, `mqtt` and `muh5`.
-
-### 2.0.75
-
-* Remove docs form this repository. Documentation is now available on its on repository (megamicros-doc)
-
-### 2.0.74
-
-* Add 'real_time' option in MesmArrayH5 for playing H5 files
-* There is still a bug to fix wen 'real_time=True': the delay which is imposed for real time respect leads to problem in the queue management
-
-### 2.0.72 to 2.0.73
-
-* Add download of H5 files as wav files du dbAi
-
-### 2.0.71
-
-* Add the megamicros base library for Megamicros device monitoring
-
-### 2.0.70
-
-* Fix bug in dataset concerning bad reshape when samples are shorter than split size
-
-### 2.0.56 to 2.0.69
-
-* Update aidb dataset by adding instance storing
-* Update aiboard to work fine with the nexw dataset
-
-### 2.0.55
-
-* fix the download error in dataset samples duration
-
-### 2.0.54
-
-* update http address for aiboard
-
-### 2.0.53
-
-* ailab/sataset updated for data split and temporal zero padding
-
-### 2.0.48, 2.0.49, 2.0.50, 2.0.51, 2.0.51, 2.0.52
-
-* New Dataset view and serializer for AiDB
-
-### 2.0.47
-
-### 2.0.46
-
-* Fix dataset error for entry removing in AiDB
-
-### 2.0.45
-
-* Fix error made by the default limit=20 for label downloading
-
-### 2.0.44
-
-* Create torch dataset for AiDB signals
-
-### 2.0.43
-
-* Add dbchantier database to megamicros-aiboard program configuration
-
-### 2.0.42
-
-* Compute power in decibels  on database signals
-
-### 2.0.41
-
-* Add the `fft` datatype for getting fft signals from the Megamicros broadcast server using the `run` method
-
-### 2.0.40
-
-* Add database endpoint for extracting samples (sourcefile/samples) and the library tools that comes with 
-
-### 2.0.39
-
-* Add direct signal samples extraction from AI database 
-
-### 2.0.38
-
-* Fix bug `TypeError: MemsArray.setAvailableAnalogs() got an unexpected keyword argument 'available_analogs_number'` in db.py
-
-### 2.0.37
-
-* Fix bug `TypeError: MemsArray.setAvailableMems() got an unexpected keyword argument 'available_mems_number'` in db.py
-
-### 2.0.36
-
-* Some updates
-
-### 2.0.35
-
-* Fix bug in H5 files reading
-
-### 2.0.34
-
-* Corrections in MemsArrayWS for using methods `settings()` and `selftest()` as *async* methods
-
-### 2.0.33
-
-### 2.0.32
-
-* Before correcting DB_PROCESSING_DELAY_RATE issue, skip the realtime process
-
-### 2.0.31
-
-* Change the DB_PROCESSING_DELAY_RATE value needed for realtime simulation from 3/10 to 2/10
