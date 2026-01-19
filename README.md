@@ -86,4 +86,4 @@ Unplugg and plugg your usb device. All should be fine.
 
 ## Megamicros documentation
 
-You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](https://readthedoc.biimea.io).
+You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](https://readthedoc.bimea.io).

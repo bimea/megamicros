@@ -39,8 +39,9 @@ fi
 # Create the distribution files
 python3 -m build --sdist
 python3 -m build --wheel
-python setup.py sdist bdist_wheel
-twine upload -r bimea dist/*
+# python setup.py sdist bdist_wheel
+# twine upload -r bimea dist/*
+twine upload dist/*
 
 # Clean up build artifacts
 rm -rf dist
