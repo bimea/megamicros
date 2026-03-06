@@ -205,13 +205,29 @@ class BaseDataSource(ABC):
         pass
     
     def wait(self) -> None:
-        """Default wait implementation - can be overridden."""
+        """
+        Wait for acquisition to complete naturally.
+        
+        Automatically transitions from RUNNING to STOPPED state.
+        Subclasses should override this to join threads etc.
+        """
+        self._do_wait()
+        if self._state == SourceState.RUNNING:
+            self._state = SourceState.STOPPED
+    
+    def _do_wait(self) -> None:
+        """Subclass-specific wait logic (join threads, etc)."""
         pass
     
     def __iter__(self) -> Iterator[np.ndarray]:
-        """Iterate over frames."""
-        if self._state != SourceState.RUNNING:
-            raise RuntimeError(f"Cannot iterate in state {self._state}. Call start() first.")
+        """
+        Iterate over frames.
+        
+        Can be called on RUNNING sources (data still being generated)
+        or STOPPED sources (reading remaining frames from queue).
+        """
+        if self._state not in (SourceState.RUNNING, SourceState.STOPPED):
+            raise RuntimeError(f"Cannot iterate in state {self._state}. Call run() first.")
         
         yield from self._generate_frames()
     

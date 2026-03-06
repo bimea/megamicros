@@ -112,7 +112,8 @@ class UsbDataSource(BaseDataSource):
         
         self._usb_config = usb_config or UsbConfig()
         self._usb_device: Usb | None = None
-        self._queue: queue.Queue = queue.Queue()
+        self._queue: queue.Queue = queue.Queue()  # Created once, reused across runs
+        self._queue_size: int = 0  # Track configured size
         self._transfer_thread: Thread | None = None
         self._timer_thread: Thread | None = None
         self._halt_request = False
@@ -174,11 +175,18 @@ class UsbDataSource(BaseDataSource):
         except Exception as e:
             raise UsbSourceException(f"Failed to configure device: {e}")
         
-        # Setup queue
-        self._queue = queue.Queue(maxsize=config.queue_size)
+        # Setup queue (recreate only if size changed)
+        if config.queue_size != self._queue_size:
+            old_size = self._queue_size
+            self._queue = queue.Queue(maxsize=config.queue_size)
+            self._queue_size = config.queue_size
+            if old_size > 0:  # Not first configuration
+                log.warning(f"Queue size changed ({old_size}→{config.queue_size}) - previous frames lost")
+        # NOTE: If queue_size unchanged, queue is preserved (frames accumulate)!
+        
         self._halt_request = False
         self._frames_received = 0
-        self._transfert_lost = 0
+        # NOTE: transfert_lost is NOT reset - cumulative counter
         
         log.debug(f"UsbDataSource configured: {len(config.mems)} MEMS, "
                  f"{config.sampling_frequency}Hz, {config.frame_length} samples/frame")
@@ -355,8 +363,8 @@ class UsbDataSource(BaseDataSource):
             count_bytes = count.to_bytes(4, byteorder='little')
             self._usb_device.controlWrite(MU_CMD_COUNT, count_bytes)
     
-    def wait(self) -> None:
-        """Wait for acquisition to complete."""
+    def _do_wait(self) -> None:
+        """Wait for acquisition threads to complete."""
         if self._transfer_thread:
             self._transfer_thread.join()
         if self._timer_thread:

@@ -220,6 +220,11 @@ class Megamicros(MemsArray):
             self (for method chaining)
         """
         
+        # Auto-cleanup if already running (better UX)
+        if self._running:
+            log.debug("Previous acquisition still running - stopping automatically")
+            self.wait()
+        
         # Use available MEMS if not specified
         if mems is None:
             mems = self.available_mems
@@ -260,6 +265,19 @@ class Megamicros(MemsArray):
         self._running = False
         log.debug("Acquisition complete")
     
+    def clear_queue(self) -> int:
+        """
+        Clear all frames from the queue without processing them.
+        
+        Returns:
+            Number of frames that were discarded
+        """
+        count = 0
+        for _ in self:
+            count += 1
+        log.debug(f"Cleared {count} frames from queue")
+        return count
+    
     def stop(self) -> None:
         """
         Stop acquisition prematurely.
@@ -274,14 +292,19 @@ class Megamicros(MemsArray):
         """
         Iterate over data frames.
         
+        Can be called:
+        - During acquisition (while running) for real-time processing
+        - After wait() to retrieve buffered frames from queue
+        
         Yields:
             np.ndarray: Frame data with shape (channels, samples)
             
         Note:
             Each frame is yielded once. Iteration empties the queue.
         """
-        if not self._running:
-            log.warning("Iteration called but source not running. Call run() first.")
+        # Allow iteration on stopped source if queue has content
+        if not self._running and self.queue_content == 0:
+            log.warning("Iteration called but source not running and queue is empty. Call run() first.")
             return
         
         yield from self._source
