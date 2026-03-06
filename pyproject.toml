@@ -1,46 +1,63 @@
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=61.0",
     "wheel",
-    "cmake_build_extension"
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "megamicros"
 dynamic = ["version"]
-description = "Megamicros Mems array library"
+description = "Megamicros MEMS microphone array library for acoustic beamforming"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "Bruno Gas", email = "bruno.gas@bimea.io"}
 ]
+maintainers = [
+    {name = "Bruno Gas", email = "bruno.gas@bimea.io"}
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Topic :: Software Development :: Build Tools",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy"
+    "Operating System :: OS Independent",
 ]
-keywords = ["MEMs", "antenna", "beamforming", "acoustics", "Machine Learninge"]
-requires-python = ">=3.7"
+keywords = ["MEMS", "microphone", "antenna", "beamforming", "acoustics", "signal processing", "array"]
+requires-python = ">=3.9"
 dependencies = [
-    "numpy",
-    "scipy",
-    "matplotlib",
-    "libusb1",
-    "h5py",
-    "imageio",
+    "numpy>=1.20",
+    "scipy>=1.7",
+    "matplotlib>=3.4",
+    "libusb1>=2.0",
+    "h5py>=3.0",
+    "imageio>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+    "black>=22.0",
+    "ruff>=0.0.260",
+    "mypy>=0.990",
+]
+websocket = [
+    "websockets>=10.0",
+]
+simulation = [
+    "pyroomacoustics>=0.6",
 ]
 
 [project.urls]

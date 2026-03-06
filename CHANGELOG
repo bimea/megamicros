@@ -2,6 +2,97 @@
 
 ## Releases
 
+### 4.0.0-dev (In Progress)
+
+**Major Refactoring - Breaking Changes**
+
+This is a major architectural overhaul of the Megamicros library implementing modern Python patterns and improved modularity.
+
+#### Architecture Changes
+
+**New Multi-Source Architecture:**
+- Created `sources/` module with pluggable data source system
+- `DataSource` protocol defining unified interface
+- Four concrete implementations:
+  - `UsbDataSource`: Physical USB hardware (Mu32, Mu256, Mu1024)
+  - `H5DataSource`: HDF5 file playback (MuH5 format)
+  - `RandomDataSource`: Random signal generator (testing/development)
+  - `WebSocketDataSource`: Remote devices over WebSocket (🚧 under development)
+
+**Configuration System:**
+- New `core/config.py` with type-safe dataclasses:
+  - `AcquisitionConfig`: All acquisition parameters in one object
+  - `UsbConfig`: USB device configuration
+  - `MemsArrayInfo`: Array geometry and metadata
+- Replaces scattered instance variables with structured configs
+
+**Refactored Megamicros Class:**
+- Now a facade/factory over data sources
+- Automatic source selection:
+  - `Megamicros(filepath='data.h5')` → H5DataSource
+  - `Megamicros(url='ws://...')` → WebSocketDataSource
+  - `Megamicros(usb=True)` → UsbDataSource
+  - `Megamicros()` → Auto-detect or fallback to Random
+- Fully backward compatible with v3.x API
+- Supports explicit source injection for testing
+
+#### Packaging Improvements
+- Updated `pyproject.toml` with modern practices:
+  - Minimum Python 3.9 (was 3.7)
+  - Version constraints on dependencies
+  - Optional dependencies: `dev`, `websocket`, `simulation`
+  - Better classifiers and keywords
+- Removed unnecessary `cmake_build_extension` dependency
+- Fixed typo: "Machine Learninge" → "Machine Learning"
+
+#### Goals
+- [x] Improve code modularity with pluggable data sources
+- [x] Enhance type safety with dataclasses and protocols
+- [x] Streamline API (backward compatible)
+- [x] Enable easy testing without hardware (RandomDataSource)
+- [x] Better separation of concerns between layers
+- [ ] Add comprehensive test suite (pytest)
+- [ ] Add type checking (mypy)
+- [ ] Complete WebSocketDataSource implementation
+
+#### Breaking Changes
+None yet - v4.0.0 maintains full backward compatibility with v3.x API
+
+#### New Features
+- **Multi-source architecture**: Use same API for USB, H5, WebSocket, or Random
+- **Random data generator**: Test without hardware
+- **Configuration objects**: Type-safe, validated configs
+- **Protocol-based design**: Easy to add new data sources
+- **Better error messages**: Explicit exceptions for each source type
+
+#### Migration Guide (when upgrading from 3.x)
+
+The v3.x API still works:
+```python  
+# v3.x code works unchanged
+antenna = Megamicros()
+antenna.run(mems=[0,1,2,3], sampling_frequency=50000)
+for frame in antenna:
+    process(frame)
+antenna.wait()
+```
+
+But v4.0 offers new patterns:
+```python
+# Explicit H5 playback
+antenna = Megamicros(filepath='recording.h5')
+
+# Testing without hardware
+antenna = Megamicros()  # Auto-falls back to RandomDataSource
+
+# Using configuration objects
+from megamicros import AcquisitionConfig
+config = AcquisitionConfig(mems=[0,1,2,3], sampling_frequency=50000, duration=10)
+antenna.run(**config.__dict__)
+```
+
+---
+
 ### 3.0.2-5
 
 * Add Data classes for signal and video
