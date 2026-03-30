@@ -162,23 +162,21 @@ class Megamicros(MemsArray):
             log.info(f"Creating WebSocketDataSource for {url}")
             return WebSocketDataSource(url)
         
-        # 3. USB source
-        if usb is True or (usb is None and self._usb_device_detected(vendor_id, product_id)):
-            log.info(f"Creating UsbDataSource ({hex(vendor_id)}:{hex(product_id)})")
-            usb_config = UsbConfig(vendor_id=vendor_id, product_id=product_id)
-            return UsbDataSource(usb_config)
+        # 3. USB source - detect actual device
+        if usb is True or usb is None:
+            # Try to detect actual device
+            device_found, detected_product_id = Usb.detectMegamicrosDevice(vendor_id)
+            
+            if device_found or usb is True:
+                # Use detected product_id or provided one
+                actual_product_id = detected_product_id if device_found else product_id
+                log.info(f"Creating UsbDataSource ({hex(vendor_id)}:{hex(actual_product_id)})") 
+                usb_config = UsbConfig(vendor_id=vendor_id, product_id=actual_product_id)
+                return UsbDataSource(usb_config)
         
         # 4. Random fallback
         log.warning("No hardware or file specified - using RandomDataSource for testing")
         return RandomDataSource(seed=kwargs.get('seed'))
-    
-    @staticmethod
-    def _usb_device_detected(vendor_id: int, product_id: int) -> bool:
-        """Check if USB device is available."""
-        try:
-            return Usb.checkDeviceByVendorProduct(vendor_id, product_id)
-        except:
-            return False
     
     # Public API - Backward compatible with v3.x
     

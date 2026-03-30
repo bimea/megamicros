@@ -111,6 +111,7 @@ class UsbConfig:
     Attributes:
         vendor_id: USB vendor ID
         product_id: USB product ID
+        bus_address: USB bus address (interface number)
         interface: USB interface number
         endpoint_in: USB input endpoint
         buffers_number: Number of USB transfer buffers
@@ -120,6 +121,7 @@ class UsbConfig:
     
     vendor_id: int = 0xFE27
     product_id: int = 0xAC03
+    bus_address: int = 0x00
     interface: int = 0x00
     endpoint_in: int = 0x81
     buffers_number: int = 8

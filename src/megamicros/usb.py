@@ -210,6 +210,33 @@ class Usb:
             usb_handle.close()
             context.close()
             return True
+    
+    @staticmethod
+    def detectMegamicrosDevice(vendor_id: int = 0xFE27) -> tuple[bool, int]:
+        """Detect which Megamicros device is connected.
+        
+        Parameters
+        ----------
+        vendor_id: int
+            The vendor ID to search for (default: 0xFE27)
+        
+        Returns
+        -------
+        tuple[bool, int]
+            (device_found, product_id) where product_id is one of:
+            0xAC00 (Mu32-usb2 legacy), 0xAC01 (Mu256), 0xAC02 (Mu1024), 
+            0xAC03 (Mu32), 0xAC04 (Mu64)
+            If not found, returns (False, 0xAC03) as default
+        """
+        # Try all known Megamicros product IDs
+        product_ids = [0xAC00, 0xAC01, 0xAC02, 0xAC03, 0xAC04]
+        
+        for product_id in product_ids:
+            if Usb.checkDeviceByVendorProduct(vendor_id, product_id):
+                return (True, product_id)
+        
+        # Not found - return default (Mu32)
+        return (False, 0xAC03)
 
 
 
@@ -418,20 +445,47 @@ class Usb:
 
         return data
     
+    def bulkRead( self, size:int, timeout:int=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
+        """
+        Perform a bulk read transfer on the USB device (alias for syncBulkRead).
+        
+        Parameters
+        ----------
+        size: int
+            The number of bytes to read
+        timeout: int, optional
+            The USB command timeout in ms (default is 1000ms)
+            
+        Returns
+        -------
+        bytes
+            The data read from the USB device
+        """
+        return self.syncBulkRead(size, timeout)
+    
     def __callback( self, transfer: usb1.USBTransfer ) -> None:
         """
         Callback function for asynchronous bulk transfer on the USB device
         """
+        status = transfer.getStatus()
+        actual_length = transfer.getActualLength()
+        
+        log.debug(f"USB callback: status={status}, length={actual_length}")
 
-        if transfer.getStatus() == usb1.TRANSFER_COMPLETED:
-            data = transfer.getBuffer()[:transfer.getActualLength()]
-
-            # Put data in the queue
-            self.__queue.put( data )
+        if status == usb1.TRANSFER_COMPLETED:
+            if actual_length > 0:
+                data = transfer.getBuffer()[:actual_length]
+                log.debug(f"USB callback: putting {len(data)} bytes in queue")
+                # Put data in the queue
+                self.__queue.put( data )
+            else:
+                log.warning(f"USB callback: transfer completed but 0 bytes received")
 
             # Resubmit the transfer
             if self.__bulk_transfer_on:
                 transfer.submit()
+        else:
+            log.warning(f"USB callback: transfer status={status} (not COMPLETED)")
 
     def asyncBulkTransfer( self, duration: int ) -> None:
         """
