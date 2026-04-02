@@ -1,9 +1,15 @@
-# Install from official bimea repository:
-#--index-url https://pypi.bimea.io
+# Install local copy from Github repository for development:
+# git clone https://github.com/bimea/megamicros.git
+# cd megamicros
+# virtualenv venv
+# source venv/bin/activate
+# pip install -r requirements.txt
+# pip install -e ./
 
+# Install from Pypi repository:
+# pip install megamicros
+
+setuptools>=61.0
 build
+wheel
 twine
-
-# Install from local repository:
--e ./
-pyroomacoustics

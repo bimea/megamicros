@@ -1,6 +1,6 @@
 # megamicros
 
-Megamicros Mems array library
+Megamicros library
 
 ## Install
 
@@ -27,17 +27,17 @@ Upgrading:
 Clone the *Megamicros* GitHub repository:
 
 ```bash
-  > cd path_to_project
   > git clone https://github.com/bimea/megamicros.git
 ```
 
-Create a virtual environnement in the ``megamicros`` repository and install the Python libraries needed for *Megamicros* to work:
+Create a virtual environnement in the ``megamicros`` repository and install the Python libraries needed for *Megamicros* to work in development mode:
 
 ```bash
-  > cd path_to_project/megamicros
+  > cd megamicros
   > virtualenv venv
   > source venv/bin/activate
   > pip install -r requirements.txt
+  > pip install -e ./
 ```
 
 ## Issues with usb access
@@ -83,6 +83,29 @@ Unplugg and plugg your usb device. All should be fine.
 
     Don't forget that if you run your Python programs on a virtual machine, usb ports should be declared as accessible on your VM.
 
+
+## Publishing
+
+### Build the package
+python -m build
+
+#### Build only wheel
+python -m build --wheel
+
+#### Build only source distribution  
+python -m build --sdist
+
+### Check the distribution files
+twine check dist/*
+
+### Upload to TestPyPI first (optional but recommended)
+twine upload --repository testpypi dist/*
+
+### Test install from TestPyPI
+pip install --index-url https://test.pypi.org/simple/ megamicros
+
+### If everything works, upload to production PyPI
+twine upload dist/*
 
 ## Megamicros documentation
 

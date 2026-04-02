@@ -1,7 +1,17 @@
 # megamicros.usb.py
 #
-# ® Copyright 2024-2025 Bimea
+# ® Copyright 2024-2026 Bimea
 # Author: bruno.gas@bimea.io
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -16,7 +26,8 @@ Define USB device handling functions to communicate with Megamicros hardware.
 
 Features:
     - Handle USB device connection, claiming, and release
-    - Perform synchronous and asynchronous bulk read transfers
+    - Perform synchronous bulk read transfers
+    - Perform direct or through queue asynchronous bulk read transfers
     - Support for control write commands to the USB device
 
 Basic usage::
@@ -38,10 +49,10 @@ Documentation:
     Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
-import queue
 from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 import usb1
 import threading
+import queue
 
 from .log import log
 from .exception import MuException
@@ -60,7 +71,6 @@ USB_DEFAULT_WRITE_TIMEOUT     = 1000                # timeout in ms
 USB_DEFAULT_BUFFERS_NUMBER   = 8                    # Default usb transfer buffers number
 USB_DEFAULT_QUEUE_SIZE       = 0                    # Queue limit after which the last signal is lost (0 means infinite signal queueing)
 USB_DEFAULT_QUEUE_TIMEOUT    = 1000                 # Queue get timeout in ms
-
 
                                                                             
 class UsbException( MuException ):
@@ -211,9 +221,11 @@ class Usb:
             context.close()
             return True
     
+    # COMMENTED OUT FOR REFERENCE - detectMegamicrosDevice function
+    """
     @staticmethod
     def detectMegamicrosDevice(vendor_id: int = 0xFE27) -> tuple[bool, int]:
-        """Detect which Megamicros device is connected.
+        '''Detect which Megamicros device is connected.
         
         Parameters
         ----------
@@ -227,7 +239,7 @@ class Usb:
             0xAC00 (Mu32-usb2 legacy), 0xAC01 (Mu256), 0xAC02 (Mu1024), 
             0xAC03 (Mu32), 0xAC04 (Mu64)
             If not found, returns (False, 0xAC03) as default
-        """
+        '''
         # Try all known Megamicros product IDs
         product_ids = [0xAC00, 0xAC01, 0xAC02, 0xAC03, 0xAC04]
         
@@ -237,7 +249,7 @@ class Usb:
         
         # Not found - return default (Mu32)
         return (False, 0xAC03)
-
+    """
 
 
     def setBufferSize( self, size:int ) -> None:

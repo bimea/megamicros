@@ -1,9 +1,28 @@
+# megamicros.__init__.py
+#
+# ® Copyright 2024-2026 Bimea
+# Author: bruno.gas@bimea.io
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 import os
-try:
-    from importlib.metadata import version
-except ImportError:
-    # Fallback for Python < 3.8
-    from importlib_metadata import version
+from importlib.metadata import version
 
 def _get_version():
     try:
@@ -33,38 +52,18 @@ This is free software, and you are welcome to redistribute it\n \
 under certain conditions; see the source code for details.\n' + '-'*20 + '\n' + '\
 MegaMicros documentation is available on https://readthedoc.bimea.io.\n' + '-'*20
 
-
-# v4.0.0 Modern API
-from .core.megamicros import Megamicros
-from .core.config import AcquisitionConfig, UsbConfig, MemsArrayInfo
-from .sources import DataSource, UsbDataSource, H5DataSource, RandomDataSource
-
-# Legacy v3.x compatibility
-from .core.base import MemsArray
-from .muh5 import MuH5
-
 # Utilities
 from .log import log
 from .exception import MuException
 
 __all__ = [
     # Main classes
-    'Megamicros',
-    'MemsArray',
     
     # Configuration
-    'AcquisitionConfig',
-    'UsbConfig',
-    'MemsArrayInfo',
     
     # Data sources
-    'DataSource',
-    'UsbDataSource',
-    'H5DataSource',
-    'RandomDataSource',
     
     # Legacy
-    'MuH5',
     
     # Utilities
     'log',
