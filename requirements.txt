@@ -13,3 +13,5 @@ setuptools>=61.0
 build
 wheel
 twine
+
+-e ./

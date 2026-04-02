@@ -72,6 +72,7 @@ USB_DEFAULT_BUFFERS_NUMBER   = 8                    # Default usb transfer buffe
 USB_DEFAULT_QUEUE_SIZE       = 0                    # Queue limit after which the last signal is lost (0 means infinite signal queueing)
 USB_DEFAULT_QUEUE_TIMEOUT    = 1000                 # Queue get timeout in ms
 
+
                                                                             
 class UsbException( MuException ):
     """ Exception base class for USB devices in Megamicros """
@@ -222,10 +223,10 @@ class Usb:
             return True
     
     # COMMENTED OUT FOR REFERENCE - detectMegamicrosDevice function
-    """
+    '''
     @staticmethod
     def detectMegamicrosDevice(vendor_id: int = 0xFE27) -> tuple[bool, int]:
-        '''Detect which Megamicros device is connected.
+        """Detect which Megamicros device is connected.
         
         Parameters
         ----------
@@ -239,7 +240,7 @@ class Usb:
             0xAC00 (Mu32-usb2 legacy), 0xAC01 (Mu256), 0xAC02 (Mu1024), 
             0xAC03 (Mu32), 0xAC04 (Mu64)
             If not found, returns (False, 0xAC03) as default
-        '''
+        """
         # Try all known Megamicros product IDs
         product_ids = [0xAC00, 0xAC01, 0xAC02, 0xAC03, 0xAC04]
         
@@ -249,7 +250,7 @@ class Usb:
         
         # Not found - return default (Mu32)
         return (False, 0xAC03)
-    """
+    '''
 
 
     def setBufferSize( self, size:int ) -> None:

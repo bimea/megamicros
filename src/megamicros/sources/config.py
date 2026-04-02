@@ -50,13 +50,13 @@ class AcquisitionConfig:
     Configuration for data acquisition.
     
     Attributes:
-        mems: List of active MEMS channels (default: all available)
+        mems: List of active MEMS channels (default: empty)
         analogs: List of active analog channels (default: empty)
         sampling_frequency: Sampling rate in Hz
         frame_length: Number of samples per frame
         duration: Acquisition duration in seconds (0 = infinite)
         datatype: Data type for samples ('int32' or 'float32')
-        counter: Include counter channel in output
+        counter: List of active counters (default [0] for single counter)
         skip_counter: Skip counter in iteration output
         queue_size: Maximum queue size (0 = unlimited)
         queue_timeout: Queue timeout in milliseconds
@@ -69,7 +69,8 @@ class AcquisitionConfig:
     frame_length: int = 1024
     duration: float = 0
     datatype: DataType = 'int32'
-    counter: bool = False
+    counter: Optional[list[int]] = field(default_factory=lambda: [0])
+    status: bool = False
     skip_counter: bool = False
     queue_size: int = 0
     queue_timeout: int = 1000
@@ -90,13 +91,45 @@ class AcquisitionConfig:
             raise ValueError("duration must be non-negative")
     
     @property
-    def active_channels(self) -> list[int]:
-        """Get all active channels (MEMS + analogs + counter if enabled)."""
-        channels = list(self.mems) + list(self.analogs)
-        if self.counter:
-            channels = [0] + channels  # Counter as first channel
-        return channels
+    def mems(self) -> list[int]:
+        """Get all active channels MEMS."""
+        return list(self.mems)
     
+    @property
+    def analogs(self) -> list[int]:
+        """Get all active channels analogs."""
+        return list(self.analogs)
+    
+    @property
+    def counters(self) -> list[int]:
+        """Get all active counters."""
+        return list(self.counter)
+
+    @property
+    def mems_number(self) -> int:
+        """Get the number of active MEMS channels."""
+        return len(self.mems)
+
+    @property
+    def analogs_number(self) -> int:
+        """Get the number of active analog channels."""
+        return len(self.analogs)
+
+    @property
+    def counters_number(self) -> int:
+        """Get the number of active counters."""
+        return 0 if self.skip_counter else len(self.counter)
+
+    @property
+    def counters_number(self) -> int:
+        """Get the number of active counters."""
+        return 0 if self.skip_counter else len(self.counter)
+
+    @property
+    def channels_number(self) -> int:
+        """Get the total number of active channels."""
+        return self.mems_number + self.analogs_number + self.counters_number + 1 if self.status else 0
+
     @property
     def total_samples(self) -> int:
         """Calculate total number of samples for acquisition."""
