@@ -91,18 +91,18 @@ class AcquisitionConfig:
             raise ValueError("duration must be non-negative")
     
     @property
-    def mems(self) -> list[int]:
-        """Get all active channels MEMS."""
+    def get_mems(self) -> list[int]:
+        """Get a copy of active MEMS channels."""
         return list(self.mems)
     
     @property
-    def analogs(self) -> list[int]:
-        """Get all active channels analogs."""
+    def get_analogs(self) -> list[int]:
+        """Get a copy of active analog channels."""
         return list(self.analogs)
     
     @property
-    def counters(self) -> list[int]:
-        """Get all active counters."""
+    def get_counters(self) -> list[int]:
+        """Get a copy of active counters."""
         return list(self.counter)
 
     @property
@@ -121,14 +121,10 @@ class AcquisitionConfig:
         return 0 if self.skip_counter else len(self.counter)
 
     @property
-    def counters_number(self) -> int:
-        """Get the number of active counters."""
-        return 0 if self.skip_counter else len(self.counter)
-
-    @property
     def channels_number(self) -> int:
         """Get the total number of active channels."""
-        return self.mems_number + self.analogs_number + self.counters_number + 1 if self.status else 0
+        status_channels = 1 if self.status else 0
+        return self.mems_number + self.analogs_number + self.counters_number + status_channels
 
     @property
     def total_samples(self) -> int:
@@ -180,13 +176,11 @@ class MemsArrayInfo:
     Attributes:
         positions: 3D positions of MEMS in meters, shape (N, 3)
         available_mems: List of available MEMS indices
-        available_analogs: List of available analog channels
         description: Optional description of the array
     """
     
     positions: Optional[np.ndarray] = None
     available_mems: list[int] = field(default_factory=lambda: list(range(32)))
-    available_analogs: list[int] = field(default_factory=list)
     description: str = ""
     
     def __post_init__(self):
@@ -196,3 +190,13 @@ class MemsArrayInfo:
                 raise ValueError("positions must be a (N, 3) numpy array")
             if self.positions.shape[0] != len(self.available_mems):
                 raise ValueError("positions length must match available_mems length")
+            
+    def __str__(self):
+        # Only show first MEMS number and count for large arrays
+        if len(self.available_mems) == 0:
+            mems_display = "[]"
+        elif len(self.available_mems) == 1:
+            mems_display = f"[{self.available_mems[0]}]"
+        else:
+            mems_display = f"[{self.available_mems[0]}, ...] ({len(self.available_mems)} total)"
+        return f"MemsArrayInfo(description='{self.description}', available_mems={mems_display})"

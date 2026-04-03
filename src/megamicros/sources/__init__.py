@@ -38,9 +38,9 @@ Documentation:
 """
 
 from .base import DataSource
-from .random import RandomDataSource
+#from .random import RandomDataSource
 from .usb import UsbDataSource
-from .h5 import H5DataSource
+#from .h5 import H5DataSource
 
 __all__ = [
     'DataSource',

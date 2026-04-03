@@ -24,7 +24,7 @@
 """
 USB hardware data source.
 
-This data source interfaces with physical Megamicros USB devices (Mu32, Mu256, Mu1024)
+This data source interfaces with physical Megamicros USB devices (Mu32, Mu64, Mu128, Mu256, Mu1024)
 for real-time data acquisition from MEMS microphone arrays.
 
 Features:
@@ -76,7 +76,7 @@ from ..log import log
 from ..exception import MuException
 
 
-# MegaMicro hardware commands (from core/mu.py)
+# MegaMicro hardware commands
 MU_CMD_RESET = b'\x00'
 MU_CMD_INIT = b'\x01'
 MU_CMD_START = b'\x02'
@@ -103,9 +103,11 @@ MU_CODE_DATATYPE_FLOAT32 = b'\x01'
 MU_BEAM_MEMS_NUMBER = 8
 MU_MEMS_QUANTIZATION = 23
 MU_MEMS_AMPLITUDE = 2**MU_MEMS_QUANTIZATION
+MU_MEMS_SENSIBILITY = 0.001
 TRANSFER_DATAWORDS_SIZE = 4
-DEFAULT_CLOCK_DIVIDER_REFERENCE = 500000  # 500 kHz clock reference
 
+DEFAULT_CLOCK_DIVIDER_REFERENCE = 500000  # 500 kHz clock reference
+DEFAULT_TRANSFER_TIMEOUT_MS = 1000  # 1 second transfer timeout (could be adjusted based on duration)
 
 class UsbSourceException(MuException):
     """Exception for USB data source."""
@@ -120,7 +122,7 @@ class UsbDataSource(BaseDataSource):
     
     Args:
         usb_config: USB device configuration
-        available_mems: Number of available MEMS (default: auto-detect)
+        available_mems: Number of available MEMS (default: auto-detect) (not connected, nor activated - just available)
     """
     
     def __init__(
@@ -144,6 +146,7 @@ class UsbDataSource(BaseDataSource):
         if available_mems is None:
             available_mems = self._detect_device_mems()
         
+        # Info on Mems Array geometry (positions not available for USB source)
         self._info = MemsArrayInfo(
             available_mems=list(range(available_mems)),
             description=f"USB Device {hex(self._usb_config.vendor_id)}:{hex(self._usb_config.product_id)}"
@@ -159,6 +162,10 @@ class UsbDataSource(BaseDataSource):
             0xAC02: 1024, # Mu1024
             0xAC03: 32,   # Mu32
             0xAC04: 64,   # Mu64 (new)
+            0xAC05: 128,  # Mu128 (new)
+            0xAC06: 256,  # Mu256 (Haikus, new)
+            0xAC07: 256,  # Mu256 (Haikus - 48kHz, new)
+            0xAC08: 512,  # Mu1024 (new)
         }
         return product_map.get(self._usb_config.product_id, 32)
     
@@ -184,7 +191,7 @@ class UsbDataSource(BaseDataSource):
                 raise ValueError(f"MEMS {mems} not available")
         
         # Configure USB buffers
-        n_channels = len(config.active_channels)
+        n_channels = config.channels_number
         buffer_size = config.frame_length * n_channels * TRANSFER_DATAWORDS_SIZE
         self._usb_device.setBuffersNumber(self._usb_config.buffers_number)
         self._usb_device.setBufferSize(buffer_size)
@@ -201,7 +208,7 @@ class UsbDataSource(BaseDataSource):
             self._send_sampling_frequency(config.sampling_frequency)
             
             log.debug(f"Sending active channels: {config.mems}")
-            self._send_active_channels(config.mems, config.analogs, config.counter)
+            self._send_active_channels(config.mems, config.analogs, config.counter, config.status)
             
             log.debug(f"Sending datatype: {config.datatype}")
             self._send_datatype(config.datatype)
@@ -235,22 +242,17 @@ class UsbDataSource(BaseDataSource):
         if self._config is None or self._usb_device is None:
             raise RuntimeError("Source not configured")
         
-        # Send start command to FPGA
-        log.info("Sending START command to FPGA")
-        self._send_start()
-        
         # Configure STOP callback to send FPGA STOP command when timer expires
         self._usb_device.setOnStopCallback(self._send_stop)
+
+        # Send start command to FPGA
+        self._send_start()
+ 
+        self._usb_device._Usb__transfer_timeout = DEFAULT_TRANSFER_TIMEOUT_MS
+        log.debug(f"USB transfer timeout set to {DEFAULT_TRANSFER_TIMEOUT_MS}ms")
         
-        # CRITICAL: Set transfer timeout much longer than duration
-        # This prevents individual transfers from timing out before the global timer expires
-        transfer_timeout_ms = max(self._config.duration * 2000, 5000)  # 2x duration or 5s min
-        self._usb_device._Usb__transfer_timeout = transfer_timeout_ms
-        log.debug(f"USB transfer timeout set to {transfer_timeout_ms}ms")
-        
-        # Use native asyncBulkTransfer from v3 (tested and working)
-        # This uses libusb's native async transfers with callbacks
-        log.info(f"Starting native USB async bulk transfer (duration={self._config.duration}s)")
+        # Uses libusb's native async transfers with callbacks
+        log.info(f"Starting native USB async bulk transfer (duration={self._config.duration}s, expected frames={self._config.total_frames})")
         try:
             self._usb_device.asyncBulkTransfer(self._config.duration)
         except Exception as e:
@@ -263,9 +265,6 @@ class UsbDataSource(BaseDataSource):
             daemon=True
         )
         self._transfer_thread.start()
-        
-        log.info(f"USB acquisition started (duration={self._config.duration}s, "
-                f"expected frames={self._config.total_frames})")
     
     def _do_stop(self) -> None:
         """Stop USB acquisition."""
@@ -293,7 +292,7 @@ class UsbDataSource(BaseDataSource):
             return
         
         frame_length = self._config.frame_length
-        n_channels = len(self._config.active_channels)
+        n_channels = self._config.channels_number
         transfer_size = frame_length * n_channels * TRANSFER_DATAWORDS_SIZE
         
         log.debug(f"Queue consumer started: expecting {transfer_size} bytes per frame")
@@ -375,7 +374,7 @@ class UsbDataSource(BaseDataSource):
             return
         
         frame_length = self._config.frame_length
-        n_channels = len(self._config.active_channels)
+        n_channels = self._config.channels_number
         transfer_size = frame_length * n_channels * TRANSFER_DATAWORDS_SIZE
         
         log.debug(f"Transfer worker started: reading {transfer_size} bytes per frame")
@@ -468,6 +467,7 @@ class UsbDataSource(BaseDataSource):
         # PURGE command (clear FIFO)
         buf[0] = MU_CMD_PURGE
         self._usb_device.ctrlWrite(MU_CMD_FPGA_0, buf)
+        log.info("RESET and PURGE commands sent to FPGA")
     
     def _send_start(self) -> None:
         """Send START command to FPGA."""
@@ -477,6 +477,7 @@ class UsbDataSource(BaseDataSource):
         buf[0] = MU_CMD_START
         buf[1] = 0x00
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
+        log.info("START command sent to FPGA")
     
     def _send_stop(self) -> None:
         """Send STOP command to FPGA and wait for remaining data."""
@@ -487,11 +488,6 @@ class UsbDataSource(BaseDataSource):
         buf[1] = 0x00
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
         log.info("STOP command sent to FPGA")
-        
-        # Wait a bit for last USB data to arrive from FPGA FIFO
-        import time
-        time.sleep(0.2)  # 200ms should be enough for last frames
-        log.debug("Waited 200ms for remaining FPGA data")
     
     def _send_sampling_frequency(self, freq: int) -> None:
         """Send sampling frequency as clockdiv to FPGA."""
@@ -503,12 +499,55 @@ class UsbDataSource(BaseDataSource):
         buf[0] = MU_CMD_INIT
         buf[1] = clockdiv & 0xFF
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
+        log.info(f"Sampling frequency {freq}Hz sent as clockdiv {clockdiv} (nearest activated frequency is {DEFAULT_CLOCK_DIVIDER_REFERENCE // (clockdiv + 1)}Hz)")
     
-    def _send_active_channels(self, mems: list[int], analogs: list[int], counter: bool) -> None:
+    def _send_active_channels(self, mems: list[int], analogs: list[int], counter: list[int], status: bool) -> None:
         """Send active channels configuration."""
-        # TODO: Implement channel activation FPGA command
-        pass
+        buf = create_string_buffer(4)
+        buf[0] = MU_CMD_ACTIVE		
+        buf[1] = 0x00
+
+        # Activate MEMS channels
+        available_mems_number = len(self._info.available_mems)
+        pluggable_mems_beams = available_mems_number // MU_BEAM_MEMS_NUMBER
+        map_mems = [0 for _ in range( pluggable_mems_beams )]
+        for mic in mems:
+            mic_index = mic % MU_BEAM_MEMS_NUMBER
+            beam_index = int(mic / MU_BEAM_MEMS_NUMBER)
+            if beam_index >= pluggable_mems_beams:
+                raise UsbSourceException( 'microphone index [%d] is out of range (should be less than %d)' % ( mic,  pluggable_mems_beams * MU_BEAM_MEMS_NUMBER ) )
+            map_mems[beam_index] += ( 0x01 << mic_index )
     
+        for beam in range( pluggable_mems_beams ):
+            if map_mems[beam] != 0:
+                buf[2] = beam
+                buf[3] = map_mems[beam]				
+                self._usb_device.ctrlWrite(MU_CMD_FPGA_3, buf)
+
+        # Activate analogs channels, status and counter in a single command (bitmask)
+        buf[0] = MU_CMD_ACTIVE		# command
+        buf[1] = 0x00				# module
+        buf[2] = 0xFF				# counter, status and analogic channels
+
+        map_csa = 0x00
+        if len( analogs ) > 0:
+            for anl_index in analogs:
+                map_csa += ( 0x01 << anl_index ) 
+
+        if status:
+            map_csa += ( 0x01 << 6 )
+
+        if available_mems_number <= 256:
+            # There is only one counter channel on 32 to 256 devices, so we can use bit 7 of the same byte
+            if len(counter) > 0:
+                map_csa += ( 0x01 << 7 )
+            else:
+                raise UsbSourceException("Counter channel not yet supported on USB devices over 256 MEMS (contact support if you need this feature)")
+
+        buf[3] = map_csa
+        self._usb_device.ctrlWrite( MU_CMD_FPGA_3, buf )
+        log.info(f"Active channels sent to FPGA: MEMS={len(mems)}, Analogs={len(analogs)}, Counter={len(counter)}, Status={status}")
+
     def _send_datatype(self, datatype: str) -> None:
         """Send datatype configuration to FPGA."""
         if not self._usb_device:
@@ -520,6 +559,7 @@ class UsbDataSource(BaseDataSource):
         else:
             buf[1] = MU_CODE_DATATYPE_FLOAT32
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
+        log.info( f"Datatype sent to FPGA: {datatype}")
     
     def _send_sample_count(self, count: int) -> None:
         """Send expected sample count to FPGA."""
@@ -532,6 +572,7 @@ class UsbDataSource(BaseDataSource):
         buf[3] = bytes(((count & 0x00FF0000) >> 16,))
         buf[4] = bytes(((count & 0xFF000000) >> 24,))
         self._usb_device.ctrlWrite(MU_CMD_FPGA_4, buf)
+        log.info(f"Sample count sent to FPGA: {count} (streaming mode if 0)")
     
     def _do_wait(self) -> None:
         """Wait for acquisition to complete."""
@@ -564,3 +605,34 @@ class UsbDataSource(BaseDataSource):
                 self._usb_device.close()
             except:
                 pass
+
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        """
+        Iterate over data frames.
+        
+        Can be called:
+        - During acquisition (while running) for real-time processing
+        - After wait() to retrieve buffered frames from queue
+        
+        Yields:
+            np.ndarray: Frame data with shape (channels, samples)
+            
+        Note:
+            Each frame is yielded once. Iteration empties the queue.
+        """
+        # Allow iteration on stopped source if queue has content
+        if self._queue.qsize() == 0:
+            log.warning("Iteration called but source not running and queue is empty.")
+            return
+        
+        timeout_sec = self._config.queue_timeout / 1000.0
+        
+        # Continue yielding frames until queue is empty or timeout
+        while True:
+            try:
+                frame = self._queue.get(timeout=timeout_sec)
+                yield frame
+            except queue.Empty:
+                # No more frames available within timeout
+                break
