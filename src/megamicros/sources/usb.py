@@ -217,6 +217,10 @@ class UsbDataSource(BaseDataSource):
             # The timer controls the duration, not the FPGA sample counter
             log.debug("Sending sample count: 0 (streaming mode)")
             self._send_sample_count(0)
+
+            # Wait for MEMS powering
+            time.sleep( config.time_activation/1000 )
+
                 
         except Exception as e:
             raise UsbSourceException(f"Failed to configure device: {e}")
@@ -316,7 +320,7 @@ class UsbDataSource(BaseDataSource):
                     
                     # Verify size
                     if len(data) != transfer_size:
-                        log.warning(f"Incorrect frame size: got {len(data)}, expected {transfer_size}")
+                        log.debug(f"Incorrect frame size: got {len(data)}, expected {transfer_size}. Skipping frame.")
                         continue
                     
                     # Convert to numpy array
@@ -622,7 +626,11 @@ class UsbDataSource(BaseDataSource):
             Each frame is yielded once. Iteration empties the queue.
         """
         # Allow iteration on stopped source if queue has content
-        if self._queue.qsize() == 0:
+        if self._state == SourceState.RUNNING and self._queue.qsize() == 0:
+            # Attendre un peu pour que le buffer se remplisse
+            time.sleep(0.05)
+
+        if self._queue.qsize() == 0 and self._state != SourceState.RUNNING:
             log.warning("Iteration called but source not running and queue is empty.")
             return
         

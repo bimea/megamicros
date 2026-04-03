@@ -61,6 +61,7 @@ class AcquisitionConfig:
         queue_size: Maximum queue size (0 = unlimited)
         queue_timeout: Queue timeout in milliseconds
         sensibility: MEMS sensitivity factor (Pa/digit)
+        time_activation: Delay before starting acquisition in ms (200ms: skip the transiant state)
     """
     
     mems: Optional[list[int]] = None
@@ -75,6 +76,7 @@ class AcquisitionConfig:
     queue_size: int = 0
     queue_timeout: int = 1000
     sensibility: float = 3.54e-6
+    time_activation: int = 0
     
     def __post_init__(self):
         """Validate configuration after initialization."""

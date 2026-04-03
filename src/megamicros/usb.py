@@ -307,21 +307,31 @@ class Usb:
 
     def claim(self) -> None:
         """ Claim the USB device interface """
-        if self.__is_claimed == False:
-            if self.__usb_handle is not None:
-                if self.__usb_handle.claimInterface( self.__bus_address ) == False:
-                    raise UsbException( f'Failed to claim interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                log.info( f' .Claimed interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                self.__is_claimed = True
+        try:
+            if self.__is_claimed == False:
+                if self.__usb_handle is not None:
+                    if self.__usb_handle.claimInterface( self.__bus_address ) == False:
+                        raise UsbException( f'Failed to claim interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+                    self.__is_claimed = True
+        except UsbException as e:
+            raise
+        except Exception as e:
+            log.error( f"Failed to claim USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
+            raise
 
     def release(self) -> None:
         """ Release the USB device interface """
-        if self.__is_claimed:
-            if self.__usb_handle is not None:
-                if self.__usb_handle.releaseInterface( self.__bus_address ) == False:
-                    raise UsbException( f'Failed to release interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                log.info( f' .Released interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                self.__is_claimed = False
+        try:
+            if self.__is_claimed:
+                if self.__usb_handle is not None:
+                    if self.__usb_handle.releaseInterface( self.__bus_address ) == False:
+                        raise UsbException( f'Failed to release interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+                    self.__is_claimed = False
+        except UsbException as e:
+            raise
+        except Exception as e:
+            log.error( f"Failed to release USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
+            raise
 
     def close( self ) -> None:
         """ Close the USB device connection """
@@ -487,18 +497,23 @@ class Usb:
 
         if status == usb1.TRANSFER_COMPLETED:
             if actual_length > 0:
+                # Get data and put it on the queue
                 data = transfer.getBuffer()[:actual_length]
-                log.debug(f"USB callback: putting {len(data)} bytes in queue")
-                # Put data in the queue
                 self.__queue.put( data )
             else:
-                log.warning(f"USB callback: transfer completed but 0 bytes received")
+                log.debug(f"USB callback: transfer completed but 0 bytes received")
 
             # Resubmit the transfer
             if self.__bulk_transfer_on:
                 transfer.submit()
+        elif status == usb1.TRANSFER_CANCELLED:
+            log.info(f"USB callback: transfer cancelled")
+        elif status == usb1.TRANSFER_ERROR:
+            log.error(f"USB callback: transfer error")
+        elif status == usb1.TRANSFER_TIMED_OUT:
+            log.debug(f"USB callback: transfer timed out")
         else:
-            log.warning(f"USB callback: transfer status={status} (not COMPLETED)")
+            log.debug(f"USB callback: transfer status={status} (not COMPLETED)")
 
     def asyncBulkTransfer( self, duration: int ) -> None:
         """
