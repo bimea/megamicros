@@ -83,30 +83,6 @@ Unplugg and plugg your usb device. All should be fine.
 
     Don't forget that if you run your Python programs on a virtual machine, usb ports should be declared as accessible on your VM.
 
-
-## Publishing
-
-### Build the package
-python -m build
-
-#### Build only wheel
-python -m build --wheel
-
-#### Build only source distribution  
-python -m build --sdist
-
-### Check the distribution files
-twine check dist/*
-
-### Upload to TestPyPI first (optional but recommended)
-twine upload --repository testpypi dist/*
-
-### Test install from TestPyPI
-pip install --index-url https://test.pypi.org/simple/ megamicros
-
-### If everything works, upload to production PyPI
-twine upload dist/*
-
 ## Megamicros documentation
 
 You can also consult the *Megamicros* project web page at [readthedoc.bimea.io](https://readthedoc.bimea.io).
