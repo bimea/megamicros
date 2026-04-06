@@ -57,6 +57,7 @@ class AcquisitionConfig:
         duration: Acquisition duration in seconds (0 = infinite)
         datatype: Data type for samples ('int32' or 'float32')
         counter: List of active counters (default [0] for single counter)
+        use_direct_transfer: Whether to use direct USB transfer mode (bypassing USB queue)
         skip_counter: Skip counter in iteration output
         queue_size: Maximum queue size (0 = unlimited)
         queue_timeout: Queue timeout in milliseconds
@@ -71,6 +72,7 @@ class AcquisitionConfig:
     duration: float = 0
     datatype: DataType = 'int32'
     counter: Optional[list[int]] = field(default_factory=lambda: [0])
+    use_direct_transfer: bool = False
     status: bool = False
     skip_counter: bool = False
     queue_size: int = 0
@@ -91,19 +93,30 @@ class AcquisitionConfig:
             raise ValueError("frame_length must be positive")
         if self.duration < 0:
             raise ValueError("duration must be non-negative")
-    
+        
+        # Validate counter for compability with legacy API (bool)
+        if isinstance(self.counter, bool):
+            self.counter = [0] if self.counter else []
+        elif self.counter is None:
+            self.counter = []
+        elif isinstance(self.counter, list):
+            if not all(isinstance(c, int) for c in self.counter):
+                raise ValueError("counter list must contain integers")
+        else:
+            raise ValueError("counter must be a list of integers, a boolean, or None")
+     
     @property
-    def get_mems(self) -> list[int]:
+    def active_mems(self) -> list[int]:
         """Get a copy of active MEMS channels."""
         return list(self.mems)
     
     @property
-    def get_analogs(self) -> list[int]:
+    def active_analogs(self) -> list[int]:
         """Get a copy of active analog channels."""
         return list(self.analogs)
     
     @property
-    def get_counters(self) -> list[int]:
+    def active_counters(self) -> list[int]:
         """Get a copy of active counters."""
         return list(self.counter)
 
@@ -120,7 +133,7 @@ class AcquisitionConfig:
     @property
     def counters_number(self) -> int:
         """Get the number of active counters."""
-        return 0 if self.skip_counter else len(self.counter)
+        return len(self.counter)
 
     @property
     def channels_number(self) -> int:
@@ -178,11 +191,17 @@ class MemsArrayInfo:
     Attributes:
         positions: 3D positions of MEMS in meters, shape (N, 3)
         available_mems: List of available MEMS indices
+        available_analogs: List of available analog indices
+        max_sampling_frequency: Maximum supported sampling frequency in Hz (if known)
+        hardware: Optional hardware identifier or description
         description: Optional description of the array
     """
     
     positions: Optional[np.ndarray] = None
     available_mems: list[int] = field(default_factory=lambda: list(range(32)))
+    available_analogs: list[int] = field(default_factory=list)
+    max_sampling_frequency: Optional[float] = None
+    hardware: Optional[str] = None
     description: str = ""
     
     def __post_init__(self):
@@ -201,4 +220,4 @@ class MemsArrayInfo:
             mems_display = f"[{self.available_mems[0]}]"
         else:
             mems_display = f"[{self.available_mems[0]}, ...] ({len(self.available_mems)} total)"
-        return f"MemsArrayInfo(description='{self.description}', available_mems={mems_display})"
+        return f"MemsArrayInfo(description='{self.description}', hardware='{self.hardware}', available_mems={mems_display})"

@@ -193,7 +193,28 @@ class BaseDataSource(ABC):
         if self._state == SourceState.RUNNING:
             self._do_stop()
             self._state = SourceState.STOPPED
+
+    def selftest(self, duration=5) -> dict:
+        """
+        Perform a self-test acquisition to check if MEMS and analog channels are working and which of them are connected. 
+        This is done by acquiring a short signal and analyzing the data to determine which channels have valid signals.
+        
+        Args:
+            duration: Duration of the self-test acquisition in seconds (default: 5)
+        
+        Returns:
+            dict: Self-test results containing information about active MEMS and analog channels.
+        """
+        if self._state != SourceState.IDLE:
+            raise RuntimeError(f"Cannot perform self-test in state {self._state}. Must be in IDLE state.")
+        
+        return self._do_selftest(duration)
     
+    @abstractmethod
+    def _do_selftest(self, duration: int) -> dict:
+        """Subclass-specific self-test logic."""
+        pass
+
     @abstractmethod
     def _do_configure(self, config: AcquisitionConfig) -> None:
         """Subclass-specific configuration."""

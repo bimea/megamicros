@@ -52,17 +52,28 @@ This is free software, and you are welcome to redistribute it\n \
 under certain conditions; see the source code for details.\n' + '-'*20 + '\n' + '\
 MegaMicros documentation is available on https://readthedoc.bimea.io.\n' + '-'*20
 
+# v4.0.0 Modern API
+from .core.megamicros import Megamicros
+from .core.config import AcquisitionConfig, UsbConfig, MemsArrayInfo
+from .sources import DataSource, UsbDataSource
+
 # Utilities
 from .log import log
 from .exception import MuException
 
 __all__ = [
     # Main classes
-    
+    'Megamicros',
+
     # Configuration
-    
+    'AcquisitionConfig',
+    'UsbConfig',
+    'MemsArrayInfo',
+
     # Data sources
-    
+    'DataSource',
+    'UsbDataSource',
+
     # Legacy
     
     # Utilities

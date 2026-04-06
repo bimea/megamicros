@@ -104,10 +104,56 @@ MU_BEAM_MEMS_NUMBER = 8
 MU_MEMS_QUANTIZATION = 23
 MU_MEMS_AMPLITUDE = 2**MU_MEMS_QUANTIZATION
 MU_MEMS_SENSIBILITY = 0.001
+MU_ANALOGS_SENSIBILITY = 0.33                       # Default analogs sensibility in V/digit (0.33 V/digit: 0x00FFFFFF on 24bits <-> 5.65Vcc)
 TRANSFER_DATAWORDS_SIZE = 4
+
+# Devices 
+VENDOR_ID = 0xFE27
+
+PRODUCT_MAP = {
+    0xAC00: "Mu32-usb2 (legacy)",
+    0xAC01: "Mu256",
+    0xAC02: "Mu1024",
+    0xAC03: "Mu32",
+    0xAC04: "Mu64 (new)",
+    0xAC05: "Mu128 (new)",
+    0xAC06: "Mu256 (Haikus, new)",
+    0xAC07: "Mu256 (Haikus - 48kHz, new)",
+    0xAC08: "Mu512 (new)",
+}
+
+PRODUCT_IDS = list(PRODUCT_MAP.keys())
+
+PRODUCT_MEMS = {
+    0xAC00: 32,   # Mu32-usb2 (legacy)
+    0xAC01: 256,  # Mu256
+    0xAC02: 1024, # Mu1024
+    0xAC03: 32,   # Mu32
+    0xAC04: 64,   # Mu64 (new)
+    0xAC05: 128,  # Mu128 (new)
+    0xAC06: 256,  # Mu256 (Haikus, new)
+    0xAC07: 256,  # Mu256 (Haikus - 48kHz, new)
+    0xAC08: 512,  # Mu512 (new)
+}
+
+PRODUCT_ANALOGS = {
+    0xAC00: 0,   # Mu32-usb2 (legacy)
+    0xAC01: 4,   # Mu256
+    0xAC02: 16,   # Mu1024
+    0xAC03: 2,   # Mu32
+    0xAC04: 2,   # Mu64 (new)
+    0xAC05: 4,   # Mu128 (new)
+    0xAC06: 4,   # Mu256 (Haikus, new)
+    0xAC07: 4,   # Mu256 (Haikus - 48kHz, new)
+    0xAC08: 8,   # Mu512 (new)
+}
 
 DEFAULT_CLOCK_DIVIDER_REFERENCE = 500000  # 500 kHz clock reference
 DEFAULT_TRANSFER_TIMEOUT_MS = 1000  # 1 second transfer timeout (could be adjusted based on duration)
+DEFAULT_SAMPLING_FREQUENCY_REFERENCE = 500000  # Default max sampling frequency x 10 (could be improved by auto-detecting from device or allowing user to specify)
+DEFAULT_SELFTEST_DURATION = 1 # Duration of SELTEST in seconds (used for MEMS and analogs check)
+DEFAULT_SELFTEST_SAMPLING_FREQUENCY = 50000 # Sampling frequency for SELFTEST (should be high enough to capture signals but not too high to avoid data loss during test)
+DEFAULT_SELFTEST_FRAME_LENGTH = 1024 # Frame length for SELFTEST (should be long enough to analyze signals but not too long to avoid data loss during test)
 
 class UsbSourceException(MuException):
     """Exception for USB data source."""
@@ -125,10 +171,36 @@ class UsbDataSource(BaseDataSource):
         available_mems: Number of available MEMS (default: auto-detect) (not connected, nor activated - just available)
     """
     
+    @staticmethod
+    def detectMegamicrosDevice(vendor_id: int = 0xFE27) -> tuple[bool, int]:
+        """Detect which Megamicros device is connected.
+        
+        Parameters
+        ----------
+        vendor_id: int
+            The vendor ID to search for (default: 0xFE27)
+        
+        Returns
+        -------
+        tuple[bool, int]
+            (device_found, product_id) where product_id is one of:
+            0xAC00 (Mu32-usb2 legacy), 0xAC01 (Mu256), 0xAC02 (Mu1024), 
+            0xAC03 (Mu32), 0xAC04 (Mu64)
+            If not found, returns (False, 0xAC03) as default
+        """
+        # Try all known Megamicros product IDs        
+        for product_id in PRODUCT_IDS:
+            if Usb.checkDeviceByVendorProduct(vendor_id, product_id):
+                return (True, product_id)
+        
+        # Not found - return default (Mu32)
+        return (False, 0xAC03)
+
     def __init__(
         self,
         usb_config: UsbConfig | None = None,
         available_mems: int | None = None,
+        available_analogs: int | None = None,
     ):
         super().__init__()
         
@@ -136,6 +208,7 @@ class UsbDataSource(BaseDataSource):
         self._usb_device: Usb | None = None
         self._queue: queue.Queue = queue.Queue()  # Created once, reused across runs
         self._queue_size: int = 0  # Track configured size
+        self._use_direct_transfer = True  # If False, use usb queue to get frames otherwise use direct transfer mode (faster, but no usb queue management)
         self._transfer_thread: Thread | None = None
         self._timer_thread: Thread | None = None
         self._halt_request = False
@@ -146,9 +219,16 @@ class UsbDataSource(BaseDataSource):
         if available_mems is None:
             available_mems = self._detect_device_mems()
         
-        # Info on Mems Array geometry (positions not available for USB source)
+        # Detect or set available Analogs
+        if available_analogs is None:
+            available_analogs = self._detect_device_analogs()
+        
+        # Info on Mems Array acoustics and geometry (positions not available for USB source)
         self._info = MemsArrayInfo(
             available_mems=list(range(available_mems)),
+            available_analogs=list(range(available_analogs)),
+            max_sampling_frequency=DEFAULT_SAMPLING_FREQUENCY_REFERENCE / 10,
+            hardware = PRODUCT_MAP.get(self._usb_config.product_id, "Unknown Device"),
             description=f"USB Device {hex(self._usb_config.vendor_id)}:{hex(self._usb_config.product_id)}"
         )
         
@@ -156,19 +236,80 @@ class UsbDataSource(BaseDataSource):
     
     def _detect_device_mems(self) -> int:
         """Detect number of MEMS from product ID."""
-        product_map = {
-            0xAC00: 32,   # Mu32-usb2 (legacy)
-            0xAC01: 256,  # Mu256
-            0xAC02: 1024, # Mu1024
-            0xAC03: 32,   # Mu32
-            0xAC04: 64,   # Mu64 (new)
-            0xAC05: 128,  # Mu128 (new)
-            0xAC06: 256,  # Mu256 (Haikus, new)
-            0xAC07: 256,  # Mu256 (Haikus - 48kHz, new)
-            0xAC08: 512,  # Mu1024 (new)
-        }
-        return product_map.get(self._usb_config.product_id, 32)
+        return PRODUCT_MEMS.get(self._usb_config.product_id, 32)
     
+    def _detect_device_analogs(self) -> int:
+        """Detect number of Analogs from product ID."""
+        return PRODUCT_ANALOGS.get(self._usb_config.product_id, 0)
+    
+    def _do_selftest(self, duration=DEFAULT_SELFTEST_DURATION) -> dict:
+        """Perform a self-test acquisition to check if MEMS and analog channels are working and which of them are connected. 
+        This is done by acquiring a short signal and analyzing the data to determine which channels have valid signals."""
+    
+        # Configure a short acquisition with all channels
+        test_config = AcquisitionConfig(
+            mems=self._info.available_mems,
+            analogs=self._info.available_analogs,
+            counter=[0], # Include counter channel to check if acquisition is working
+            sampling_frequency=DEFAULT_SELFTEST_SAMPLING_FREQUENCY,  # Higher frequency for test
+            frame_length=DEFAULT_SELFTEST_FRAME_LENGTH,  # Longer frames for better analysis
+            duration=duration,  # Short duration
+        )
+
+        frames = []
+        self.configure(test_config)
+        self.start()
+        
+        # Collect frames until acquisition is complete
+        for frame in self:
+            frames.append(frame)
+
+        # Wait for acquisition to complete
+        self.wait()
+        self.stop()
+
+        frames_number = len(frames)
+        channels_number = test_config.channels_number
+
+        # Concatenate frames to analyze signals (shape: channels x total_samples)
+        signal = np.concatenate(frames, axis=1)
+        log.info(f"SELFTEST acquired signal shape: {signal.shape}")
+
+        counter = signal[0, :]
+        mems_signals = signal[1:1+len(self._info.available_mems), :]
+        analog_signals = signal[1+len(self._info.available_mems):, :]
+        
+        mems_signals = mems_signals.astype(np.float32) * MU_MEMS_SENSIBILITY
+        analogs_signals = analog_signals.astype(np.float32) * MU_ANALOGS_SENSIBILITY
+
+        mems_power = np.mean(mems_signals**2, axis=1)
+        analogs_power = np.mean(analog_signals**2, axis=1)
+
+        mems_actives = np.where( mems_power > 0, 1, 0 )
+        analogs_actives = np.where( analogs_power > 1e-10 , 1, 0 )
+
+        # get indexes of connected mems and analogs
+        connected_mems =  np.where( mems_actives > 0 )[0].tolist()
+        connected_analogs =  np.where( analogs_actives > 0 )[0].tolist()
+
+        log.info( f"Autotest results:" )
+        log.info( f"  ✓ recording time is: {duration} seconds" )
+        log.info( f"  ✓ Received {frames_number * channels_number * 4} data bytes: {frames_number} frames on {channels_number } channels")
+        log.info( f"  ✓ detected {sum(mems_actives)} active MEMs: {connected_mems}" )
+        log.info( f"  ✓ detected {sum(analogs_actives)} active analogs: {connected_analogs}" )
+        log.info( f"  ✓ detected counter channel with values from {counter[0]} to {counter[-1]}" )
+        log.info( f"  ✓ estimated data lost: {counter[-1] - counter[0] + 1 - frames_number * DEFAULT_SELFTEST_FRAME_LENGTH} samples" )
+        log.info( f"Selftest endded successfully" )
+
+        return {
+            "connected_mems": connected_mems,
+            "connected_analogs": connected_analogs,
+            "counters": counter,
+            "mems_power": mems_power,
+            "analogs_power": analogs_power,
+        }
+        
+
     def _do_configure(self, config: AcquisitionConfig) -> None:
         """Configure USB device."""
         # Open USB device
@@ -181,7 +322,6 @@ class UsbDataSource(BaseDataSource):
                     bus_address=self._usb_config.bus_address,
                     endpoint_in=self._usb_config.endpoint_in
                 )
-                self._usb_device.claim()
             except Exception as e:
                 raise UsbSourceException(f"Failed to open USB device: {e}")
         
@@ -195,6 +335,7 @@ class UsbDataSource(BaseDataSource):
         buffer_size = config.frame_length * n_channels * TRANSFER_DATAWORDS_SIZE
         self._usb_device.setBuffersNumber(self._usb_config.buffers_number)
         self._usb_device.setBufferSize(buffer_size)
+        self._use_direct_transfer = config.use_direct_transfer
         
         log.info(f"USB configured: {buffer_size} bytes/frame, {n_channels} channels, "
                  f"{self._usb_config.buffers_number} buffers")
@@ -220,7 +361,6 @@ class UsbDataSource(BaseDataSource):
 
             # Wait for MEMS powering
             time.sleep( config.time_activation/1000 )
-
                 
         except Exception as e:
             raise UsbSourceException(f"Failed to configure device: {e}")
@@ -242,9 +382,10 @@ class UsbDataSource(BaseDataSource):
                  f"{config.sampling_frequency}Hz, {config.frame_length} samples/frame")
     
     def _do_start(self) -> None:
-        """Start USB acquisition using native async bulk transfer."""
+        """Start USB acquisition using native async bulk transfer. This is a non-blocking call."""
         if self._config is None or self._usb_device is None:
             raise RuntimeError("Source not configured")
+        log.info("Starting USB acquisition...")
         
         # Configure STOP callback to send FPGA STOP command when timer expires
         self._usb_device.setOnStopCallback(self._send_stop)
@@ -258,17 +399,26 @@ class UsbDataSource(BaseDataSource):
         # Uses libusb's native async transfers with callbacks
         log.info(f"Starting native USB async bulk transfer (duration={self._config.duration}s, expected frames={self._config.total_frames})")
         try:
+            if self._use_direct_transfer:
+                self._usb_device.setTransfertCallback(self._consume_usb_transfert)
             self._usb_device.asyncBulkTransfer(self._config.duration)
         except Exception as e:
             raise UsbSourceException(f"Failed to start async bulk transfer: {e}")
         
-        # Start thread to consume data from USB queue
-        self._transfer_thread = Thread(
-            target=self._consume_usb_queue,
-            name="UsbQueueConsumer",
-            daemon=True
-        )
-        self._transfer_thread.start()
+        # Start thread to consume data from USB queue in usb queue mode (non-direct transfer)
+        """
+        Note: In asyncBulkTransfer mode and direct transfer mode OFF, data is received in the USB callback and put in the internal USB queue.
+            We start a separate thread to consume this queue, convert to frames and put in our own queue.
+            This allows us to decouple USB data reception from frame processing, and handle queue timeouts and halting more gracefully.
+        """
+        if not self._use_direct_transfer:
+            self._transfer_thread = Thread(
+                target=self._consume_usb_queue,
+                name="UsbQueueConsumer",
+                daemon=True
+            )
+            self._transfer_thread.start()
+        
     
     def _do_stop(self) -> None:
         """Stop USB acquisition."""
@@ -283,15 +433,55 @@ class UsbDataSource(BaseDataSource):
             except:
                 pass
         
-        # Wait for consumer thread
-        if self._transfer_thread and self._transfer_thread.is_alive():
-            self._transfer_thread.join(timeout=2.0)
+        # Wait for consumer thread if using USB queue mode (non-direct transfer)
+        if not self._use_direct_transfer:
+            if self._transfer_thread and self._transfer_thread.is_alive():
+                self._transfer_thread.join(timeout=2.0)
         
+        # Close USB device
+        if self._usb_device:
+            try:
+                log.info("Stopping USB device and releasing resources...")
+                self._usb_device.close()
+                self._usb_device = None
+            except Exception as e:
+                log.warning(f"Error releasing USB device during stop: {e}")
+                pass
+
         log.debug(f"UsbDataSource stopped: {self._frames_received} frames received, "
                  f"{self._transfert_lost} frames lost")
     
+    def _consume_usb_transfert(self, data: bytes) -> None:
+        """Callback that is called when a new USB transfer is received, converts to frames and insert into our queue."""
+        if self._config is None or self._usb_device is None:
+            return
+        
+        frame_length = self._config.frame_length
+        n_channels = self._config.channels_number
+        transfer_size = frame_length * n_channels * TRANSFER_DATAWORDS_SIZE
+
+        if len(data) != transfer_size:
+            log.debug(f"Incorrect frame size: got {len(data)}, expected {transfer_size}. Skipping frame.")
+            self._transfert_lost += 1
+            return
+        
+        # Convert to numpy array
+        frame = self._bytes_to_frame(data, n_channels, frame_length)
+
+        # Put in the queue (drop oldest if full)
+        if self._queue.maxsize > 0 and self._queue.qsize() >= self._queue.maxsize:
+            try:
+                self._queue.get_nowait()
+                self._transfert_lost += 1
+            except queue.Empty:
+                pass
+        
+        self._queue.put(frame)
+        self._frames_received += 1
+
+
     def _consume_usb_queue(self) -> None:
-        """Consumer thread that reads from USB internal queue and converts to frames."""
+        """Consumer thread that reads from USB internal queue, converts to frames and insert into our queue."""
         if self._config is None or self._usb_device is None:
             return
         
@@ -356,99 +546,27 @@ class UsbDataSource(BaseDataSource):
         
         log.debug(f"Queue consumer stopped: {self._frames_received} frames received")
     
-    def _generate_frames(self) -> Iterator[np.ndarray]:
-        """Yield frames from queue."""
-        if self._config is None:
-            raise RuntimeError("Source not configured")
-        
-        timeout_sec = self._config.queue_timeout / 1000.0
-        
-        while self._state == SourceState.RUNNING:
-            try:
-                frame = self._queue.get(timeout=timeout_sec)
-                yield frame
-            except queue.Empty:
-                # Check if acquisition is complete
-                if self._halt_request or (self._transfer_thread and not self._transfer_thread.is_alive()):
-                    break
-    
-    def _transfer_worker(self) -> None:
-        """Worker thread for USB bulk transfers."""
-        if self._config is None or self._usb_device is None:
-            return
-        
-        frame_length = self._config.frame_length
-        n_channels = self._config.channels_number
-        transfer_size = frame_length * n_channels * TRANSFER_DATAWORDS_SIZE
-        
-        log.debug(f"Transfer worker started: reading {transfer_size} bytes per frame")
-        
-        try:
-            while not self._halt_request and self._state == SourceState.RUNNING:
-                try:
-                    # Read bulk data
-                    data = self._usb_device.bulkRead(
-                        size=transfer_size,
-                        timeout=self._usb_config.transfer_timeout
-                    )
-                    
-                    if data is None or len(data) == 0:
-                        log.warning("Received empty data from USB")
-                        continue
-                    
-                    # Convert to numpy array
-                    frame = self._bytes_to_frame(data, n_channels, frame_length)
-                    
-                    # Put in queue (drop oldest if full)
-                    if self._queue.maxsize > 0 and self._queue.qsize() >= self._queue.maxsize:
-                        try:
-                            self._queue.get_nowait()
-                            self._transfert_lost += 1
-                        except queue.Empty:
-                            pass
-                    
-                    self._queue.put(frame)
-                    self._frames_received += 1
-                    
-                except Exception as read_error:
-                    # Log but continue on individual read errors
-                    error_msg = str(read_error)
-                    if "TIMEOUT" in error_msg or "timeout" in error_msg.lower():
-                        log.debug(f"USB read timeout (normal at end of acquisition)")
-                        break  # Timeout usually means end of data
-                    else:
-                        log.warning(f"USB read error: {read_error}")
-                        # Continue trying to read unless it's a critical error
-                        if "PIPE" in error_msg or "NO_DEVICE" in error_msg:
-                            break
-                    
-        except Exception as e:
-            log.error(f"USB transfer thread fatal error: {e}")
-            self._halt_request = True
-        
-        log.debug(f"Transfer worker stopped: {self._frames_received} frames received")
-    
-    def _timer_worker(self) -> None:
-        """Worker thread for duration timer."""
-        if self._config is None or self._config.duration == 0:
-            return
-        
-        time.sleep(self._config.duration)
-        self._halt_request = True
-        log.debug(f"Timer expired after {self._config.duration}s")
     
     def _bytes_to_frame(self, data: bytes, n_channels: int, frame_length: int) -> np.ndarray:
         """Convert raw bytes to numpy frame."""
         if self._config is None:
             raise RuntimeError("Source not configured")
         
-        # Convert bytes to int32 array
-        arr = np.frombuffer(data, dtype=np.int32)
-        
+        # Convert bytes to int32/float32 array according the configured datatype
+        if self._config.datatype == 'int32':
+            arr = np.frombuffer(data, dtype=np.int32)
+        elif self._config.datatype == 'float32':
+            arr = np.frombuffer(data, dtype=np.float32)
+        else:
+            raise ValueError(f"Unsupported datatype: {self._config.datatype}")
+
+        # arr = np.frombuffer(data, dtype=dtype, count=n_channels * frame_length)
+
         # Reshape to (channels, samples)
         frame = arr.reshape((n_channels, frame_length), order='F')
         
         # Convert to float if needed
+        '''
         if self._config.datatype == 'float32':
             frame = frame.astype(np.float32)
             # Apply sensibility to MEMS channels
@@ -456,9 +574,31 @@ class UsbDataSource(BaseDataSource):
             n_mems = len(self._config.mems)
             if n_mems > 0:
                 frame[mems_offset:mems_offset+n_mems, :] *= self._config.sensibility
+        '''
         
         return frame
     
+    def _generate_frames(self) -> Iterator[np.ndarray]:
+        """Yield frames from queue."""
+        if self._config is None:
+            raise RuntimeError("Source not configured")
+
+        if self._queue.qsize() == 0 and self._state != SourceState.RUNNING:
+            log.warning("Iteration called but source not running and queue is empty.")
+            return
+
+        timeout_sec = self._config.queue_timeout / 1000.0
+
+        # Continue yielding frames until queue is empty or timeout
+        while True:
+            try:
+                frame = self._queue.get(timeout=timeout_sec)
+                yield frame
+            except queue.Empty:
+                # No more frames available within timeout
+                break
+
+
     # FPGA command methods
     def _send_reset(self) -> None:
         """Send RESET and PURGE commands to FPGA (clear FIFO)."""
@@ -541,12 +681,11 @@ class UsbDataSource(BaseDataSource):
         if status:
             map_csa += ( 0x01 << 6 )
 
-        if available_mems_number <= 256:
+        if available_mems_number <= 256 and len(counter) > 0:
             # There is only one counter channel on 32 to 256 devices, so we can use bit 7 of the same byte
-            if len(counter) > 0:
-                map_csa += ( 0x01 << 7 )
-            else:
-                raise UsbSourceException("Counter channel not yet supported on USB devices over 256 MEMS (contact support if you need this feature)")
+            map_csa += ( 0x01 << 7 )
+        else:
+            raise UsbSourceException("Counter channel not yet supported on USB devices over 256 MEMS (contact support if you need this feature)")
 
         buf[3] = map_csa
         self._usb_device.ctrlWrite( MU_CMD_FPGA_3, buf )
@@ -601,46 +740,57 @@ class UsbDataSource(BaseDataSource):
         """Get number of lost frames."""
         return self._transfert_lost
     
+    @property 
+    def mems_sensibility(self) -> float:
+        """Get MEMS sensibility in Pa/digit."""
+        return MU_MEMS_SENSIBILITY
+
     def __del__(self):
         """Cleanup USB resources."""
-        if self._usb_device:
+        self.cleanup()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures cleanup even on exceptions."""
+        self.cleanup()
+        return False  # Don't suppress exceptions
+
+    def cleanup(self):
+        """
+        Explicit cleanup method.
+        
+        Stops acquisition, releases USB device, and closes connection.
+        Safe to call multiple times.
+        """
+        # Stop acquisition if running (it will also release USB device)
+        if self._state == SourceState.RUNNING:
             try:
-                self._usb_device.release()
-                self._usb_device.close()
+                self.stop()
             except:
                 pass
+        
+            return
+        
+        # Else release USB device
+        if self._usb_device:
+            try:
+                self._usb_device.close()
+                log.info("USB device released and closed")
+            except Exception as e:
+                log.warning(f"Error during cleanup: {e}")
 
 
     def __iter__(self) -> Iterator[np.ndarray]:
         """
-        Iterate over data frames.
+        Iterate over frames.
         
-        Can be called:
-        - During acquisition (while running) for real-time processing
-        - After wait() to retrieve buffered frames from queue
-        
-        Yields:
-            np.ndarray: Frame data with shape (channels, samples)
-            
-        Note:
-            Each frame is yielded once. Iteration empties the queue.
+        Can be called on RUNNING sources (data still being generated)
+        or STOPPED sources (reading remaining frames from queue).
         """
-        # Allow iteration on stopped source if queue has content
-        if self._state == SourceState.RUNNING and self._queue.qsize() == 0:
-            # Attendre un peu pour que le buffer se remplisse
-            time.sleep(0.05)
-
-        if self._queue.qsize() == 0 and self._state != SourceState.RUNNING:
-            log.warning("Iteration called but source not running and queue is empty.")
-            return
+        if self._state not in (SourceState.RUNNING, SourceState.STOPPED):
+            raise RuntimeError(f"Cannot iterate in state {self._state}. Call run() first.")
         
-        timeout_sec = self._config.queue_timeout / 1000.0
-        
-        # Continue yielding frames until queue is empty or timeout
-        while True:
-            try:
-                frame = self._queue.get(timeout=timeout_sec)
-                yield frame
-            except queue.Empty:
-                # No more frames available within timeout
-                break
+        yield from self._generate_frames()
