@@ -1,7 +1,17 @@
-# megamicros.apps.megamicros.py is the command line interface for megamicros.
+# megamicros.apps.main.py
 #
-# ® Copyright 2024-2025 Bimea
+# ® Copyright 2024-2026 Bimea
 # Author: bruno.gas@bimea.io
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -16,8 +26,6 @@ import argparse
 from megamicros import __version__, welcome_msg
 from megamicros.log import log
 from megamicros.exception import MuException
-from megamicros.core.mu import Megamicros
-from megamicros.usb import Usb
 
 def arg_parse() -> tuple:
 
@@ -45,41 +53,6 @@ def main():
     # Print welcome message
     print( welcome_msg )
     print( f"megamicros {__version__}" )
-
-    if args.check_usb:
-        print( "Checking USB..." )
-        try:
-            for system_name, system_info in Megamicros.Systems.items():
-                if Usb.checkDeviceByVendorProduct( system_info['vendor_id'],  system_info['product_id'] ):
-                    print( f"Found following {system_info['name']} Megamicros device found with following characteristics:")
-                    print( f"  - system name: {system_info['name']}" )
-                    print( f"  - usb vendor id: {system_info['vendor_id']:04x}" )
-                    print( f"  - usb vendor product: {system_info['product_id']:04x}" )
-                    print( f"  - usb bus address: {system_info['bus_address']}" )
-                    print( f"  - pluggable mems number: {system_info['beams']*8}" )
-                    print( f"  - pluggable analogs number: {system_info['analogs']}" )
-                    return
-
-            print("No Megamicros system found.")
-            return
-
-        except MuException as e:
-            print( f"Failed: {e}")
-
-    elif args.check_device:
-        print( "Checking Megamicros device..." )
-        try:
-            antenna = Megamicros()
-            available_mems, available_analogs = antenna.selftest(1)
-            print( f"Found Megamicros device:")
-            print( f"  - {len(available_mems)} available MEMs found")
-            print( f"  - {len(available_analogs)} available analogs found")
-            print( f"  - MEMs: {available_mems}" )
-            print( f"  - Analogs: {available_analogs}" )
-
-        except MuException as e:
-            print( f"Failed: {e}")
-
 
 if __name__ == "__main__":
 	main()

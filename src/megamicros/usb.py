@@ -1,7 +1,17 @@
 # megamicros.usb.py
 #
-# ® Copyright 2024-2025 Bimea
+# ® Copyright 2024-2026 Bimea
 # Author: bruno.gas@bimea.io
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -16,7 +26,8 @@ Define USB device handling functions to communicate with Megamicros hardware.
 
 Features:
     - Handle USB device connection, claiming, and release
-    - Perform synchronous and asynchronous bulk read transfers
+    - Perform synchronous bulk read transfers
+    - Perform direct or through queue asynchronous bulk read transfers
     - Support for control write commands to the USB device
 
 Basic usage::
@@ -38,10 +49,10 @@ Documentation:
     Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
-import queue
 from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 import usb1
 import threading
+import queue
 
 from .log import log
 from .exception import MuException
@@ -128,6 +139,7 @@ class Usb:
         self.__on_stop_callback: callable|None = None
         self.__async_transfer_thread: threading.Thread|None = None
         self.__async_transfer_thread_exception: Exception|None = None
+        self.__callback_transfert: callable|None = None
 
         # Timer management
         self.__timer_thread: threading.Timer|None = None
@@ -142,6 +154,19 @@ class Usb:
     def __del__( self ):
         self.close()
         log.info( ' .USB object destroyed' )
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures cleanup even on exceptions."""
+        self.close()
+        return False  # Don't suppress exceptions
+
+    def cleanup(self):
+        """Explicit cleanup method - releases and closes USB device."""
+        self.close()
 
     @property
     def buffer_size( self ) -> int:
@@ -211,8 +236,6 @@ class Usb:
             context.close()
             return True
 
-
-
     def setBufferSize( self, size:int ) -> None:
         """ Set the USB transfer buffer size in bytes"""
         self.__buffer_size = size
@@ -228,6 +251,12 @@ class Usb:
         self.__queue_size = size
         self.__queue = Usb.Queue( maxsize=size )
 
+    def setTransfertCallback( self, callback: callable ) -> None:
+        """ Set the callback function to be called when a new USB transfer is received 
+        The callback function should have the following signature: callback( data: bytes ) -> None
+        """
+        self.__callback_transfert = callback
+
     def setOnStopCallback( self, callback: callable ) -> None:
         """ Set the callback function to be called when the asynchronous bulk transfer stops """
         self.__on_stop_callback = callback
@@ -238,7 +267,7 @@ class Usb:
         Try to locate the device based on vendor_id, product_id, bus_address
         """
 
-        log.info( f' .Connecting to USB device {vendor_id:04x}:{product_id:04x} ...' )
+        log.info( f'Connecting to USB device {vendor_id:04x}:{product_id:04x} ...' )
         self.__context = usb1.USBContext()
         self.__usb_handle = self.__context.openByVendorIDAndProductID( 
             vendor_id, 
@@ -262,26 +291,36 @@ class Usb:
         self.release()
 
         self.__is_open = True
-        log.info( f' .Connected on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+        log.info( f'Connected on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
 
 
     def claim(self) -> None:
         """ Claim the USB device interface """
-        if self.__is_claimed == False:
-            if self.__usb_handle is not None:
-                if self.__usb_handle.claimInterface( self.__bus_address ) == False:
-                    raise UsbException( f'Failed to claim interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                log.info( f' .Claimed interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                self.__is_claimed = True
+        try:
+            if self.__is_claimed == False:
+                if self.__usb_handle is not None:
+                    if self.__usb_handle.claimInterface( self.__bus_address ) == False:
+                        raise UsbException( f'Failed to claim interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+                    self.__is_claimed = True
+        except UsbException as e:
+            raise
+        except Exception as e:
+            log.error( f"Failed to claim USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
+            raise
 
     def release(self) -> None:
         """ Release the USB device interface """
-        if self.__is_claimed:
-            if self.__usb_handle is not None:
-                if self.__usb_handle.releaseInterface( self.__bus_address ) == False:
-                    raise UsbException( f'Failed to release interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                log.info( f' .Released interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
-                self.__is_claimed = False
+        try:
+            if self.__is_claimed:
+                if self.__usb_handle is not None:
+                    if self.__usb_handle.releaseInterface( self.__bus_address ) == False:
+                        raise UsbException( f'Failed to release interface {self.__bus_address} on USB device {self.__vendor_id:04x}:{self.__product_id:04x}' )
+                    self.__is_claimed = False
+        except UsbException as e:
+            raise
+        except Exception as e:
+            log.error( f"Failed to release USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
+            raise
 
     def close( self ) -> None:
         """ Close the USB device connection """
@@ -418,20 +457,55 @@ class Usb:
 
         return data
     
+    def bulkRead( self, size:int, timeout:int=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
+        """
+        Perform a bulk read transfer on the USB device (alias for syncBulkRead).
+        
+        Parameters
+        ----------
+        size: int
+            The number of bytes to read
+        timeout: int, optional
+            The USB command timeout in ms (default is 1000ms)
+            
+        Returns
+        -------
+        bytes
+            The data read from the USB device
+        """
+        return self.syncBulkRead(size, timeout)
+    
     def __callback( self, transfer: usb1.USBTransfer ) -> None:
         """
         Callback function for asynchronous bulk transfer on the USB device
         """
+        status = transfer.getStatus()
+        actual_length = transfer.getActualLength()
+        
+        log.debug(f"USB callback: status={status}, length={actual_length}")
 
-        if transfer.getStatus() == usb1.TRANSFER_COMPLETED:
-            data = transfer.getBuffer()[:transfer.getActualLength()]
-
-            # Put data in the queue
-            self.__queue.put( data )
+        if status == usb1.TRANSFER_COMPLETED:
+            if actual_length > 0:
+                # Get data and call the user transfert callback or put it on the queue
+                data = transfer.getBuffer()[:actual_length]
+                if self.__callback_transfert is not None:
+                    self.__callback_transfert( data )
+                else:
+                    self.__queue.put( data )
+            else:
+                log.debug(f"USB callback: transfer completed but 0 bytes received")
 
             # Resubmit the transfer
             if self.__bulk_transfer_on:
                 transfer.submit()
+        elif status == usb1.TRANSFER_CANCELLED:
+            log.info(f"USB callback: transfer cancelled")
+        elif status == usb1.TRANSFER_ERROR:
+            log.error(f"USB callback: transfer error")
+        elif status == usb1.TRANSFER_TIMED_OUT:
+            log.debug(f"USB callback: transfer timed out")
+        else:
+            log.debug(f"USB callback: transfer status={status} (not COMPLETED)")
 
     def asyncBulkTransfer( self, duration: int ) -> None:
         """
@@ -455,7 +529,7 @@ class Usb:
         if not self.__is_claimed:
             self.claim()
 
-        log.info( ' .Init asynchronous bulk transfer...')
+        log.info( 'Init asynchronous bulk transfer...')
 
         # Clear previous transfer buffers if any
         self.__transfer_buffers.clear()
@@ -478,11 +552,13 @@ class Usb:
         # Start the timer if a limited execution time is requested
         # In this case, the transfer ending is scheduled after duration seconds
         if duration > 0 :
+            log.info( f"Starting thread timer for {duration} seconds..." )
             self.__timer_thread = threading.Timer( duration, self.__timer_end_of_transfer_thread )
             self.__timer_thread_flag = True
             self.__timer_thread.start()
 
         # Start run thread
+        log.info( f"Starting asynchronous bulk transfer thread..." )
         self.__async_transfer_thread_exception = None
         self.__async_transfer_thread = threading.Thread( target= self.__asyncBulkTransfer_thread )
         self.__async_transfer_thread.start()
@@ -491,7 +567,7 @@ class Usb:
         """
         Thread function to perform an asynchronous bulk transfer on the USB device
         """
-        log.info( " .Transfer thread execution started" )
+        log.info( "(Async bulk THREAD) Transfer thread execution started" )
 
         # Submit all transfers
         for transfer in self.__transfer_buffers:
@@ -508,20 +584,20 @@ class Usb:
                     self.__context.handleEvents()
 
             if not self.__bulk_transfer_on:
-                log.info( f" .Quitting transfer loop due to end of process request..." )
+                log.info( f"(Async bulk THREAD) Quitting transfer loop due to end of process request..." )
             else:
-                log.info( f" .Quitting transfer loop due to all transfers completed, timeout reached or error..." )
-                self.__asyncBulkTransferStop_thread()
+                log.info( f"(Async bulk THREAD) Quitting transfer loop due to all transfers completed, timeout reached or error..." )
+                self.__asyncBulkTransferStop()
     
         except usb1.USBError as e:
-            log.error( f" .Error during asynchronous bulk transfer on USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
-            log.error( f" .Error resulting in thread termination ({type(e).__name__}): {e}" )
+            log.error( f"(Async bulk THREAD) Error during asynchronous bulk transfer on USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
+            log.error( f"(Async bulk THREAD) Error resulting in thread termination ({type(e).__name__}): {e}" )
             self.__async_transfer_thread_exception = e
-            self.__asyncBulkTransferStop_thread()
+            self.__asyncBulkTransferStop()
 
-    def __asyncBulkTransferStop_thread( self ) -> None:
+    def __asyncBulkTransferStop( self ) -> None:
         """
-        Thread function to stop an asynchronous bulk transfer on the USB device
+        Stop an asynchronous bulk transfer on the USB device
         """
         # Run user callback if any
         if self.__on_stop_callback is not None:
@@ -533,8 +609,8 @@ class Usb:
     def __timer_end_of_transfer_thread( self ) -> None:
         """ Timer callback for run stopping """
 
-        log.info( f" .Thread timer ended: stop the bulk transfer..." )
-        self.__asyncBulkTransferStop_thread()
+        log.info( f"(Timer THREAD) Thread timer ended: stop the bulk transfer..." )
+        self.__asyncBulkTransferStop()
         self.__thread_timer_flag = False
     
     def asyncBulkTransferWait( self, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
@@ -544,10 +620,17 @@ class Usb:
         """
 
         if self.__async_transfer_thread is not None:
+            log.info( "Waiting for asynchronous bulk transfer to end..." )
             self.__async_transfer_thread.join()
             self.__async_transfer_thread = None
 
+        # Release the device if it was claimed for the transfer
+        if self.__is_claimed:
+            self.release()
+
+        # Handle exceptions from the transfer thread if any
         if self.__async_transfer_thread_exception is not None:
+            log.warning( "An exception occurred during asynchronous bulk transfer thread execution: " + str( self.__async_transfer_thread_exception ) )
             thread_exception = MuException( f"Thread exception ({type(self.__async_transfer_thread_exception).__name__}): {self.__async_transfer_thread_exception}" )
             self.__async_transfer_thread_exception = None
             raise thread_exception

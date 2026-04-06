@@ -1,4 +1,4 @@
-# megamicros.core.__init__.py
+# megamicros.sources
 #
 # ® Copyright 2024-2026 Bimea
 # Author: bruno.gas@bimea.io
@@ -20,15 +20,31 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-#
-# Core module for Megamicros library.
 
-from .megamicros import Megamicros
-from .config import AcquisitionConfig, UsbConfig, MemsArrayInfo
+"""
+Data sources module for Megamicros library.
+
+This module provides various data source implementations that can provide
+data frames to the Megamicros antenna objects.
+
+Available sources:
+    - UsbDataSource: Hardware USB device
+    - H5DataSource: HDF5 file playback
+    - WebSocketDataSource: Remote device over WebSocket
+    - RandomDataSource: Random signal generator (for testing)
+    
+Documentation:
+    Full MegaMicros documentation is available at: https://readthedoc.bimea.io
+"""
+
+from .base import DataSource
+from .random import RandomDataSource
+from .usb import UsbDataSource
+#from .h5 import H5DataSource
 
 __all__ = [
-    'Megamicros',
-    'AcquisitionConfig',
-    'UsbConfig',
-    'MemsArrayInfo',
+    'DataSource',
+    'UsbDataSource',
+    'H5DataSource',
+    'RandomDataSource',
 ]
