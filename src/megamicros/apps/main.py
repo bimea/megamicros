@@ -23,7 +23,8 @@
 
 import argparse
 
-from megamicros import __version__, welcome_msg
+from megamicros import __version__, welcome_msg, UsbDataSource
+from megamicros.sources.usb import PRODUCT_MAP
 from megamicros.log import log
 from megamicros.exception import MuException
 
@@ -53,6 +54,28 @@ def main():
     # Print welcome message
     print( welcome_msg )
     print( f"megamicros {__version__}" )
+
+    if args.check_usb:
+        print( "Checking USB not yet implemented" )
+
+    elif args.check_device:
+        print( "Checking Megamicros device..." )
+        try:
+            device_found, product_id = UsbDataSource.detectMegamicrosDevice()
+            if device_found:
+                device_hardware = PRODUCT_MAP.get(product_id, None)
+                if device_hardware:
+                    print( f">>>> Found {device_hardware} Megamicros device")
+                else:
+                    print( f"Device with Product ID 0x{product_id:04X} detected, but not recognized." )
+            else:
+                print( "No Megamicros device found." )
+
+        except MuException as e:
+            print( f"Failed: {e}")
+    else:
+        print( "No action specified. Use --help for available options." )
+
 
 if __name__ == "__main__":
 	main()

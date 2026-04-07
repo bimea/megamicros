@@ -2,7 +2,7 @@
 
 ## Releases
 
-### 3.1.0 (In Progress) Major Refactoring - Breaking Changes
+### 3.1.0-1 (In Progress) Major Refactoring - Breaking Changes
 
 This is a major architectural overhaul of the Megamicros library implementing modern Python patterns and improved modularity.
 
