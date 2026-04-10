@@ -63,6 +63,8 @@ class AcquisitionConfig:
         queue_timeout: Queue timeout in milliseconds
         sensibility: MEMS sensitivity factor (Pa/digit)
         time_activation: Delay before starting acquisition in ms (200ms: skip the transiant state)
+        trigger_start: Trigger start mode ('soft', 'trig1', 'trig2')
+        trigger_mode: Trigger mode for external/USB trigger ('rising', 'falling', 'high', 'low')
     """
     
     mems: Optional[list[int]] = None
@@ -79,6 +81,8 @@ class AcquisitionConfig:
     queue_timeout: int = 1000
     sensibility: float = 3.54e-6
     time_activation: int = 0
+    trigger_start: Literal['soft', 'trig1', 'trig2'] = 'soft'
+    trigger_mode: Literal['rising', 'falling', 'high', 'low'] = 'rising'
     
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -104,6 +108,14 @@ class AcquisitionConfig:
                 raise ValueError("counter list must contain integers")
         else:
             raise ValueError("counter must be a list of integers, a boolean, or None")
+        
+        # Validate trigger options
+        valid_trigger_starts = {'soft', 'trig1', 'trig2'}
+        valid_trigger_modes = {'rising', 'falling', 'high', 'low'}
+        if self.trigger_start not in valid_trigger_starts:
+            raise ValueError(f"trigger_start must be one of {valid_trigger_starts}")
+        if self.trigger_mode not in valid_trigger_modes:
+            raise ValueError(f"trigger_mode must be one of {valid_trigger_modes}")
      
     @property
     def active_mems(self) -> list[int]:

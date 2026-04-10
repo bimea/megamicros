@@ -84,6 +84,7 @@ MU_CMD_STOP = b'\x03'
 MU_CMD_COUNT = b'\x04'
 MU_CMD_ACTIVE = b'\x05'
 MU_CMD_PURGE = b'\x06'
+MU_CMD_ABORT = b'\x08'      # Abort acquisition (allow to stop waiting for the trigger start)
 MU_CMD_DATATYPE = b'\x09'
 MU_CMD_FX3_RESET = 0xC0
 MU_CMD_FX3_PH = 0xC4
@@ -391,7 +392,7 @@ class UsbDataSource(BaseDataSource):
         self._usb_device.setOnStopCallback(self._send_stop)
 
         # Send start command to FPGA
-        self._send_start()
+        self._send_start(self._config.trigger_start, self._config.trigger_mode)
  
         self._usb_device._Usb__transfer_timeout = DEFAULT_TRANSFER_TIMEOUT_MS
         log.debug(f"USB transfer timeout set to {DEFAULT_TRANSFER_TIMEOUT_MS}ms")
@@ -419,7 +420,18 @@ class UsbDataSource(BaseDataSource):
             )
             self._transfer_thread.start()
         
-    
+    def _do_abort(self):
+        """Send the ABORT command to FPGA to stop acquisition immediately (without waiting for trigger start if triggered acquisition)."""
+        if self._config is None or self._usb_device is None:
+            raise RuntimeError("Source not configured")
+        log.info("Aborting USB acquisition...")
+        
+        # send ABORT command to FPGA
+        self._send_abort()
+
+        # Stop USB acquisition and release resources
+        self._do_stop()
+
     def _do_stop(self) -> None:
         """Stop USB acquisition."""
         self._halt_request = True
@@ -612,16 +624,35 @@ class UsbDataSource(BaseDataSource):
         buf[0] = MU_CMD_PURGE
         self._usb_device.ctrlWrite(MU_CMD_FPGA_0, buf)
         log.info("RESET and PURGE commands sent to FPGA")
-    
-    def _send_start(self) -> None:
+
+    def _send_start(self, trigger_start: str = "soft", trigger_mode: str = "rising") -> None:
         """Send START command to FPGA."""
         if not self._usb_device:
             return
+        switcher_trigger_start = {
+            "soft": 0x00,
+            "trig1": 0x01,
+            "trig2": 0x02
+        }
+        switcher_trigger_mode = {
+            "rising": 0x00,
+            "falling": 0x40,
+            "high": 0x80,
+            "low": 0xC0
+        }
+        trig_opt = switcher_trigger_start.get(trigger_start, 0x00)        
+        trig_mode_opt = switcher_trigger_mode.get(trigger_mode, 0x00)
+
         buf = create_string_buffer(2)
         buf[0] = MU_CMD_START
-        buf[1] = 0x00
+        buf[1] = 0x00 + trig_opt + trig_mode_opt
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
-        log.info("START command sent to FPGA")
+        if trigger_start not in switcher_trigger_start:
+            log.warning(f"Invalid trigger start option: {trigger_start}. Defaulting to 'soft'.")
+        if trigger_mode not in switcher_trigger_mode:
+            log.warning(f"Invalid trigger mode option: {trigger_mode}. Defaulting to 'rising'.")
+        
+        log.info(f"START command sent to FPGA (trigger: {trigger_start}, mode: {trigger_mode if trigger_start != 'soft' else 'N/A'})")
     
     def _send_stop(self) -> None:
         """Send STOP command to FPGA and wait for remaining data."""
@@ -633,6 +664,15 @@ class UsbDataSource(BaseDataSource):
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
         log.info("STOP command sent to FPGA")
     
+    def _send_abort(self) -> None:
+        """Send ABORT command to FPGA to stop waiting for the trigger start."""
+        if not self._usb_device:
+            return
+        buf = create_string_buffer(1)
+        buf[0] = MU_CMD_ABORT
+        self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
+        log.info("ABORT command sent to FPGA")
+
     def _send_sampling_frequency(self, freq: int) -> None:
         """Send sampling frequency as clockdiv to FPGA."""
         if not self._usb_device:

@@ -115,6 +115,14 @@ class DataSource(Protocol):
         Can be called during iteration to terminate early.
         """
         ...
+
+    def abort(self) -> None:
+        """
+        Abort acquisition immediately.
+        
+        Should be used in case of errors or when an immediate stop is required or when a triggered acquisition needs to be stopped before it starts.
+        """
+        ...
     
     def wait(self) -> None:
         """
@@ -194,6 +202,14 @@ class BaseDataSource(ABC):
             self._do_stop()
             self._state = SourceState.STOPPED
 
+    def abort(self) -> None:
+        """Abort acquisition immediately."""
+        if self._state in (SourceState.RUNNING):
+            self._do_abort()
+            self._state = SourceState.STOPPED
+        else:
+            raise RuntimeError(f"Cannot abort in state {self._state}. No acquisition to stop.")
+
     def selftest(self, duration=5) -> dict:
         """
         Perform a self-test acquisition to check if MEMS and analog channels are working and which of them are connected. 
@@ -228,6 +244,11 @@ class BaseDataSource(ABC):
     @abstractmethod
     def _do_stop(self) -> None:
         """Subclass-specific stop logic."""
+        pass
+
+    @abstractmethod
+    def _do_abort(self) -> None:
+        """Subclass-specific abort logic."""
         pass
     
     @abstractmethod
