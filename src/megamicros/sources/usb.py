@@ -643,14 +643,15 @@ class UsbDataSource(BaseDataSource):
         trig_opt = switcher_trigger_start.get(trigger_start, 0x00)        
         trig_mode_opt = switcher_trigger_mode.get(trigger_mode, 0x00)
 
-        buf = create_string_buffer(2)
-        buf[0] = MU_CMD_START
-        buf[1] = 0x00 + trig_opt + trig_mode_opt
-        self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
         if trigger_start not in switcher_trigger_start:
             log.warning(f"Invalid trigger start option: {trigger_start}. Defaulting to 'soft'.")
         if trigger_mode not in switcher_trigger_mode:
             log.warning(f"Invalid trigger mode option: {trigger_mode}. Defaulting to 'rising'.")
+
+        buf = create_string_buffer(2)
+        buf[0] = MU_CMD_START
+        buf[1] = 0x00 + trig_opt + trig_mode_opt
+        self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
         
         log.info(f"START command sent to FPGA (trigger: {trigger_start}, mode: {trigger_mode if trigger_start != 'soft' else 'N/A'})")
     

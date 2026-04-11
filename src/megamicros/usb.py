@@ -487,6 +487,7 @@ class Usb:
         if status == usb1.TRANSFER_COMPLETED:
             if actual_length > 0:
                 # Get data and call the user transfert callback or put it on the queue
+                log.debug(f"USB callback: transfer data received, length={actual_length}")
                 data = transfer.getBuffer()[:actual_length]
                 if self.__callback_transfert is not None:
                     self.__callback_transfert( data )
@@ -545,7 +546,8 @@ class Usb:
                 self.buffer_size,
                 callback=self.__callback,
                 user_data = id,
-                timeout=self.transfer_timeout
+                # timeout=self.transfer_timeout
+                timeout=0
             )
             self.__transfer_buffers.append( transfer )
 
@@ -604,6 +606,15 @@ class Usb:
             self.__on_stop_callback()
 
         self.__bulk_transfer_on = False
+
+        # Cancel all pending transfers to unblock handleEvents()
+        # This is critical when timeout=0 (infinite wait)
+        for transfer in self.__transfer_buffers:
+            if transfer.isSubmitted():
+                try:
+                    transfer.cancel()
+                except Exception as e:
+                    log.debug(f"Failed to cancel transfer: {e}")
 
 
     def __timer_end_of_transfer_thread( self ) -> None:
