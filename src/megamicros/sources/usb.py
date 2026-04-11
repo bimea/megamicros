@@ -655,15 +655,35 @@ class UsbDataSource(BaseDataSource):
         
         log.info(f"START command sent to FPGA (trigger: {trigger_start}, mode: {trigger_mode if trigger_start != 'soft' else 'N/A'})")
     
-    def _send_stop(self) -> None:
+    def _send_stop(self, trigger_stop: str = "soft", trigger_stop_mode: str = "rising") -> None:
         """Send STOP command to FPGA and wait for remaining data."""
         if not self._usb_device:
             return
+        
+        switcher_trigger_stop = {
+            "soft": 0x00,
+            "trig1": 0x01,
+            "trig2": 0x02
+        }
+        switcher_trigger_stop_mode = {
+            "rising": 0x00,
+            "falling": 0x40,
+            "high": 0x80,
+            "low": 0xC0
+        }
+        if trigger_stop not in switcher_trigger_stop:
+            log.warning(f"Invalid trigger stop option: {trigger_stop}. Defaulting to 'soft'.")
+        if trigger_stop_mode not in switcher_trigger_stop_mode:
+            log.warning(f"Invalid trigger stop mode option: {trigger_stop_mode}. Defaulting to 'rising'.")
+
+        trig_opt = switcher_trigger_stop.get(trigger_stop, 0x00)        
+        trig_mode_opt = switcher_trigger_stop_mode.get(trigger_stop_mode, 0x00)
+
         buf = create_string_buffer(2)
         buf[0] = MU_CMD_STOP
-        buf[1] = 0x00
+        buf[1] = 0x00 + trig_opt + trig_mode_opt
         self._usb_device.ctrlWrite(MU_CMD_FPGA_1, buf)
-        log.info("STOP command sent to FPGA")
+        log.info(f"STOP command sent to FPGA (trigger: {trigger_stop}, mode: {trigger_stop_mode if trigger_stop != 'soft' else 'N/A'})")
     
     def _send_abort(self) -> None:
         """Send ABORT command to FPGA to stop waiting for the trigger start."""
