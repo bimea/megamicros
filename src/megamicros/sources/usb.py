@@ -155,6 +155,9 @@ DEFAULT_SAMPLING_FREQUENCY_REFERENCE = 500000  # Default max sampling frequency 
 DEFAULT_SELFTEST_DURATION = 1 # Duration of SELTEST in seconds (used for MEMS and analogs check)
 DEFAULT_SELFTEST_SAMPLING_FREQUENCY = 50000 # Sampling frequency for SELFTEST (should be high enough to capture signals but not too high to avoid data loss during test)
 DEFAULT_SELFTEST_FRAME_LENGTH = 1024 # Frame length for SELFTEST (should be long enough to analyze signals but not too long to avoid data loss during test)
+DEFAULT_USB_QUEUE_TIMEOUT = 0.1 # Timeout for USB queue get operations (in seconds)
+
+FPGA_TRIG_TIMEOUT = 30.0 # Timeout for waiting the first frame after trigger start in seconds (should be longer than FPGA timeout to allow acquisition to start)
 
 class UsbSourceException(MuException):
     """Exception for USB data source."""
@@ -505,7 +508,6 @@ class UsbDataSource(BaseDataSource):
         
         # Access USB internal queue and transfer flag
         usb_queue = self._usb_device._Usb__queue
-        queue_timeout = self._config.queue_timeout / 1000.0
         
         try:
             # Loop while USB transfer is active OR queue has data
@@ -515,8 +517,13 @@ class UsbDataSource(BaseDataSource):
                 
                 try:
                     # Get raw bytes from USB queue
-                    data = usb_queue.get(timeout=queue_timeout)
-                    
+                    if self._frames_received == 0:
+                        # Longer timeout for first frame to allow acquisition to start
+                        data = usb_queue.get(timeout=30.0)  
+                    else:
+                        # Short timeout for subsequent frames to allow checking USB active flag and halting if needed
+                        data = usb_queue.get(timeout=DEFAULT_USB_QUEUE_TIMEOUT)
+
                     if data is None or len(data) == 0:
                         continue
                     
@@ -599,12 +606,18 @@ class UsbDataSource(BaseDataSource):
             log.warning("Iteration called but source not running and queue is empty.")
             return
 
-        timeout_sec = self._config.queue_timeout / 1000.0
-
         # Continue yielding frames until queue is empty or timeout
         while True:
             try:
-                frame = self._queue.get(timeout=timeout_sec)
+                # frame = self._queue.get(timeout=timeout_sec)
+                if self._frames_received == 0 and self._config.trigger_start != "soft" :
+                    # For triggered acquisitions, wait longer for the first frame to allow acquisition to start after trigger
+                    # FPGA timeout is set to 30s. 
+                    frame = self._queue.get(timeout=FPGA_TRIG_TIMEOUT)
+                else:
+                    # Longer timeout for first frame to allow acquisition to start
+                    frame = self._queue.get(timeout=self._config.timeout)
+
                 yield frame
             except queue.Empty:
                 # No more frames available within timeout

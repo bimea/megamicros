@@ -218,7 +218,7 @@ class Megamicros():
         counter: list[int] | bool = [0],
         skip_counter: bool = False,
         queue_size: int = 0,
-        queue_timeout: int = 1000,
+        timeout: int = 1,
         sensibility: float = 3.54e-6,
         **kwargs
     ) -> 'Megamicros':
@@ -238,7 +238,7 @@ class Megamicros():
             counter: Include counter channel(s) (default [0] for single counter, False for none and compatibility with old API)
             skip_counter: Skip counter in output
             queue_size: Max queue size (0 = unlimited)
-            queue_timeout: Queue timeout in ms
+            timeout: Timeout in seconds
             sensibility: MEMS sensitivity (Pa/digit)
             
         Returns:
@@ -265,7 +265,7 @@ class Megamicros():
             counter=counter if isinstance(counter, list) else ([0] if counter else []),
             skip_counter=skip_counter,
             queue_size=queue_size,
-            queue_timeout=queue_timeout,
+            timeout=timeout,
             sensibility=sensibility,
         )
         

@@ -60,11 +60,13 @@ class AcquisitionConfig:
         use_direct_transfer: Whether to use direct USB transfer mode (bypassing USB queue)
         skip_counter: Skip counter in iteration output
         queue_size: Maximum queue size (0 = unlimited)
-        queue_timeout: Queue timeout in milliseconds
+        timeout: Timeout in seconds before stopping acquisition if no data is received
         sensibility: MEMS sensitivity factor (Pa/digit)
         time_activation: Delay before starting acquisition in ms (200ms: skip the transiant state)
         trigger_start: Trigger start mode ('soft', 'trig1', 'trig2')
-        trigger_mode: Trigger mode for external/USB trigger ('rising', 'falling', 'high', 'low')
+        trigger_start_mode: Trigger mode for external/USB trigger ('rising', 'falling', 'high', 'low')
+        trigger_stop: Trigger stop mode ('soft', 'trig1', 'trig2')
+        trigger_stop_mode: Trigger mode for external/USB stop trigger ('rising', 'falling', 'high', 'low')
     """
     
     mems: Optional[list[int]] = None
@@ -78,7 +80,7 @@ class AcquisitionConfig:
     status: bool = False
     skip_counter: bool = False
     queue_size: int = 0
-    queue_timeout: int = 1000
+    timeout: float = 1.0
     sensibility: float = 3.54e-6
     time_activation: int = 0
     trigger_start: Literal['soft', 'trig1', 'trig2'] = 'soft'

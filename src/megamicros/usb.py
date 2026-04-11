@@ -65,13 +65,12 @@ LIBUSB_ENDPOINT_OUT          = 0x00
 # Default constants to perform input bulk transfers from the usb device
 USB_DEFAULT_INTERFACE        = 0x00
 USB_DEFAULT_ENDPOINT_IN      = 0x81
-USB_DEFAULT_TRANSFER_TIMEOUT  = 1000                # timeout in ms
 USB_DEFAULT_WRITE_TIMEOUT     = 1000                # timeout in ms
 
 USB_DEFAULT_BUFFERS_NUMBER   = 8                    # Default usb transfer buffers number
 USB_DEFAULT_QUEUE_SIZE       = 0                    # Queue limit after which the last signal is lost (0 means infinite signal queueing)
 USB_DEFAULT_QUEUE_TIMEOUT    = 1000                 # Queue get timeout in ms
-
+USB_DEFAULT_SYNC_BULK_TIMEOUT = 1000                # Timeout for synchronous bulk read in ms
 
                                                                             
 class UsbException( MuException ):
@@ -133,7 +132,6 @@ class Usb:
         self.__buffers_number: int = USB_DEFAULT_BUFFERS_NUMBER
 
         # Transfer parameters
-        self.__transfer_timeout: int = USB_DEFAULT_TRANSFER_TIMEOUT
         self.__transfer_buffers: list[usb1.USBTransfer] = []
         self.__bulk_transfer_on: bool = False
         self.__on_stop_callback: callable|None = None
@@ -178,7 +176,11 @@ class Usb:
 
     @property
     def transfer_timeout( self ) -> int:
-        return self.__transfer_timeout
+        """ Get the USB transfer timeout in ms. 
+        For compatibility with async transfer, this is not used as the timeout is set to 0 (infinite wait) 
+        and the transfer is stopped by cancelling pending transfers. 
+        """
+        return 0
 
     @property
     def bus_address( self ) -> int:
@@ -418,7 +420,7 @@ class Usb:
         if not keeping_claimed:
             self.release()
 
-    def syncBulkRead( self, size:int, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
+    def syncBulkRead( self, size:int, time_out=USB_DEFAULT_SYNC_BULK_TIMEOUT ) -> bytes:
         """
         Perform a synchronous bulk read transfer on the USB device
 
@@ -457,7 +459,7 @@ class Usb:
 
         return data
     
-    def bulkRead( self, size:int, timeout:int=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
+    def bulkRead( self, size:int, timeout:int=USB_DEFAULT_SYNC_BULK_TIMEOUT ) -> bytes:
         """
         Perform a bulk read transfer on the USB device (alias for syncBulkRead).
         
@@ -539,6 +541,7 @@ class Usb:
         self.__queue.clear()
 
         # Allocate the list of transfer buffers
+        # timeout is set to 0 for infinite wait since we will stop the transfer by cancelling pending transfers when needed
         for id in range( self.buffers_number ):
             transfer = self.__usb_handle.getTransfer()
             transfer.setBulk(
@@ -546,7 +549,6 @@ class Usb:
                 self.buffer_size,
                 callback=self.__callback,
                 user_data = id,
-                # timeout=self.transfer_timeout
                 timeout=0
             )
             self.__transfer_buffers.append( transfer )
@@ -565,7 +567,7 @@ class Usb:
         self.__async_transfer_thread = threading.Thread( target= self.__asyncBulkTransfer_thread )
         self.__async_transfer_thread.start()
 
-    def __asyncBulkTransfer_thread( self, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> None:
+    def __asyncBulkTransfer_thread( self ) -> None:
         """
         Thread function to perform an asynchronous bulk transfer on the USB device
         """
@@ -624,7 +626,7 @@ class Usb:
         self.__asyncBulkTransferStop()
         self.__thread_timer_flag = False
     
-    def asyncBulkTransferWait( self, time_out=USB_DEFAULT_TRANSFER_TIMEOUT ) -> bytes:
+    def asyncBulkTransferWait( self ) -> bytes:
         """
         Wait for the end of an asynchronous bulk transfer on the USB device.
         This is a blocking call.
