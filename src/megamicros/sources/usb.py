@@ -392,7 +392,7 @@ class UsbDataSource(BaseDataSource):
         self._usb_device.setOnStopCallback(self._send_stop)
 
         # Send start command to FPGA
-        self._send_start(self._config.trigger_start, self._config.trigger_mode)
+        self._send_start(self._config.trigger_start, self._config.trigger_start_mode)
  
         self._usb_device._Usb__transfer_timeout = DEFAULT_TRANSFER_TIMEOUT_MS
         log.debug(f"USB transfer timeout set to {DEFAULT_TRANSFER_TIMEOUT_MS}ms")

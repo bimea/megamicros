@@ -82,7 +82,9 @@ class AcquisitionConfig:
     sensibility: float = 3.54e-6
     time_activation: int = 0
     trigger_start: Literal['soft', 'trig1', 'trig2'] = 'soft'
-    trigger_mode: Literal['rising', 'falling', 'high', 'low'] = 'rising'
+    trigger_start_mode: Literal['rising', 'falling', 'high', 'low'] = 'rising'
+    trigger_stop: Literal['soft', 'trig1', 'trig2'] = 'soft'
+    trigger_stop_mode: Literal['rising', 'falling', 'high', 'low'] = 'rising'
     
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -111,12 +113,19 @@ class AcquisitionConfig:
         
         # Validate trigger options
         valid_trigger_starts = {'soft', 'trig1', 'trig2'}
-        valid_trigger_modes = {'rising', 'falling', 'high', 'low'}
+        valid_trigger_start_modes = {'rising', 'falling', 'high', 'low'}
         if self.trigger_start not in valid_trigger_starts:
             raise ValueError(f"trigger_start must be one of {valid_trigger_starts}")
-        if self.trigger_mode not in valid_trigger_modes:
-            raise ValueError(f"trigger_mode must be one of {valid_trigger_modes}")
-     
+        if self.trigger_start_mode not in valid_trigger_start_modes:
+            raise ValueError(f"trigger_start_mode must be one of {valid_trigger_start_modes}")
+
+        valid_trigger_stops = {'soft', 'trig1', 'trig2'}
+        valid_trigger_stop_modes = {'rising', 'falling', 'high', 'low'}
+        if self.trigger_stop not in valid_trigger_stops:
+            raise ValueError(f"trigger_stop must be one of {valid_trigger_stops}")
+        if self.trigger_stop_mode not in valid_trigger_stop_modes:
+            raise ValueError(f"trigger_stop_mode must be one of {valid_trigger_stop_modes}")
+        
     @property
     def active_mems(self) -> list[int]:
         """Get a copy of active MEMS channels."""
