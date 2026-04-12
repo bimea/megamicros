@@ -156,8 +156,10 @@ DEFAULT_SELFTEST_DURATION = 1 # Duration of SELTEST in seconds (used for MEMS an
 DEFAULT_SELFTEST_SAMPLING_FREQUENCY = 50000 # Sampling frequency for SELFTEST (should be high enough to capture signals but not too high to avoid data loss during test)
 DEFAULT_SELFTEST_FRAME_LENGTH = 1024 # Frame length for SELFTEST (should be long enough to analyze signals but not too long to avoid data loss during test)
 DEFAULT_USB_QUEUE_TIMEOUT = 0.1 # Timeout for USB queue get operations (in seconds)
+DEFAULT_USB_TRIGGER_TIMEOUT = 1 # Timeout for waiting trigger start in seconds
 
 FPGA_TRIG_TIMEOUT = 30.0 # Timeout for waiting the first frame after trigger start in seconds (should be longer than FPGA timeout to allow acquisition to start)
+SOURCE_TIMEOUT = 0.1 # Timeout for source frame retrieval (in seconds) - should be shorter than FPGA_TRIG_TIMEOUT to allow checking for halt request and stopping acquisition if needed
 
 class UsbSourceException(MuException):
     """Exception for USB data source."""
@@ -218,6 +220,7 @@ class UsbDataSource(BaseDataSource):
         self._halt_request = False
         self._frames_received = 0
         self._transfert_lost = 0
+        self._waiting_for_trigger = False
         
         # Detect or set available MEMS
         if available_mems is None:
@@ -380,6 +383,8 @@ class UsbDataSource(BaseDataSource):
         
         self._halt_request = False
         self._frames_received = 0
+        self._waiting_for_trigger = False
+
         # NOTE: transfert_lost is NOT reset - cumulative counter
         
         log.debug(f"UsbDataSource configured: {len(config.mems)} MEMS, "
@@ -390,9 +395,6 @@ class UsbDataSource(BaseDataSource):
         if self._config is None or self._usb_device is None:
             raise RuntimeError("Source not configured")
         log.info("Starting USB acquisition...")
-        
-        # Configure STOP callback to send FPGA STOP command when timer expires
-        self._usb_device.setOnStopCallback(self._send_stop)
 
         # Send start command to FPGA
         self._send_start(self._config.trigger_start, self._config.trigger_start_mode)
@@ -422,7 +424,49 @@ class UsbDataSource(BaseDataSource):
                 daemon=True
             )
             self._transfer_thread.start()
+
+        # Start timer thread if duration is limited and trig mode on soft
+        if self._config.trigger_start == "soft":
+            if self._config.duration > 0 and self._timer_thread is None:
+                self._timer_thread = Thread(
+                    target=self._timer_worker,
+                    name="RandomTimerThread",
+                    daemon=True
+                )
+            self._timer_thread.start()
+
+        # in triggered mode, the timer thread is started after receiving the first frame to ensure accurate timing based on actual acquisition start after trigger, 
+        # so we don't start it here. Instead we set a flag to indicate that we're waiting for the trigger, 
+        # and the timer thread will be started in the _consume_usb_transfert callback when we receive the first frame after trigger start
+        else:
+            self._waiting_for_trigger = True
+
         
+    def _timer_worker(self) -> None:
+        """Timer thread to stop generation after specified duration."""
+        if self._config is None or self._config.duration <= 0:
+            return
+        
+        time.sleep(self._config.duration)
+        
+        if not self._halt_request:
+            log.debug(f"USBDataSource: duration limit reached ({self._config.duration}s)")
+            self._halt_request = True
+
+        # Send FPGA STOP command
+        self._send_stop()
+
+        # Stop USB async transfer
+        if self._usb_device is None:
+            raise RuntimeError("USB device lost during acquisition")
+
+        try:
+            log.debug("Stopping USB async transfer from timer thread...")
+            self._usb_device.asyncBulkTransferStop()
+        except Exception as e:
+            log.warning(f"Error stopping USB transfer from timer thread: {e}")
+            pass
+
     def _do_abort(self):
         """Send the ABORT command to FPGA to stop acquisition immediately (without waiting for trigger start if triggered acquisition)."""
         if self._config is None or self._usb_device is None:
@@ -492,8 +536,20 @@ class UsbDataSource(BaseDataSource):
                 pass
         
         self._queue.put(frame)
-        self._frames_received += 1
 
+        # Start the timer thread after receiving the first frame to ensure accurate timing based on actual acquisition start
+        if self._waiting_for_trigger:
+            if self._config.duration > 0 and self._timer_thread is None:
+                self._timer_thread = Thread(
+                    target=self._timer_worker,
+                    name="RandomTimerThread",
+                    daemon=True
+                )
+                self._timer_thread.start()
+            self._waiting_for_trigger = False
+            log.debug("Timer thread started after receiving first frame (triggered acquisition)")
+    
+        self._frames_received += 1
 
     def _consume_usb_queue(self) -> None:
         """Consumer thread that reads from USB internal queue, converts to frames and insert into our queue."""
@@ -517,9 +573,22 @@ class UsbDataSource(BaseDataSource):
                 
                 try:
                     # Get raw bytes from USB queue
-                    if self._frames_received == 0:
+                    if self._waiting_for_trigger:
                         # Longer timeout for first frame to allow acquisition to start
-                        data = usb_queue.get(timeout=30.0)  
+                        # This timeout value is set to 1s to allow checking USB active flag and halting if needed
+                        log.debug(f"Waiting for first frame from USB queue after trigger start with timeout {DEFAULT_USB_TRIGGER_TIMEOUT}s...")
+                        data = usb_queue.get(timeout=DEFAULT_USB_TRIGGER_TIMEOUT)
+
+                        # Start the timer thread after receiving the first frame to ensure accurate timing based on actual acquisition start
+                        if self._config.duration > 0 and self._timer_thread is None:
+                            self._timer_thread = Thread(
+                                target=self._timer_worker,
+                                name="RandomTimerThread",
+                                daemon=True
+                            )
+                            self._timer_thread.start()
+                        self._waiting_for_trigger = False
+                        log.debug("Timer thread started after receiving first frame (triggered acquisition)")
                     else:
                         # Short timeout for subsequent frames to allow checking USB active flag and halting if needed
                         data = usb_queue.get(timeout=DEFAULT_USB_QUEUE_TIMEOUT)
@@ -610,17 +679,47 @@ class UsbDataSource(BaseDataSource):
         while True:
             try:
                 # frame = self._queue.get(timeout=timeout_sec)
-                if self._frames_received == 0 and self._config.trigger_start != "soft" :
+                if self._waiting_for_trigger:
                     # For triggered acquisitions, wait longer for the first frame to allow acquisition to start after trigger
-                    # FPGA timeout is set to 30s. 
-                    frame = self._queue.get(timeout=FPGA_TRIG_TIMEOUT)
+                    log.debug(f"(USB Source) Waiting for trigger start with timeout {self._config.timeout}s...")
+                    if self._config.timeout > 0:
+                        # Longer timeout for first frame defined by config
+                        frame = self._queue.get(timeout=self._config.timeout)
+                    else:
+                        # No limit timeout for first frame if config timeout is 0 or negative
+                        frame = self._queue.get()
                 else:
-                    # Longer timeout for first frame to allow acquisition to start
-                    frame = self._queue.get(timeout=self._config.timeout)
+                    # Shorter timeout for subsequent frames to allow checking for halt request and stopping acquisition if needed
+                    frame = self._queue.get(timeout=SOURCE_TIMEOUT)
 
                 yield frame
             except queue.Empty:
                 # No more frames available within timeout
+                if self._waiting_for_trigger:
+                    log.debug("User timeout for trigger waiting reached")
+                    # In triggered mode, if we reach the timeout while waiting for the first frame, 
+                    # it means that the trigger was not received or acquisition did not start properly, so we stop the acquisition to avoid hanging indefinitely
+                    # send ABORT command to FPGA
+                    if not self._halt_request:
+                        self._halt_request = True
+
+                    # Send FPGA ABORT command
+                    self._send_abort()
+                    self._send_stop()
+
+                    # Stop USB async transfer
+                    if self._usb_device is None:
+                        raise RuntimeError("USB device lost during acquisition")
+
+                    try:
+                        log.debug("Stopping USB async transfer from source thread...")
+                        self._usb_device.asyncBulkTransferStop()
+                    except Exception as e:
+                        log.debug(f"Error stopping USB transfer from source thread: {e}")
+                        pass
+
+                else:
+                    log.debug("No more frames available in queue (source stopped or timeout reached)")
                 break
 
 
@@ -755,12 +854,13 @@ class UsbDataSource(BaseDataSource):
         if status:
             map_csa += ( 0x01 << 6 )
 
-        if available_mems_number <= 256 and len(counter) > 0:
-            # There is only one counter channel on 32 to 256 devices, so we can use bit 7 of the same byte
-            map_csa += ( 0x01 << 7 )
-        else:
-            raise UsbSourceException("Counter channel not yet supported on USB devices over 256 MEMS (contact support if you need this feature)")
-
+        if len(counter) > 0:
+            if available_mems_number <= 256:
+                # There is only one counter channel on 32 to 256 devices, so we can use bit 7 of the same byte
+                map_csa += ( 0x01 << 7 )
+            else:
+                raise UsbSourceException("Counter channel not yet supported on USB devices over 256 MEMS (contact support if you need this feature)")
+            
         buf[3] = map_csa
         self._usb_device.ctrlWrite( MU_CMD_FPGA_3, buf )
         log.info(f"Active channels sent to FPGA: MEMS={len(mems)}, Analogs={len(analogs)}, Counter={len(counter)}, Status={status}")
@@ -803,6 +903,9 @@ class UsbDataSource(BaseDataSource):
         # Wait for queue consumer thread
         if self._transfer_thread:
             self._transfer_thread.join(timeout=5.0)
+
+        # Timer thread is daemon, it will exit on its own if still running
+        self._timer_thread = None  
     
     @property
     def queue_content(self) -> int:

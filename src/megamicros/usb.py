@@ -134,13 +134,9 @@ class Usb:
         # Transfer parameters
         self.__transfer_buffers: list[usb1.USBTransfer] = []
         self.__bulk_transfer_on: bool = False
-        self.__on_stop_callback: callable|None = None
         self.__async_transfer_thread: threading.Thread|None = None
         self.__async_transfer_thread_exception: Exception|None = None
         self.__callback_transfert: callable|None = None
-
-        # Timer management
-        self.__timer_thread: threading.Timer|None = None
 
         # Queue management
         self.__queue_size: int = USB_DEFAULT_QUEUE_SIZE
@@ -258,10 +254,6 @@ class Usb:
         The callback function should have the following signature: callback( data: bytes ) -> None
         """
         self.__callback_transfert = callback
-
-    def setOnStopCallback( self, callback: callable ) -> None:
-        """ Set the callback function to be called when the asynchronous bulk transfer stops """
-        self.__on_stop_callback = callback
 
     def open( self, vendor_id:int, product_id:int, bus_address:int, endpoint_in:int, endpoint_out:int|None = None ) -> None:
         """ 
@@ -553,14 +545,6 @@ class Usb:
             )
             self.__transfer_buffers.append( transfer )
 
-        # Start the timer if a limited execution time is requested
-        # In this case, the transfer ending is scheduled after duration seconds
-        if duration > 0 :
-            log.info( f"Starting thread timer for {duration} seconds..." )
-            self.__timer_thread = threading.Timer( duration, self.__timer_end_of_transfer_thread )
-            self.__timer_thread_flag = True
-            self.__timer_thread.start()
-
         # Start run thread
         log.info( f"Starting asynchronous bulk transfer thread..." )
         self.__async_transfer_thread_exception = None
@@ -591,21 +575,18 @@ class Usb:
                 log.info( f"(Async bulk THREAD) Quitting transfer loop due to end of process request..." )
             else:
                 log.info( f"(Async bulk THREAD) Quitting transfer loop due to all transfers completed, timeout reached or error..." )
-                self.__asyncBulkTransferStop()
+                self.asyncBulkTransferStop()
     
         except usb1.USBError as e:
             log.error( f"(Async bulk THREAD) Error during asynchronous bulk transfer on USB device {self.__vendor_id:04x}:{self.__product_id:04x}: {e}" )
             log.error( f"(Async bulk THREAD) Error resulting in thread termination ({type(e).__name__}): {e}" )
             self.__async_transfer_thread_exception = e
-            self.__asyncBulkTransferStop()
+            self.asyncBulkTransferStop()
 
-    def __asyncBulkTransferStop( self ) -> None:
+    def asyncBulkTransferStop( self ) -> None:
         """
         Stop an asynchronous bulk transfer on the USB device
         """
-        # Run user callback if any
-        if self.__on_stop_callback is not None:
-            self.__on_stop_callback()
 
         self.__bulk_transfer_on = False
 
@@ -617,14 +598,6 @@ class Usb:
                     transfer.cancel()
                 except Exception as e:
                     log.debug(f"Failed to cancel transfer: {e}")
-
-
-    def __timer_end_of_transfer_thread( self ) -> None:
-        """ Timer callback for run stopping """
-
-        log.info( f"(Timer THREAD) Thread timer ended: stop the bulk transfer..." )
-        self.__asyncBulkTransferStop()
-        self.__thread_timer_flag = False
     
     def asyncBulkTransferWait( self ) -> bytes:
         """
@@ -648,11 +621,5 @@ class Usb:
             self.__async_transfer_thread_exception = None
             raise thread_exception
 
-    
-    def asyncBulkTransferStop( self ) -> None:
-        """
-        Stop an asynchronous bulk transfer on the USB device
-        Not implemented yet
-        """
-        raise NotImplementedError( 'Usb.asyncBulkTransferStop() not implemented yet' )
+
     

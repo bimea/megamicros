@@ -72,7 +72,7 @@ Documentation:
     Full MegaMicros documentation is available at: https://readthedoc.bimea.io
 """
 
-from typing import Optional, Iterator
+from typing import Optional, Iterator, Literal
 from pathlib import Path
 import numpy as np
 
@@ -220,6 +220,11 @@ class Megamicros():
         queue_size: int = 0,
         timeout: int = 1,
         sensibility: float = 3.54e-6,
+        time_activation: int = 200,
+        trigger_start: Literal['soft', 'trig1', 'trig2'] = 'soft',
+        trigger_start_mode: Literal['rising', 'falling', 'high', 'low'] = 'rising',
+        trigger_stop: Literal['soft', 'trig1', 'trig2'] = 'soft',
+        trigger_stop_mode: Literal['rising', 'falling', 'high', 'low'] = 'rising',
         **kwargs
     ) -> 'Megamicros':
         """
@@ -240,7 +245,12 @@ class Megamicros():
             queue_size: Max queue size (0 = unlimited)
             timeout: Timeout in seconds
             sensibility: MEMS sensitivity (Pa/digit)
-            
+            time_activation: Delay before starting acquisition in ms (200ms: skip the transient state)
+            trigger_start: Trigger start mode ('soft', 'trig1', 'trig2')
+            trigger_start_mode: Trigger mode for external/USB trigger ('rising', 'falling', 'high', 'low')
+            trigger_stop: Trigger stop mode ('soft', 'trig1', 'trig2')
+            trigger_stop_mode: Trigger mode for external/USB stop trigger ('rising', 'falling', 'high', 'low')
+            **kwargs: Additional configuration options (for future extensions)
         Returns:
             self (for method chaining)
         """
@@ -267,6 +277,12 @@ class Megamicros():
             queue_size=queue_size,
             timeout=timeout,
             sensibility=sensibility,
+            time_activation=time_activation,
+            trigger_start=trigger_start,
+            trigger_start_mode=trigger_start_mode,
+            trigger_stop=trigger_stop,
+            trigger_stop_mode=trigger_stop_mode,
+            **kwargs
         )
         
         # Configure and start source

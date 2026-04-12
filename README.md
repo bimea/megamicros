@@ -81,7 +81,7 @@ Unplugg and plugg your usb device. All should be fine.
 
 !!! Note
 
-    Don't forget that if you run your Python programs on a virtual machine, usb ports should be declared as accessible on your VM.
+Don't forget that if you run your Python programs on a virtual machine, usb ports should be declared as accessible on your VM.
 
 ## Megamicros documentation
 

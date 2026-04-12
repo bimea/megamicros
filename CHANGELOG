@@ -2,6 +2,11 @@
 
 ## Releases
 
+### 3.1.2
+
+- Add trigger start handling
+- fixe some limits on acqusition process (usb and source queues timeout)
+
 ### 3.1.0-1 (In Progress) Major Refactoring - Breaking Changes
 
 This is a major architectural overhaul of the Megamicros library implementing modern Python patterns and improved modularity.
