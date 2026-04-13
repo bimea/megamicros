@@ -448,13 +448,23 @@ class UsbDataSource(BaseDataSource):
             return
         
         time.sleep(self._config.duration)
-        
-        if not self._halt_request:
-            log.debug(f"USBDataSource: duration limit reached ({self._config.duration}s)")
-            self._halt_request = True
 
+        log.debug(f"USBDataSource: duration limit reached ({self._config.duration}s)")
+        
         # Send FPGA STOP command
-        self._send_stop()
+        if self._config.trigger_stop == "soft":
+            self._send_stop()
+            if not self._halt_request:
+                log.debug(f"Halt requested")
+                self._halt_request = True
+        else:
+            # In hard trigger stop mode, we rely on the trigger to stop acquisition, 
+            # so we don't stop USB transfer here to allow remaining frames to be received until trigger stop is detected in the callback
+            # Trigger stop detection is done by checking the queue timeouts in the _consume_usb_transfert callback, 
+            # and if we detect a timeout after halt_request is set, we know that the trigger stop has been reached and we can stop the USB transfer and end acquisition
+            log.debug("Stopping acquisition from timer thread (hard trigger stop mode, waiting for trigger stop)...")
+            self._send_stop(trigger_stop=self._config.trigger_stop, trigger_stop_mode=self._config.trigger_stop_mode)
+            return  
 
         # Stop USB async transfer
         if self._usb_device is None:
@@ -632,7 +642,7 @@ class UsbDataSource(BaseDataSource):
         except Exception as e:
             log.error(f"Fatal error in queue consumer: {e}")
         
-        log.debug(f"Queue consumer stopped: {self._frames_received} frames received")
+        log.debug(f"Queue consumer stopped: {self._frames_received} frames received. _halt_request={self._halt_request}, _transfer_on={self._usb_device._Usb__bulk_transfer_on if self._usb_device else 'N/A'}    ")
     
     
     def _bytes_to_frame(self, data: bytes, n_channels: int, frame_length: int) -> np.ndarray:
@@ -692,7 +702,14 @@ class UsbDataSource(BaseDataSource):
                     # Shorter timeout for subsequent frames to allow checking for halt request and stopping acquisition if needed
                     frame = self._queue.get(timeout=SOURCE_TIMEOUT)
 
+                '''
+                # Already done weather by...
+                if self._waiting_for_trigger:
+                    log.debug("First frame received after trigger start, acquisition started")
+                    self._waiting_for_trigger = False
+                '''
                 yield frame
+
             except queue.Empty:
                 # No more frames available within timeout
                 if self._waiting_for_trigger:
@@ -717,6 +734,25 @@ class UsbDataSource(BaseDataSource):
                     except Exception as e:
                         log.debug(f"Error stopping USB transfer from source thread: {e}")
                         pass
+
+                elif self._config.trigger_stop != "soft":
+                    log.debug("User timeout for hard trigger stop reached - assuming trigger stop reached and stopping acquisition")
+                    # In hard trigger stop mode, if we reach the timeout while waiting for frames after trigger, 
+                    # it means that the trigger stop may have been received so that acquisition has likely stopped (no more frames), 
+                    # so we stop the acquisition
+                    self._send_abort()
+                    self._send_stop()
+
+                    # Stop USB async transfer
+                    if self._usb_device is None:
+                        raise RuntimeError("USB device lost during acquisition")
+
+                    try:
+                        log.debug("Stopping USB async transfer from source thread...")
+                        self._usb_device.asyncBulkTransferStop()
+                    except Exception as e:
+                        log.debug(f"Error stopping USB transfer from source thread: {e}")
+                        pass 
 
                 else:
                     log.debug("No more frames available in queue (source stopped or timeout reached)")

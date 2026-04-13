@@ -2,9 +2,9 @@
 
 ## Releases
 
-### 3.1.2
+### 3.1.2-3
 
-- Add trigger start handling
+- Add trigger start and stop handling
 - fixe some limits on acqusition process (usb and source queues timeout)
 
 ### 3.1.0-1 (In Progress) Major Refactoring - Breaking Changes
