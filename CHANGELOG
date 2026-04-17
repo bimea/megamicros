@@ -2,8 +2,10 @@
 
 ## Releases
 
-### 3.1.2-3
+### 3.1.2-5
 
+- Fix MEMs sensibility bug : Changed MU_MEMS_SENSIBILITY from 0.001 3.54e-6 in source/usb.py
+- Add the old megamicros.muh5 package for compatibility. Should be updated in the future
 - Add trigger start and stop handling
 - fixe some limits on acqusition process (usb and source queues timeout)
 
