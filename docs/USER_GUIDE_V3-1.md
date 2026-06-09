@@ -23,7 +23,7 @@ Note : HDF5 will be available on versions >= 3.1.1
 
 ## Introduction
 
-Megamicros est une bibliothèque Python pour l'acquisition et le traitement de signaux depuis des antennes de microphones MEMS. La version 3.1 introduit une architecture multi-sources tout en restant **100% compatible** avec le code v3.x.
+Megamicros est une bibliothèque Python pour l'acquisition et le traitement de signaux depuis des antennes de microphones MEMS. La version 3.1 introduit une architecture multi-sources tout en restant **100% compatible** avec le code v3.0
 
 ### Principales fonctionnalités
 
