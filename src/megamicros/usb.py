@@ -53,6 +53,7 @@ from ctypes import addressof, byref, sizeof, create_string_buffer, CFUNCTYPE
 import usb1
 import threading
 import queue
+import sys
 
 from .log import log
 from .exception import MuException
@@ -146,8 +147,13 @@ class Usb:
             self.open( vendor_id, product_id, bus_address, endpoint_in if endpoint_in is not None else USB_DEFAULT_ENDPOINT_IN, endpoint_out )
 
     def __del__( self ):
-        self.close()
-        log.info( ' .USB object destroyed' )
+        # __del__ may run when logging internals are already torn down.
+        try:
+            self.close()
+            if not sys.is_finalizing():
+                log.info( 'USB object destroyed' )
+        except Exception:
+            pass
 
     def __enter__(self):
         """Context manager entry."""

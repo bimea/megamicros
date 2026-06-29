@@ -16,14 +16,19 @@ antenna.run(
 
 antenna.wait()
 
-print(f"✓ Acquisition complete!")
-print(f"✓ Frames in queue: {antenna.queue_content}")
+print(f"Queue content before: {antenna.queue_content}")
 
 # Stocker toutes les données
 all_frames = []
 for frame in antenna:
     all_frames.append(frame)
 
+print(f"Retrieved frames {len(all_frames)}")
+print(f"Queue content after: {antenna.queue_content}")
+
 # Concaténer
 signal = np.concatenate(all_frames, axis=1)
 print(f"Signal complet : {signal.shape}")
+
+# Affiche le compteur en voie 0:
+print(f"Compteur en voie 0 : {signal[0, :]}")

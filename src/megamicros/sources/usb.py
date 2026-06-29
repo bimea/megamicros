@@ -67,6 +67,7 @@ from threading import Thread
 from ctypes import create_string_buffer
 import time
 import queue
+import sys
 import numpy as np
 
 from .base import BaseDataSource, SourceState
@@ -960,7 +961,11 @@ class UsbDataSource(BaseDataSource):
 
     def __del__(self):
         """Cleanup USB resources."""
-        self.cleanup()
+        # Never let destructor exceptions leak during interpreter shutdown.
+        try:
+            self.cleanup()
+        except Exception:
+            pass
 
     def __enter__(self):
         """Context manager entry."""
@@ -991,9 +996,11 @@ class UsbDataSource(BaseDataSource):
         if self._usb_device:
             try:
                 self._usb_device.close()
-                log.info("USB device released and closed")
+                if not sys.is_finalizing():
+                    log.info("USB device released and closed")
             except Exception as e:
-                log.warning(f"Error during cleanup: {e}")
+                if not sys.is_finalizing():
+                    log.warning(f"Error during cleanup: {e}")
 
 
     def __iter__(self) -> Iterator[np.ndarray]:

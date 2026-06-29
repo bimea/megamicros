@@ -2,6 +2,10 @@
 
 ## Releases
 
+### 3.1.6
+
+- Implemented a defensive fix in the library due to an interpreter-shutdown/destructor logging race
+
 ### 3.1.2-5
 
 - Fix MEMs sensibility bug : Changed MU_MEMS_SENSIBILITY from 0.001 3.54e-6 in source/usb.py
