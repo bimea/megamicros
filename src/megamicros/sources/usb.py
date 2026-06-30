@@ -768,21 +768,15 @@ class UsbDataSource(BaseDataSource):
 
         # RESET command
         buf = create_string_buffer(1)
-        """
-        buf[0] = MU_CMD_RESET
-        self._usb_device.ctrlWrite(MU_CMD_FPGA_0, buf)
-        # PURGE command (clear FIFO)
-        buf[0] = MU_CMD_PURGE
-        self._usb_device.ctrlWrite(MU_CMD_FPGA_0, buf)
-        log.info("RESET and PURGE commands sent to FPGA")
-        """
         DEFAULT_TIME_ACTIVATION_RESET = 100  # ms
 
         self._usb_device.ctrlWriteReset( MU_CMD_FX3_RESET )
         self._usb_device.ctrlWriteReset( MU_CMD_FX3_PH )
+        # RESET command
         buf[0] = MU_CMD_RESET
         self._usb_device.ctrlWrite( MU_CMD_FPGA_0, buf )
         time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
+        # PURGE command (clear FIFO)
         buf[0] = MU_CMD_PURGE
         self._usb_device.ctrlWrite(MU_CMD_FPGA_0, buf)
         time.sleep( DEFAULT_TIME_ACTIVATION_RESET / 1000)
